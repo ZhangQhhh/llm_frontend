@@ -200,7 +200,7 @@ export default defineComponent({
 
     // 检查登录状态
     const checkAuth = () => {
-      if (!store.state.token) {
+      if (!store.state.user.token) {
         router.push({ name: 'login' });
         return false;
       }
@@ -261,7 +261,7 @@ export default defineComponent({
             rerank_top_n: rerankTopN.value,
             use_insert_block: insertBlock.value
           },
-          store.state.token,
+          store.state.user.token,
           (message: StreamMessage) => {
             handleStreamMessage(message, assistantMessage);
           }
@@ -318,7 +318,7 @@ export default defineComponent({
       if (!sessionId.value) return;
 
       try {
-        await clearSessionApi(sessionId.value, store.state.token);
+        await clearSessionApi(sessionId.value, store.state.user.token);
       } catch (error) {
         console.warn('清空会话API调用失败，仅清空本地');
       }

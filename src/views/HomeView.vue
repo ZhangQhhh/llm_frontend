@@ -19,6 +19,10 @@
             <span class="icon">💬</span>
             多轮对话
           </router-link>
+          <router-link to="/exam" class="btn btn-secondary">
+            <span class="icon">📝</span>
+            智能家教
+          </router-link>
         </div>
       </div>
 
@@ -64,6 +68,12 @@
           </div>
 
           <div class="feature-card">
+            <div class="feature-icon">📝</div>
+            <h3>智能家教</h3>
+            <p>在线考试系统，智能评分与详细解析，助力学习提升</p>
+          </div>
+
+          <div class="feature-card">
             <div class="feature-icon">📖</div>
             <h3>来源追溯</h3>
             <p>每个回答都标注参考来源，确保信息可追溯</p>
@@ -73,6 +83,12 @@
             <div class="feature-icon">🚀</div>
             <h3>多模型支持</h3>
             <p>集成多种先进大模型，满足不同场景需求</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🎓</div>
+            <h3>题目解析</h3>
+            <p>AI智能生成选择题解析，公开访问无需登录</p>
           </div>
 
           <div class="feature-card">
@@ -113,6 +129,8 @@
             <ul>
               <li><router-link to="/knowledge-qa">知识问答</router-link></li>
               <li><router-link to="/conversation">多轮对话</router-link></li>
+              <li><router-link to="/exam">智能家教</router-link></li>
+              <li><router-link to="/test-explain">题目解析</router-link></li>
               <li><router-link to="/login">登录</router-link></li>
             </ul>
           </div>

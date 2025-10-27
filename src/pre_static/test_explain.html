@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选择题问答测试 - 公开访问</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f9fafb;
+            color: #111827;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 2rem;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: #6b7280;
+            margin-top: 0;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-top: 1.5rem;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            gap: 1rem;
+        }
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            background-color: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+        .status {
+            color: #4b5563;
+            font-size: 14px;
+            text-align: right;
+            flex-grow: 1;
+        }
+        #result-container {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        #result {
+            white-space: pre-wrap;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #374151;
+            background-color: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            min-height: 50px;
+        }
+        .server-info {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="server-info" id="server-info">正在连接服务器...</div>
+    <h1>选择题问答测试</h1>
+    <p>请在下方文本框中输入题目内容，然后点击“生成解析”。</p>
+    <textarea id="question-input" placeholder="示例格式：&#10;1. 题目题干...&#10;A. 选项A&#10;B. 选项B&#10;C. 选项C&#10;D. 选项D&#10;答案：B"></textarea>
+    <div class="controls">
+        <button id="generate-btn">生成解析</button>
+        <div class="status" id="status-msg">准备就绪</div>
+    </div>
+    <div id="result-container">
+        <h2>解析结果</h2>
+        <pre id="result"></pre>
+    </div>
+</div>
+
+<script>
+    const api = (path) => `${location.protocol}//${location.host}${path}`;
+
+    const questionInput = document.getElementById('question-input');
+    const generateBtn = document.getElementById('generate-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const resultEl = document.getElementById('result');
+    const serverInfoEl = document.getElementById('server-info');
+
+    let pollingInterval = null;
+
+    // 获取服务器信息并填充示例
+    async function init() {
+        try {
+            const res = await fetch(api('/'));
+            const data = await res.json();
+            serverInfoEl.textContent = `服务运行在: ${data.lan_ip}:${data.port}`;
+        } catch (e) {
+            serverInfoEl.textContent = '无法连接到后端服务。';
+            serverInfoEl.style.color = 'red';
+        }
+
+        // 预置示例题目
+        questionInput.value = `1. 下列关于中国古代四大发明的描述，哪个是正确的？\nA. 指南针最初用于航海。\nB. 火药的发明与炼丹术有关。\nC. 活字印刷术由蔡伦发明。\n答案：B`;
+    }
+
+    // 轮询任务状态
+    async function pollTaskStatus(taskId) {
+        if (pollingInterval) clearInterval(pollingInterval);
+
+        pollingInterval = setInterval(async () => {
+            try {
+                const res = await fetch(api(`/tasks/status/${taskId}`));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                statusMsg.textContent = `状态: ${data.status}... (${data.progress}/${data.total})`;
+
+                if (data.status === 'completed' || data.status === 'failed') {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                    generateBtn.disabled = false;
+
+                    if (data.status === 'completed') {
+                        statusMsg.textContent = "生成成功！";
+                        // 修改点：直接显示完整结果，而不是使用 streamDisplay
+                        resultEl.textContent = data.result?.rationale_overall || "未能获取解析文本。";
+                    } else {
+                        const errorMsg = `任务失败: ${data.error || '未知错误'}`;
+                        statusMsg.textContent = errorMsg;
+                        resultEl.textContent = errorMsg;
+                    }
+                }
+            } catch (error) {
+                statusMsg.textContent = `轮询状态时出错: ${error.message}`;
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                generateBtn.disabled = false;
+            }
+        }, 200);
+    }
+
+    // 处理生成按钮点击
+    async function handleGenerate() {
+        const questionText = questionInput.value.trim();
+        if (!questionText) {
+            alert("请输入题目内容！");
+            return;
+        }
+
+        generateBtn.disabled = true;
+        statusMsg.textContent = "正在提交任务...";
+        resultEl.textContent = "";
+
+        try {
+            const res = await fetch(api("/public/explain_from_text"), {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_text: questionText })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || `服务器错误: ${res.status}`);
+            }
+
+            const j = await res.json();
+            if (j.task_id) {
+                statusMsg.textContent = `任务已启动，正在等待结果...`;
+                pollTaskStatus(j.task_id);
+            } else {
+                throw new Error(j.detail || "未能启动任务。");
+            }
+        } catch (e) {
+            statusMsg.textContent = "启动任务失败: " + e.message;
+            resultEl.textContent = "错误: " + e.message;
+            generateBtn.disabled = false;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        init();
+        generateBtn.onclick = handleGenerate;
+    });
+</script>
+
+</body>
+</html>

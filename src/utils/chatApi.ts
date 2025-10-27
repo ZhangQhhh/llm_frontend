@@ -3,6 +3,7 @@
  */
 
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
+import http from '@/config/api/http';
 
 /**
  * SSE流式响应处理器
@@ -117,18 +118,15 @@ export async function sendStreamChatRequest(
  * 清空会话
  */
 export async function clearSession(sessionId: string, token: string): Promise<void> {
-  const response = await fetch(API_ENDPOINTS.KNOWLEDGE.CONVERSATION_CLEAR, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
-    },
-    body: JSON.stringify({ session_id: sessionId })
-  });
-
-  if (!response.ok) {
-    throw new Error(`清空会话失败: ${response.status}`);
-  }
+  await http.post(
+    API_ENDPOINTS.KNOWLEDGE.CONVERSATION_CLEAR,
+    { session_id: sessionId },
+    {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    }
+  );
 }
 
 /**
@@ -139,19 +137,14 @@ export async function submitLikeFeedback(
   answer: string,
   sources: ReferenceSource[]
 ): Promise<void> {
-  const response = await fetch(API_ENDPOINTS.FEEDBACK.LIKE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  try {
+    await http.post(API_ENDPOINTS.FEEDBACK.LIKE, {
       question,
       answer,
       source: JSON.stringify(sources)
-    })
-  });
-
-  if (!response.ok) {
-    const result = await response.json();
-    throw new Error(result.message || `提交失败: ${response.status}`);
+    });
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || `提交失败: ${error.response?.status || 'unknown'}`);
   }
 }
 
@@ -166,21 +159,16 @@ export async function submitDislikeFeedback(
   reporterName?: string,
   reporterUnit?: string
 ): Promise<void> {
-  const response = await fetch(API_ENDPOINTS.FEEDBACK.DISLIKE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  try {
+    await http.post(API_ENDPOINTS.FEEDBACK.DISLIKE, {
       question,
       answer,
       source: JSON.stringify(sources),
       reason,
       reporterName,
       reporterUnit
-    })
-  });
-
-  if (!response.ok) {
-    const result = await response.json();
-    throw new Error(result.message || `提交失败: ${response.status}`);
+    });
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || `提交失败: ${error.response?.status || 'unknown'}`);
   }
 }

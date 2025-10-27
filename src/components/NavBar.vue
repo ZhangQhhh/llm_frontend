@@ -11,8 +11,8 @@
     <!-- Logo -->
     <div class="navbar-brand">
       <router-link to="/" class="brand-link">
-        <span class="logo-icon">🛡️</span>
-        <span class="logo-text">边检知识问答</span>
+        <img src="@/assets/logo.png" alt="logo" class="logo-image" />
+        <span class="logo-text">皖美边检-智慧大脑</span>
       </router-link>
     </div>
 
@@ -34,6 +34,15 @@
     >
       <el-icon><ChatDotRound /></el-icon>
       <span>多轮对话</span>
+    </el-menu-item>
+    
+    <el-menu-item 
+      index="/exam" 
+      @click="navigateTo('/exam')"
+      v-if="isLoggedIn"
+    >
+      <el-icon><EditPen /></el-icon>
+      <span>边检智能家教</span>
     </el-menu-item>
 
     <!-- 管理入口（仅管理员可见） -->
@@ -100,7 +109,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { 
   HomeFilled, 
   Reading, 
-  ChatDotRound, 
+  ChatDotRound,
+  EditPen,
   Setting, 
   User, 
   ArrowDown, 
@@ -114,6 +124,7 @@ export default defineComponent({
     HomeFilled,
     Reading,
     ChatDotRound,
+    EditPen,
     Setting,
     User,
     ArrowDown,
@@ -125,9 +136,9 @@ export default defineComponent({
     const route = useRoute()
 
     const activeIndex = computed(() => route.path)
-    const isLoggedIn = computed(() => store.state.is_login)
-    const username = computed(() => store.state.username || '用户')
-    const userPhoto = computed(() => store.state.photo)
+    const isLoggedIn = computed(() => store.state.user.is_login)
+    const username = computed(() => store.state.user.username || '用户')
+    const userPhoto = computed(() => store.state.user.photo)
     const userRole = computed(() => store.getters.userRole)
     const isAdmin = computed(() => store.getters.isAdmin)
 
@@ -203,8 +214,10 @@ export default defineComponent({
   color: #2563eb;
 }
 
-.logo-icon {
-  font-size: 28px;
+.logo-image {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
 }
 
 .logo-text {

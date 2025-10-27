@@ -61,6 +61,23 @@ const routes: Array<RouteRecordRaw> = [
       requiresAuth: true,
       title: '个人设置'
     }
+  },
+  {
+    path: '/exam',
+    name: 'exam',
+    component: () => import('../views/ExamView.vue'),
+    meta: { 
+      requiresAuth: true,
+      title: '边检智能家教'
+    }
+  },
+  {
+    path: '/test-explain',
+    name: 'test-explain',
+    component: () => import('../views/TestExplainView.vue'),
+    meta: { 
+      title: '选择题问答测试'
+    }
   }
 ]
 
@@ -72,7 +89,7 @@ const router = createRouter({
 // 路由守卫：权限检查
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('jwt_token')
-  const isLoggedIn = (store.state as any).is_login
+  const isLoggedIn = (store.state as any).user.is_login
   const isAdmin = store.getters.isAdmin
   
   // 设置页面标题

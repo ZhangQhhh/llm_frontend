@@ -37,8 +37,8 @@ export default defineComponent({
   setup() {
     const store = useStore();
     
-    const username = computed(() => store.state.username);
-    const email = computed(() => store.state.email);
+    const username = computed(() => store.state.user.username);
+    const email = computed(() => store.state.user.email);
     const userRole = computed(() => store.getters.userRole);
     
     const roleText = computed(() => {

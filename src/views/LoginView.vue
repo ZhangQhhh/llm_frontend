@@ -146,6 +146,8 @@
 import { defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import http from '@/config/api/http';
+import { API_ENDPOINTS } from '@/config/api/api';
 
 export default defineComponent({
   name: 'LoginView',
@@ -221,20 +223,14 @@ export default defineComponent({
       registerLoading.value = true;
 
       // 调用注册API
-      fetch(store.state.API_ENDPOINTS?.USER?.REGISTER || '/api/user/account/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: registerForm.value.username,
-          password: registerForm.value.password,
-          confirmPassword: registerForm.value.confirmPassword
-        })
+      http.post(API_ENDPOINTS.USER.REGISTER, {
+        username: registerForm.value.username,
+        password: registerForm.value.password,
+        confirmPassword: registerForm.value.confirmPassword
       })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => {
           registerLoading.value = false;
+          const data = response.data;
           if (data.error_msg === 'success') {
             alert('注册成功！请登录');
             isLogin.value = true;
@@ -248,9 +244,9 @@ export default defineComponent({
             registerError.value = data.error_msg || '注册失败，请重试';
           }
         })
-        .catch(() => {
+        .catch((error) => {
           registerLoading.value = false;
-          registerError.value = '注册失败，请检查网络连接';
+          registerError.value = error.response?.data?.error_msg || '注册失败，请检查网络连接';
         });
     };
 

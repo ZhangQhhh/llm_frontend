@@ -1,6 +1,6 @@
-import $ from "jquery";
 import router from "@/router";
 import { API_ENDPOINTS } from "@/config/api/api";
+import http from "@/config/api/http";
 import { Module, ActionContext } from "vuex"; // [1] 导入 Vuex 类型
 import { UserRole, hasPermission, isAdmin, isSuperAdmin } from "@/config/permissions";
 
@@ -55,7 +55,7 @@ interface LoginData {
 
 interface GetInfoData {
   success: (resp: GetInfoSuccessResponse) => void;
-  error: (resp: ApiErrorResponse | JQuery.jqXHR) => void;
+  error: (resp: ApiErrorResponse | any) => void;
 }
 
 // [7] 定义 RootState，如果你有根 state 的话。这里我们用 'any' 代替
@@ -140,37 +140,32 @@ export default {
   },
   actions: {  // 修改state的函数写在actions里边
     // [11] 为 context 和 data 添加类型
-    login(context: ActionContext<UserState, RootState>, data: LoginData) {
-      $.ajax({
-        url: API_ENDPOINTS.USER.LOGIN,
-        type: "post",
-        data: {
-          username: data.username,
-          password: data.password,
-        },
-        // [12] 为 ajax 回调参数添加类型
-        success(resp: LoginSuccessResponse | ApiErrorResponse) {
-          if (resp.error_msg === "success") {
-// 我们告诉 TS，在这个块里，resp 就是 LoginSuccessResponse
-            const successResp = resp as LoginSuccessResponse;
-
-            localStorage.setItem("jwt_token", successResp.token);
-            // 'resp' 在这里被 TypeScript 智能地推断为 LoginSuccessResponse
-            context.commit("updateToken", successResp.token);
-            data.success(successResp);
-          } else {
-            // 'resp' 在这里被推断为 ApiErrorResponse
-            data.error(resp);
+    async login(context: ActionContext<UserState, RootState>, data: LoginData) {
+      try {
+        const response = await http.post<LoginSuccessResponse | ApiErrorResponse>(
+          API_ENDPOINTS.USER.LOGIN,
+          {
+            username: data.username,
+            password: data.password,
           }
-        },
-        error(xhr: JQuery.jqXHR) {
-          // 捕获HTTP错误，如403等
-          data.error({
-            error_msg: "error",
-            message: xhr.status === 403 ? "用户名或密码错误" : "登录失败，请稍后重试"
-          });
+        );
+        
+        const resp = response.data;
+        if (resp.error_msg === "success") {
+          const successResp = resp as LoginSuccessResponse;
+          localStorage.setItem("jwt_token", successResp.token);
+          context.commit("updateToken", successResp.token);
+          data.success(successResp);
+        } else {
+          data.error(resp);
         }
-      });
+      } catch (error: any) {
+        // 捕获HTTP错误，如403等
+        data.error({
+          error_msg: "error",
+          message: error.response?.status === 403 ? "用户名或密码错误" : "登录失败，请稍后重试"
+        });
+      }
     },
     logout(context: ActionContext<UserState, RootState>) {
       localStorage.removeItem("jwt_token");
@@ -178,31 +173,31 @@ export default {
       router.push({ name: 'home' });
     },
 
-    getinfo(context: ActionContext<UserState, RootState>, data: GetInfoData) {
-      $.ajax({
-        url: API_ENDPOINTS.USER.INFO,
-        type: "get",
-        headers: {
-          Authorization: "Bearer " + context.state.token,
-        },
-        success(resp: GetInfoSuccessResponse | ApiErrorResponse) {
-          if (resp.error_msg === "success") {
-            // 我们告诉 TS，在这个块里，resp 就是 GetInfoSuccessResponse
-            const successResp = resp as GetInfoSuccessResponse;
-            context.commit("updateUser", {
-              ...resp, // resp 里包含了所有 UserInfo
-              is_login: true,
-            });
-            data.success(successResp );
-          } else {
-            // 'resp' 在这里是 ApiErrorResponse
-            data.error(resp);
+    async getinfo(context: ActionContext<UserState, RootState>, data: GetInfoData) {
+      try {
+        const response = await http.get<GetInfoSuccessResponse | ApiErrorResponse>(
+          API_ENDPOINTS.USER.INFO,
+          {
+            headers: {
+              Authorization: "Bearer " + context.state.token,
+            }
           }
-        },
-        error(resp: JQuery.jqXHR) {
-          data.error(resp)
+        );
+        
+        const resp = response.data;
+        if (resp.error_msg === "success") {
+          const successResp = resp as GetInfoSuccessResponse;
+          context.commit("updateUser", {
+            ...resp,
+            is_login: true,
+          });
+          data.success(successResp);
+        } else {
+          data.error(resp);
         }
-      })
+      } catch (error: any) {
+        data.error(error.response || error);
+      }
     }
   },
   modules: {
