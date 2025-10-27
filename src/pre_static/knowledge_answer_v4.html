@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>知识问答 V4 - 精准检索模式</title>
+    <style>
+        /* --- 1. 定义新的本地字体 --- */
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 400;
+          src: url('../static/fonts/SourceHanSansSC-Regular.otf') format('opentype');
+        }
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 500;
+          src: url('../static/fonts/SourceHanSansSC-Medium.otf') format('opentype');
+        }
+        @font-face {
+          font-family: 'Noto Serif SC';
+          font-style: normal;
+          font-weight: 700;
+          src: url('../static/fonts/SourceHanSerifCN-Bold.otf') format('opentype');
+        }
+
+        /* --- 2. 应用字体 --- */
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: "Noto Sans SC", sans-serif;
+            background-color: #fafbfc;
+            background-image: radial-gradient(circle at 1% 1%, rgba(59, 130, 246, 0.05) 0%, transparent 30%),
+                              radial-gradient(circle at 99% 99%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+        }
+
+        .main-container {
+            text-align: center;
+            padding-top: 10vh;
+            width: 100%;
+            max-width: 960px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-family: "Noto Serif SC", serif;
+            font-size: 40px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 30px;
+        }
+
+        .prompt-box {
+            position: relative;
+        }
+
+        textarea {
+            width: 100%;
+            height: 140px;
+            border-radius: 16px;
+            border: 1px solid #d1d5db;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            font-size: 16px;
+            color: #374151;
+            resize: none;
+            box-sizing: border-box;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            line-height: 1.6;
+            font-family: "Noto Sans SC", sans-serif;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .prompt-actions {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        button, .modal-button {
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: "Noto Sans SC", sans-serif;
+        }
+        button:hover:not(:disabled), .modal-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        button:disabled, .modal-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .answer-box {
+            text-align: left;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            background-color: #fff;
+            margin-top: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .answer-box h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #374151;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        #answerText {
+            width: 100%;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #374151;
+            min-height: 50px;
+        }
+
+        .thinking-section { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #bae6fd; border-radius: 12px; padding: 20px; margin: 20px 0; position: relative; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.1); }
+        .thinking-header { display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #7dd3fc; }
+        .thinking-icon { width: 24px; height: 24px; background: linear-gradient(45deg, #3b82f6, #1d4ed8); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: white; font-size: 14px; font-weight: bold; }
+        .thinking-title { font-size: 16px; font-weight: 600; color: #1e40af; margin: 0; }
+        .thinking-content { color: #1e3a8a; font-size: 14px; line-height: 1.6; font-style: italic; background: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; }
+
+        .reference-section { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #bbf7d0; border-radius: 12px; padding: 20px; margin: 20px 0; position: relative; box-shadow: 0 2px 10px rgba(16, 185, 129, 0.1); }
+        .reference-header { display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #86efac; }
+        .reference-icon { width: 24px; height: 24px; background: linear-gradient(45deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: white; font-size: 14px; font-weight: bold; }
+        .reference-title { font-size: 16px; font-weight: 600; color: #047857; margin: 0; }
+        .reference-content { color: #064e3b; }
+        .reference-item { margin-bottom: 20px; padding: 15px; background: rgba(255, 255, 255, 0.8); border-radius: 8px; border: 1px solid #a7f3d0; position: relative; }
+        .reference-item:last-child { margin-bottom: 0; }
+
+        /* 新增：被选中节点的特殊样式 */
+        .reference-item.selected {
+            border: 2px solid #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+        }
+
+        .reference-filename { font-weight: 600; color: #065f46; margin-bottom: 8px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+
+        /* 新增：选中标签样式 */
+        .selected-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #10b981, #059669);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .reference-similarity { font-size: 13px; color: #6b7280; margin-bottom: 10px; font-style: italic; }
+        .reference-text { color: #374151; font-size: 14px; line-height: 1.6; background: #f9fafb; padding: 12px; border-radius: 6px; border-left: 3px solid #10b981; }
+
+        /* 新增：关键段落样式 */
+        .key-passage {
+            background: #fef3c7;
+            border-left: 3px solid #f59e0b;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #92400e;
+        }
+        .key-passage-label {
+            font-weight: 600;
+            color: #b45309;
+            margin-bottom: 5px;
+        }
+
+        .normal-content { color: #374151; font-size: 15px; line-height: 1.7; margin: 10px 0; }
+
+        .feedback-actions { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 10px; }
+        .feedback-btn { background-color: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 15px; font-size: 14px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+        #likeBtn:hover:not(:disabled) { background-color: #dcfce7; border-color: #10b981; color: #065f46; }
+        #dislikeBtn:hover:not(:disabled) { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .feedback-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 500px; max-width: 90%; }
+        .modal-content h3 { margin-top: 0; font-size: 20px; color: #1f2937; margin-bottom: 20px; font-family: "Noto Sans SC", sans-serif; }
+        .modal-form-group { margin-bottom: 15px; }
+        .modal-form-group label { display: block; margin-bottom: 5px; font-size: 14px; color: #374151; font-weight: 500; }
+        .modal-form-group input, .modal-form-group textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; box-sizing: border-box; font-family: "Noto Sans SC", sans-serif; }
+        .modal-form-group textarea { resize: vertical; min-height: 100px; }
+        .modal-actions { margin-top: 25px; display: flex; justify-content: flex-end; gap: 12px; }
+        .modal-button.cancel { background: #e5e7eb; color: #374151; }
+
+        .loader { border: 4px solid #f3f4f6; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
+
+        .switch-container, .input-container, .model-selector-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d1d5db; transition: .4s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input[type="checkbox"]:checked + .slider { background-color: #3b82f6; }
+        input[type="checkbox"]:checked + .slider:before { transform: translateX(18px); }
+        #modelSelector {
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            padding: 3px 5px;
+            font-size: 14px;
+            background-color: white;
+            font-family: "Noto Sans SC", sans-serif;
+        }
+
+        @keyframes bounce-y { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-8px); } 60% { transform: translateY(-4px); } }
+        .scroll-down-arrow { position: fixed; bottom: 30px; right: 40px; z-index: 999; background-color: #3b82f6; color: white; border-radius: 50px; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: opacity 0.3s; animation: bounce-y 2s ease-in-out infinite; }
+        .scroll-down-arrow:hover { animation-play-state: paused; background-color: #1d4ed8; }
+        .scroll-down-arrow span { font-size: 14px; font-weight: 500; }
+        .scroll-down-arrow i { border: solid white; border-width: 0 2px 2px 0; display: inline-block; padding: 4px; transform: rotate(45deg); -webkit-transform: rotate(45deg); }
+
+    </style>
+</head>
+<body>
+   <div class="main-container">
+        <h1>知识问答助手 V4</h1>
+
+        <div class="prompt-box">
+            <textarea id="questionInput" placeholder="请输入您的问题..."></textarea>
+            <div class="prompt-actions">
+
+                <div class="model-selector-container">
+                    <label for="modelSelector" style="white-space: nowrap;">选择模型:</label>
+                    <select id="modelSelector">
+                        <option value="qwen3-32b">qwen-32</option>
+                        <option value="qwen2025">qwen满血版</option>
+                        <option value="deepseek">deepseek-r1</option>
+                        <option value="deepseek-32b">deepseek-32b</option>
+                    </select>
+                </div>
+
+                <div class="input-container">
+                    <label for="rerankTopNInput" style="white-space: nowrap;">参考数:</label>
+                    <input type="number" id="rerankTopNInput" value="10" min="1" max="15" style="width: 45px; border-radius: 5px; border: 1px solid #ccc; text-align: center;">
+                </div>
+
+                <div class="switch-container">
+                    <label class="switch">
+                        <input type="checkbox" id="insertBlockToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span>精准检索</span>
+                </div>
+
+                <div class="switch-container">
+                    <label class="switch">
+                        <input type="checkbox" id="thinkingModeToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span>思考模式</span>
+                </div>
+                <button id="submitBtn">发送</button>
+            </div>
+        </div>
+
+        <div id="loader" class="loader hidden"></div>
+
+        <div id="answerBox" class="answer-box hidden">
+            <h2 id="answerTitle">回答</h2>
+            <div id="answerText"></div>
+            <div id="feedbackActions" class="feedback-actions hidden">
+                <button id="likeBtn" class="feedback-btn">👍 点赞</button>
+                <button id="dislikeBtn" class="feedback-btn">👎 点踩</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="feedbackModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3>提交反馈</h3>
+            <form id="feedbackForm">
+                <div class="modal-form-group">
+                    <label for="reasonInput">错误原因 (必填)</label>
+                    <textarea id="reasonInput" placeholder="请具体描述回答中的错误或问题..."></textarea>
+                </div>
+                <div class="modal-form-group">
+                    <label for="reporterNameInput">反映人</label>
+                    <input type="text" id="reporterNameInput" placeholder="请输入您的姓名">
+                </div>
+                <div class="modal-form-group">
+                    <label for="reporterUnitInput">反映单位</label>
+                    <input type="text" id="reporterUnitInput" placeholder="请输入您的单位">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelFeedbackBtn" class="modal-button cancel">取消</button>
+                    <button type="submit" id="submitFeedbackBtn" class="modal-button">提交反馈</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="scrollToFeedbackBtn" class="scroll-down-arrow hidden">
+        <span>评价</span>
+        <i></i>
+    </div>
+
+
+<script src="/static/marked.min.js"></script>
+<script>
+    const modelSelector = document.getElementById("modelSelector");
+    const rerankTopNInput = document.getElementById("rerankTopNInput");
+    const questionInput = document.getElementById("questionInput");
+    const submitBtn = document.getElementById("submitBtn");
+    const thinkingModeToggle = document.getElementById("thinkingModeToggle");
+    const insertBlockToggle = document.getElementById("insertBlockToggle");
+    const loader = document.getElementById("loader");
+    const answerBox = document.getElementById("answerBox");
+    const answerTitle = document.getElementById("answerTitle");
+    const answerText = document.getElementById("answerText");
+
+    const feedbackActions = document.getElementById("feedbackActions");
+    const likeBtn = document.getElementById("likeBtn");
+    const dislikeBtn = document.getElementById("dislikeBtn");
+
+    const feedbackModal = document.getElementById("feedbackModal");
+    const feedbackForm = document.getElementById("feedbackForm");
+    const reasonInput = document.getElementById("reasonInput");
+    const reporterNameInput = document.getElementById("reporterNameInput");
+    const reporterUnitInput = document.getElementById("reporterUnitInput");
+    const cancelFeedbackBtn = document.getElementById("cancelFeedbackBtn");
+    const submitFeedbackBtn = document.getElementById("submitFeedbackBtn");
+
+    const scrollToFeedbackBtn = document.getElementById("scrollToFeedbackBtn");
+
+    const API_ENDPOINT = "/api/knowledge_chat";
+    const API_A_ENDPOINT = "/api/feedback/like";
+    const API_B_ENDPOINT = "/api/feedback/dislike";
+
+    // --- 全局变量定义 ---
+    let lastQuestion = "";
+    let lastAnswer = "";
+    let selectedNodeIds = new Set();
+    let lastSources = [];
+    let isHandling503 = false;
+
+    // 🔥 新增：定义状态消息关键词列表
+    const STATUS_KEYWORDS = [
+        "正在进行混合检索",
+        "正在使用 InsertBlock",
+        "找到",
+        "个可回答的节点",
+        "未找到可直接回答的节点",
+        "已找到相关资料，正在生成回答",
+        "未找到高相关性资料，基于通用知识回答",
+        "参考来源"
+    ];
+
+    // 🔥 新增：判断是否为状态消息的函数
+    function isStatusMessage(text) {
+        if (!text || text.trim() === '') return true;
+        for (const keyword of STATUS_KEYWORDS) {
+            if (text.includes(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function handle503Error() {
+        // 如果已经在处理503，就不要重复执行
+        if (isHandling503) return;
+        isHandling503 = true;
+
+        console.error("检测到 503 错误（服务器不可用）。立即跳转到维护页面...");
+
+        // 立即跳转到 /maintenance.html
+        window.location.href = '/maintenance.html';
+    }
+
+    function renderApp(currentAnswer, sources) {
+        let html = '';
+        const thinkingRegex = /<think>(.*?)<\/think>/gs;
+        const thinkMatch = thinkingRegex.exec(currentAnswer);
+
+        if (thinkMatch) {
+            const beforeContent = currentAnswer.slice(0, thinkMatch.index).trim();
+            const thinkingContent = thinkMatch[1].trim();
+            const afterContent = currentAnswer.slice(thinkMatch.index + thinkMatch[0].length).trim();
+            const mainAnswerContent = (beforeContent + '\n' + afterContent).trim();
+            if (mainAnswerContent) {
+                html += `<div class="normal-content">${marked.parse(mainAnswerContent)}</div>`;
+            }
+            html += `<div class="thinking-section"><div class="thinking-header"><div class="thinking-icon">💭</div><h3 class="thinking-title">思考过程</h3></div><div class="thinking-content">${thinkingContent.replace(/\n/g, "<br>")}</div></div>`;
+        } else {
+            if (currentAnswer) {
+                html += `<div class="normal-content">${marked.parse(currentAnswer)}</div>`;
+            }
+        }
+
+        if (sources.length > 0) {
+            html += `<div class="reference-section"><div class="reference-header"><div class="reference-icon">📚</div><h3 class="reference-title">参考内容（全部检索结果）</h3></div><div class="reference-content">`;
+            sources.forEach(item => {
+                const isSelected = selectedNodeIds.has(item.id);
+                const selectedClass = isSelected ? 'selected' : '';
+                const selectedBadge = isSelected ? '<span class="selected-badge">✓ 已选中</span>' : '';
+                let itemHtml = `<div class="reference-item ${selectedClass}">
+                    <div class="reference-filename">[${item.id}] ${item.fileName} ${selectedBadge}</div>
+                    <div class="reference-similarity">
+                        <span>初始检索分: ${item.initialScore}</span> |
+                        <span>重排序分: ${item.rerankedScore}</span>`;
+                if (item.canAnswer !== undefined) {
+                    itemHtml += ` | <span style="color: ${item.canAnswer ? '#059669' : '#dc2626'};">
+                        ${item.canAnswer ? '✓ 可回答' : '✗ 不可回答'}
+                    </span>`;
+                }
+                itemHtml += `</div><div class="reference-text">"${item.content.replace(/\n/g, "<br>")}"</div>`;
+                if (item.keyPassage) {
+                    itemHtml += `<div class="key-passage">
+                        <div class="key-passage-label">🔍 关键段落：</div>
+                        ${item.keyPassage.replace(/\n/g, "<br>")}
+                    </div>`;
+                }
+                itemHtml += `</div>`;
+                html += itemHtml;
+            });
+            html += `</div></div>`;
+        }
+        answerText.innerHTML = html;
+    }
+
+    const handleLikeClick = async () => {
+        likeBtn.disabled = true;
+        dislikeBtn.disabled = true;
+        scrollToFeedbackBtn.classList.add("hidden");
+        try {
+            const response = await fetch(API_A_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                // <-- 修改点 2: 在请求体中添加 source 字段
+                body: JSON.stringify({
+                    question: lastQuestion,
+                    answer: lastAnswer,
+                    source: JSON.stringify(lastSources) // 将source数组转为JSON字符串
+                }),
+            });
+
+            if (response.status === 503) {
+                console.warn("检测到服务器正在维护...");
+                handle503Error(); // 调用新函数
+                throw new Error("服务器 503"); // 停止后续执行
+            }
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || `服务器响应错误: ${response.status}`);
+            }
+            alert("感谢您的反馈！");
+        } catch (error) {
+            console.error("提交点赞反馈失败:", error);
+            alert(`提交反馈失败: ${error.message}`);
+            likeBtn.disabled = false;
+            dislikeBtn.disabled = false;
+        }
+    };
+
+    const handleDislikeSubmit = async (event) => {
+        event.preventDefault();
+        const reason = reasonInput.value.trim();
+        const reporterName = reporterNameInput.value.trim();
+        const reporterUnit = reporterUnitInput.value.trim();
+        if (!reason) {
+            alert("请填写具体的错误原因。");
+            return;
+        }
+        submitFeedbackBtn.disabled = true;
+        submitFeedbackBtn.textContent = "提交中...";
+        try {
+            const response = await fetch(API_B_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                // <-- 修改点 3: 在请求体中添加 source 字段
+                body: JSON.stringify({
+                    question: lastQuestion,
+                    answer: lastAnswer,
+                    reason: reason,
+                    reporterName: reporterName,
+                    reporterUnit: reporterUnit,
+                    source: JSON.stringify(lastSources) // 将source数组转为JSON字符串
+                }),
+            });
+            // <-- 【修改点 2】: 添加 503 维护检查
+            if (response.status === 503) {
+                handle503Error(); // 调用新函数
+                throw new Error("服务器 503"); // 停止后续执行
+            }
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || `服务器响应错误: ${response.status}`);
+            }
+            alert("反馈提交成功，感谢您！");
+            feedbackModal.classList.add("hidden");
+            likeBtn.disabled = true;
+            dislikeBtn.disabled = true;
+            scrollToFeedbackBtn.classList.add("hidden");
+        } catch (error) {
+            console.error("提交点踩反馈失败:", error);
+            alert(`提交反馈失败: ${error.message}`);
+        } finally {
+            submitFeedbackBtn.disabled = false;
+            submitFeedbackBtn.textContent = "提交反馈";
+        }
+    };
+
+    const handleSubmit = async () => {
+        const question = questionInput.value.trim();
+        if (!question) {
+            alert("问题不能为空！");
+            return;
+        }
+        feedbackActions.classList.add("hidden");
+        scrollToFeedbackBtn.classList.add("hidden");
+        likeBtn.disabled = false;
+        dislikeBtn.disabled = false;
+        feedbackForm.reset();
+        submitBtn.disabled = true;
+        loader.classList.remove("hidden");
+        answerBox.classList.add("hidden");
+
+        let currentAnswer = "";
+        lastSources = [];
+        selectedNodeIds.clear();
+        lastQuestion = question;
+        lastAnswer = "";
+
+        // 🔥 新增：用于累积思考内容
+        let thinkingContent = "";
+
+        renderApp(currentAnswer, lastSources);
+
+        const enableThinking = thinkingModeToggle.checked;
+        const enableInsertBlock = insertBlockToggle.checked;
+        const rerankTopN = rerankTopNInput.value;
+        const selectedModelId = modelSelector.value;
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    question: question,
+                    thinking: enableThinking,
+                    rerank_top_n: rerankTopN,
+                    model_id: selectedModelId,
+                    use_insert_block: enableInsertBlock,
+                    insert_block_llm_id: selectedModelId
+                }),
+            });
+
+            if (response.status === 503) {
+                console.warn("检测到服务器正在维护(主提交)...");
+                handle503Error();
+                throw new Error("服务器 503");
+            }
+
+            if (!response.ok) throw new Error(`服务器错误: ${response.status}`);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+            let isFirstChunk = true;
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                let parts = buffer.split("\n\n");
+                buffer = parts.pop();
+                for (const part of parts) {
+                    if (part.startsWith("data: ")) {
+                        const rawData = part.substring(6);
+
+                        // 🔥 新增：处理 THINK: 前缀的思考内容
+                        if (rawData.startsWith("THINK:")) {
+                            const thinkChunk = rawData.substring(6);
+                            thinkingContent += thinkChunk;
+
+                            // 将思考内容包装到 <think> 标签中
+                            const fullAnswer = thinkingContent ?
+                                `<think>${thinkingContent}</think>\n${currentAnswer}` :
+                                currentAnswer;
+
+                            if (isFirstChunk) {
+                                answerBox.classList.remove("hidden");
+                                isFirstChunk = false;
+                            }
+
+                            renderApp(fullAnswer, lastSources);
+                            console.log("接收到思考内容:", thinkChunk.substring(0, 50) + "...");
+                        }
+                        else if (rawData.startsWith("CONTENT:")) {
+                            const content = rawData.substring(8).replace(/\u2029/g, "\n");
+
+                            // 🔥 修复：过滤掉状态消息，只保留真正的回答内容
+                            if (!isStatusMessage(content)) {
+                                if (isFirstChunk) {
+                                    answerBox.classList.remove("hidden");
+                                    isFirstChunk = false;
+                                }
+                                currentAnswer += content;
+
+                                // 组合思考内容和正文内容
+                                const fullAnswer = thinkingContent ?
+                                    `<think>${thinkingContent}</think>\n${currentAnswer}` :
+                                    currentAnswer;
+
+                                lastAnswer = fullAnswer;
+                                renderApp(fullAnswer, lastSources);
+                            } else {
+                                console.log("检索状态:", content.trim());
+                            }
+                        } else if (rawData.startsWith("SOURCE:")) {
+                            const jsonString = rawData.substring(7);
+                            try {
+                                const sourceData = JSON.parse(jsonString);
+                                lastSources.push(sourceData);
+                                if sourceData.canAnswer === true) {
+                                    selectedNodeIds.add(sourceData.id);
+                                }
+
+                                // 使用完整答案进行渲染
+                                const fullAnswer = thinkingContent ?
+                                    `<think>${thinkingContent}</think>\n${currentAnswer}` :
+                                    currentAnswer;
+                                renderApp(fullAnswer, lastSources);
+                            } catch (e) {
+                                console.error("解析SOURCE JSON失败:", e, jsonString);
+                            }
+                        } else if (rawData.startsWith("DONE:")) {
+                            console.log("Stream finished.");
+                            if (lastAnswer || currentAnswer) {
+                                feedbackActions.classList.remove("hidden");
+                                scrollToFeedbackBtn.classList.remove("hidden");
+                            }
+                        } else if (rawData.startsWith("ERROR:")) {
+                            throw new Error(rawData.substring(6));
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("请求失败:", error);
+            answerTitle.textContent = "错误";
+            answerText.innerHTML = `<div class="normal-content">请求失败: ${error.message}</div>`;
+            answerBox.classList.remove("hidden");
+        } finally {
+            submitBtn.disabled = false;
+            loader.classList.add("hidden");
+        }
+    };
+
+    submitBtn.addEventListener("click", handleSubmit);
+    questionInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            handleSubmit();
+        }
+    });
+    likeBtn.addEventListener("click", handleLikeClick);
+    dislikeBtn.addEventListener("click", () => {
+        feedbackModal.classList.remove("hidden");
+    });
+    feedbackForm.addEventListener("submit", handleDislikeSubmit);
+    cancelFeedbackBtn.addEventListener("click", () => {
+        feedbackModal.classList.add("hidden");
+    });
+    scrollToFeedbackBtn.addEventListener('click', () => {
+        feedbackActions.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+    });
+</script>
+
+</body>
+</html>

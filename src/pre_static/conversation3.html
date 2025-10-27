@@ -1,0 +1,910 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>多轮知识对话（完整版 · 宽屏 · 可折叠参考与思考分区）</title>
+<style>
+/* ----------------- 字体（请按内网实际路径替换） ----------------- */
+@font-face {
+  font-family: "Noto Sans SC";
+  font-weight: 400;
+  src: url('/static/fonts/SourceHanSansSC-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: "Noto Sans SC";
+  font-weight: 600;
+  src: url('/static/fonts/SourceHanSansSC-Medium.otf') format('opentype');
+}
+@font-face {
+  font-family: "Noto Serif SC";
+  font-weight: 700;
+  src: url('/static/fonts/SourceHanSerifCN-Bold.otf') format('opentype');
+}
+
+/* ----------------- 主题变量 ----------------- */
+:root{
+  --accentA: #7c3aed;
+  --accentB: #06b6d4;
+  --muted: #64748b;
+  --bg: #f7fbff;
+  --card: #ffffff;
+  --text-primary: #1a202c; /* 更深的文本颜色 */
+  --text-secondary: #4a5568; /* 次要文本颜色 */
+}
+
+/* ----------------- 全局 ----------------- */
+html,body{
+  height:100%;
+  margin:0;
+  font-family:"Noto Sans SC",system-ui,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;
+  background:linear-gradient(180deg,var(--bg),#eef3ff);
+  color:var(--text-primary);
+  line-height:1.6; /* 增加行高 */
+}
+.wrap{
+  max-width:1400px;
+  margin:24px auto; /* 增加外边距 */
+  padding:24px; /* 增加内边距 */
+  box-sizing:border-box;
+}
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:18px; /* 增加间距 */
+}
+.brand{
+  display:flex;
+  gap:16px; /* 增加间距 */
+  align-items:center;
+}
+.logo{
+  width:60px; /* 增大Logo */
+  height:60px; /* 增大Logo */
+  border-radius:14px;
+  background:linear-gradient(135deg,var(--accentA),var(--accentB));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-weight:700;
+  font-family:"Noto Serif SC",serif;
+  font-size:24px; /* 增大Logo字体 */
+}
+h1{
+  margin:0;
+  font-family:"Noto Serif SC",serif;
+  font-size:22px; /* 增大标题 */
+  color:var(--text-primary);
+}
+.subtitle{
+  font-size:14px; /* 增大副标题 */
+  color:var(--muted);
+  margin-top:6px;
+}
+.user-panel{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+.btn{
+  border:0;
+  padding:10px 16px; /* 增大按钮 */
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:700;
+  background:linear-gradient(90deg,var(--accentA),var(--accentB));
+  color:#fff;
+  box-shadow:0 8px 24px rgba(124,58,237,0.18); /* 调整阴影 */
+  font-size:15px; /* 增大按钮字体 */
+}
+.btn.ghost{
+  background:#fff;
+  border:1px solid #e0e7ef;
+  color:var(--text-primary);
+  box-shadow:none;
+  font-weight:600;
+}
+.token-indicator{
+  font-size:14px;
+  color:var(--muted);
+}
+
+/* ----------------- 主卡片 ----------------- */
+.card{
+  background:var(--card);
+  border-radius:16px; /* 增大圆角 */
+  padding:20px; /* 增加内边距 */
+  box-shadow:0 18px 50px rgba(2,6,23,0.08); /* 更明显的阴影 */
+  position:relative;
+}
+.locked-overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(255,255,255,0.75);
+  backdrop-filter:blur(4px); /* 略微增强模糊 */
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:1000;
+}
+
+/* 控件 */
+textarea#questionInput{
+  width:100%;
+  min-height:150px; /* 增大输入框高度 */
+  border-radius:12px;
+  padding:16px;
+  border:1px solid #dbe2ed; /* 调整边框颜色 */
+  font-size:16px; /* 增大输入框字体 */
+  resize:vertical;
+  box-sizing:border-box;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.05); /* 增加内阴影 */
+}
+.control-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:16px;
+  flex-wrap:wrap;
+}
+select,input[type=number]{
+  padding:9px 12px;
+  border-radius:10px;
+  border:1px solid #dbe2ed;
+  font-size:15px; /* 增大控件字体 */
+}
+.right-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+/* ----------------- 回答与侧栏布局 ----------------- */
+.answer-area{
+  display:grid;
+  grid-template-columns:70% 30%; /* 调整比例 */
+  gap:24px; /* 增加间距 */
+  margin-top:24px;
+}
+.conversation{
+  background:#fbfdff;
+  border-radius:14px;
+  border:1px solid #e6eef8;
+  padding:18px; /* 增加内边距 */
+  height:80vh; /* 略微增加高度 */
+  overflow:auto;
+  box-sizing:border-box;
+  box-shadow:inset 0 1px 4px rgba(0,0,0,0.02); /* 轻微内阴影 */
+}
+.sidebar{
+  background:#fff;
+  border-radius:14px;
+  border:1px solid #eef2ff;
+  padding:16px; /* 增加内边距 */
+  height:80vh;
+  display:flex;
+  flex-direction:column;
+  box-sizing:border-box;
+  overflow:hidden;
+  box-shadow:0 4px 15px rgba(0,0,0,0.04);
+}
+
+/* ----------------- 对话气泡样式优化 ----------------- */
+.msg{
+  display:flex;
+  gap:12px;
+  margin-bottom:18px; /* 增加气泡间距 */
+  align-items:flex-start;
+}
+.msg.user{justify-content:flex-end;}
+.msg .bubble{
+  max-width:90%;
+  padding:16px 20px; /* 增大气泡内边距 */
+  border-radius:16px; /* 增大圆角 */
+  font-size:17px; /* 增大气泡字体 */
+  line-height:1.7;
+  box-shadow:0 6px 18px rgba(2,6,23,0.06);
+}
+.msg.user .bubble{
+  background:linear-gradient(90deg,var(--accentA),var(--accentB));
+  color:#fff;
+  border-bottom-right-radius:6px; /* 调整圆角 */
+}
+.msg.assistant .bubble{
+  background:#fff;
+  border:1px solid #eef2ff;
+  color:var(--text-primary);
+  border-bottom-left-radius:6px; /* 调整圆角 */
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+
+/* ----------------- 思考/正文分区样式（嵌入到助手气泡中）- 界面优化核心 ----------------- */
+.assistant-block{
+  display:flex;
+  flex-direction:column;
+  gap:16px; /* 增加思考过程与正文之间的间距 */
+}
+.block-section{
+  border-radius:12px; /* 增大圆角 */
+  padding:14px 16px; /* 增大内边距 */
+  margin-bottom:0; /* 移除默认的margin-bottom，使用gap控制 */
+}
+.section-title{
+  font-size:14px; /* 增大标题字体 */
+  color:var(--text-secondary); /* 调整颜色 */
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding-bottom:10px; /* 增大底部填充 */
+  margin-bottom:10px;
+  border-bottom:1px dashed #e0e7ef; /* 调整标题下划线 */
+}
+.section-title .label{
+  font-weight:700;
+  font-size:15px; /* 增大标签字体 */
+  color:var(--text-primary);
+}
+.section-body{
+  font-size:16px; /* 增大正文内容字体 */
+  color:var(--text-primary);
+  white-space:pre-wrap;
+  word-break:break-word;
+  line-height:1.8; /* 增加行高 */
+}
+
+/* 思考过程部分 */
+.assistant-block .block-section:first-child {
+    background: #fdfdff; /* 更浅的背景 */
+    border: 1px dashed #cfd8dc; /* 调整虚线边框 */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+.assistant-block .block-section:first-child .section-title {
+    border-bottom: 1px solid #e0e7ef;
+}
+.assistant-block .block-section:first-child .section-title .label {
+    color: #4b5563;
+}
+.assistant-block .block-section:first-child .section-title .label::before {
+    content: "🧠";
+    margin-right: 10px; /* 增大图标与文字间距 */
+}
+
+/* 正文部分 */
+.assistant-block .block-section:last-child {
+    background: #ffffff;
+    border: 1px solid #cce7ff; /* 调整边框颜色 */
+    box-shadow: 0 6px 16px rgba(59,130,246,0.08); /* 更明显的阴影 */
+}
+.assistant-block .block-section:last-child .section-title {
+    border-bottom: 1px solid var(--accentA);
+}
+.assistant-block .block-section:last-child .section-title .label {
+    color: #1e3a8a;
+    font-size: 16px; /* 增大正文标题字体 */
+}
+
+/* 折叠按钮 */
+.toggle-small{
+  font-size:14px; /* 增大折叠按钮字体 */
+  color:var(--accentA);
+  cursor:pointer;
+  border:none;
+  background:transparent;
+  padding:5px 8px;
+}
+.small-muted{
+  font-size:13px; /* 增大muted文本 */
+  color:var(--muted);
+}
+
+/* 参考来源面板 */
+.references-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.references-list{
+  overflow:auto;
+  flex:1;
+  padding-right:8px; /* 增加右侧填充 */
+}
+.reference-item{
+  background:#fff;
+  border:1px solid #eef2ff;
+  border-radius:10px; /* 增大圆角 */
+  padding:12px; /* 增大内边距 */
+  margin-bottom:12px; /* 增加间距 */
+  font-size:14px; /* 增大参考来源字体 */
+  line-height:1.7;
+  box-shadow:0 2px 8px rgba(0,0,0,0.02);
+}
+.reference-meta{
+  font-size:13px; /* 增大元数据字体 */
+  color:var(--muted);
+  margin-bottom:8px;
+}
+.ref-keypassage{
+  margin-top:10px;
+  padding:12px; /* 增大内边距 */
+  border-left:4px solid #f59e0b; /* 增大边框 */
+  background:#fffbee; /* 更浅的背景 */
+  border-radius:8px; /* 增大圆角 */
+  color:#a0520e; /* 调整颜色 */
+  font-size:14px; /* 增大关键段落字体 */
+}
+
+/* 更多来源折叠控制 */
+.references-collapsed .references-list{max-height:220px;} /* 略微增大默认高度 */
+.references-expanded .references-list{max-height:unset;}
+
+/* loader */
+.loader{width:32px;height:32px;border-radius:50%;border:4px solid #eef2ff;border-top-color:var(--accentA);animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* footer */
+.footer{
+  margin-top:18px;
+  color:var(--muted);
+  font-size:14px; /* 增大footer字体 */
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+/* 登录模态 */
+.modal-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.45);z-index:2000;}
+.login-modal{width:480px;max-width:94%;background:#fff;border-radius:14px;padding:20px;box-shadow:0 28px 70px rgba(2,6,23,0.35);}
+.login-row{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+.login-row input{padding:12px;border-radius:10px;border:1px solid #e6eef8;font-size:15px;}
+.login-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+
+/* 响应式 */
+@media (max-width:1000px){
+  .answer-area{grid-template-columns:1fr;}
+  .conversation,.sidebar{height:auto;min-height:400px; /* 增大小屏幕下高度 */ }
+  .logo{width:50px;height:50px;font-size:20px;}
+  h1{font-size:20px;}
+  .wrap{padding:18px;}
+  .card{padding:18px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">问</div>
+      <div>
+        <h1>多轮知识对话</h1>
+        <div class="subtitle">宽屏 · 支持多轮 · 折叠参考 · 思考/正文分区（内网，无 CDN）</div>
+      </div>
+    </div>
+
+    <div class="user-panel">
+      <div class="token-indicator" id="statusText">未登录</div>
+      <button class="btn ghost" id="btnLogout" style="display:none">登出</button>
+      <button class="btn" id="btnOpenLogin">登录</button>
+    </div>
+  </header>
+
+  <div class="card" id="mainCard">
+    <div id="lockedOverlay" class="locked-overlay" style="display:none;">
+      <div style="text-align:center;">
+        <div style="font-weight:700;font-size:20px;">需要登录才能使用</div>
+        <div class="small-muted" style="margin-top:10px;font-size:14px;">请点击右上角登录按钮进行登录（登录 API 地址留空以便内网调试）。</div>
+      </div>
+    </div>
+
+    <textarea id="questionInput" placeholder="请输入问题（支持多轮对话）。首次发送会创建 session，会话 ID 保存在本地）。"></textarea>
+
+    <div class="control-row">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <label for="modelSelector" class="small-muted">模型</label>
+        <select id="modelSelector">
+               <option value="qwen3-32b">qwen-32</option>
+                <option value="qwen2025">qwen满血版</option>
+                <option value="deepseek">deepseek-r1</option>
+        </select>
+
+        <label class="small-muted">参考数</label>
+        <input type="number" id="rerankTopNInput" value="10" min="1" max="30" style="width:80px;">
+
+        <label class="small-muted"><input type="checkbox" id="thinkingModeToggle" checked> 思考模式</label>
+        <label class="small-muted"><input type="checkbox" id="insertBlockToggle"> 精准检索</label>
+      </div>
+
+      <div class="right-actions">
+        <div id="currentSession" class="small-muted">会话：无</div>
+        <div id="liveLoader" style="display:none"><div class="loader"></div></div>
+        <button id="submitBtn" class="btn" disabled>发送</button>
+      </div>
+    </div>
+
+    <div class="answer-area" style="margin-top:24px;">
+      <div class="conversation" id="conversation">
+        <div class="small-muted" id="welcomeNote">欢迎 — 请先登录并发送问题以开始多轮对话。服务器端多轮接口：<code>/api/knowledge_chat_conversation</code>（SSE 或流式响应）。</div>
+      </div>
+
+      <div class="sidebar references-collapsed" id="sidebar">
+        <div class="references-header">
+          <div style="font-weight:700;font-size:16px;">参考来源</div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div class="small-muted" id="refCount">0 条</div>
+            <button id="toggleRefsBtn" class="toggle-small">更多来源 ▾</button>
+          </div>
+        </div>
+
+        <div class="references-list" id="references" style="overflow:auto;"></div>
+
+        <div style="margin-top:16px;">
+          <button id="clearSessionBtn" class="btn ghost" style="width:100%;">清空会话</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="small-muted">内部静态资源优先 · 不依赖 CDN</div>
+      <div class="small-muted">© 多轮知识对话系统</div>
+    </div>
+  </div>
+</div>
+
+<div id="loginModal" class="modal-overlay" style="display:none;">
+  <div class="login-modal" role="dialog" aria-modal="true">
+    <h3>系统登录</h3>
+    <div class="small-muted">登录成功后后端返回 map.put("token", jwt); map.put("error_msg", "success"); token 将被用于 Authorization: Bearer &lt;token&gt;</div>
+
+    <div class="login-row">
+      <input id="loginUsername" placeholder="用户名 / 工号" />
+      <input id="loginPassword" type="password" placeholder="密码" />
+    </div>
+
+    <div class="login-actions">
+      <button class="btn ghost" id="loginCancel">取消</button>
+      <button class="btn" id="loginSubmit">登录</button>
+    </div>
+
+    <div id="loginMsg" style="margin-top:12px;color:#ef4444;display:none;font-size:14px;"></div>
+  </div>
+</div>
+
+<script>
+/*
+  完整说明（前端行为）：
+  - LOGIN_API 为空时：执行本地模拟登录（用于内网/开发）
+  - 若设为真实登录地址，请确保后端返回 JSON：{ "token": "jwt...", "error_msg": "success" }
+  - CHAT_API：/llm/api/knowledge_chat_conversation （后端需支持 SSE 或流式返回）
+  - SSE data 前缀支持：
+      SESSION:<session_id>
+      CONTENT:<chunk>            (用于补充正文)
+      THINK:<chunk>              (用于补充思考过程)
+      SOURCE:<json>              (json 表示参考来源对象)
+      ERROR:<msg>
+      DONE:
+    前端将把 THINK 内容放到「思考过程」分区，CONTENT 放到「正文」分区。
+*/
+
+const LOGIN_API = "/api/auth/login";
+const CHAT_API = "/llm/api/knowledge_chat_conversation";
+const STORAGE_TOKEN_KEY = "multi_turn_chat_jwt";
+const STORAGE_SESSION_KEY = "multi_turn_chat_session_id";
+const STORAGE_USER_KEY = "multi_turn_chat_user";
+
+const loginModal = document.getElementById("loginModal");
+const btnOpenLogin = document.getElementById("btnOpenLogin");
+const btnLogout = document.getElementById("btnLogout");
+const loginSubmit = document.getElementById("loginSubmit");
+const loginCancel = document.getElementById("loginCancel");
+const loginUsername = document.getElementById("loginUsername");
+const loginPassword = document.getElementById("loginPassword");
+const loginMsg = document.getElementById("loginMsg");
+const statusText = document.getElementById("statusText");
+
+const submitBtn = document.getElementById("submitBtn");
+const questionInput = document.getElementById("questionInput");
+const modelSelector = document.getElementById("modelSelector");
+const rerankTopNInput = document.getElementById("rerankTopNInput");
+const thinkingModeToggle = document.getElementById("thinkingModeToggle");
+const insertBlockToggle = document.getElementById("insertBlockToggle");
+const conversation = document.getElementById("conversation");
+const references = document.getElementById("references");
+const currentSessionEl = document.getElementById("currentSession");
+const clearSessionBtn = document.getElementById("clearSessionBtn");
+const liveLoader = document.getElementById("liveLoader");
+const lockedOverlay = document.getElementById("lockedOverlay");
+const welcomeNote = document.getElementById("welcomeNote");
+const toggleRefsBtn = document.getElementById("toggleRefsBtn");
+const sidebar = document.getElementById("sidebar");
+const refCountEl = document.getElementById("refCount");
+
+let jwtToken = localStorage.getItem(STORAGE_TOKEN_KEY) || null;
+let sessionId = localStorage.getItem(STORAGE_SESSION_KEY) || null;
+let username = localStorage.getItem(STORAGE_USER_KEY) || null;
+
+updateLoginUI();
+
+/* ------------------ 登录相关 ------------------ */
+btnOpenLogin.addEventListener("click", () => {
+  loginMsg.style.display = "none";
+  loginModal.style.display = "flex";
+  loginUsername.value = username || "";
+  loginPassword.value = "";
+});
+loginCancel.addEventListener("click", () => {
+  loginModal.style.display = "none";
+});
+btnLogout.addEventListener("click", () => { logout(); });
+
+loginSubmit.addEventListener("click", async () => {
+  loginMsg.style.display = "none";
+  const user = loginUsername.value.trim();
+  const pass = loginPassword.value.trim();
+  if (!user || !pass) {
+    loginMsg.style.display = "block";
+    loginMsg.textContent = "用户名和密码不能为空。";
+    return;
+  }
+  loginSubmit.disabled = true;
+  loginSubmit.textContent = "登录中...";
+  try {
+    let tokenResp;
+    if (!LOGIN_API) {
+      tokenResp = { token: "SIM_JWT_" + btoa(user).slice(0,24), error_msg: "success" };
+      await new Promise(r => setTimeout(r, 350));
+    } else {
+      const resp = await fetch(LOGIN_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+
+
+        // <-- 【修改点 1】: 添加 503 维护检查
+      if (resp.status === 503) {
+          console.warn("检测到服务器正在维护(登录)...");
+          window.location.reload();
+          throw new Error("服务器维护中，正在刷新...");
+      }
+      // -- 检查结束
+
+
+      if (!resp.ok) throw new Error("登录请求失败: " + resp.status);
+      tokenResp = await resp.json();
+    }
+    if (!tokenResp || !tokenResp.token || tokenResp.error_msg !== "success") {
+      throw new Error((tokenResp && tokenResp.error_msg) ? tokenResp.error_msg : "登录返回格式异常");
+    }
+    jwtToken = tokenResp.token;
+    username = user;
+    localStorage.setItem(STORAGE_TOKEN_KEY, jwtToken);
+    localStorage.setItem(STORAGE_USER_KEY, username);
+    loginModal.style.display = "none";
+    updateLoginUI();
+    appendSystemMessage(`登录成功：${username}`);
+  } catch (err) {
+    console.error("login error", err);
+    loginMsg.style.display = "block";
+    loginMsg.textContent = "登录失败：" + (err.message || err);
+  } finally {
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = "登录";
+  }
+});
+
+function updateLoginUI() {
+  jwtToken = localStorage.getItem(STORAGE_TOKEN_KEY);
+  sessionId = localStorage.getItem(STORAGE_SESSION_KEY);
+  username = localStorage.getItem(STORAGE_USER_KEY);
+  const loggedIn = !!jwtToken;
+  statusText.textContent = loggedIn ? `已登录：${username || '用户'}` : "未登录";
+  btnLogout.style.display = loggedIn ? "inline-block" : "none";
+  btnOpenLogin.style.display = loggedIn ? "none" : "inline-block";
+  submitBtn.disabled = !loggedIn;
+  lockedOverlay.style.display = loggedIn ? "none" : "flex";
+  currentSessionEl.textContent = "会话：" + (sessionId ? sessionId.substring(0, 8) + '...' : "无");
+}
+
+/* ------------------ 会话清空 (已修复) ------------------ */
+clearSessionBtn.addEventListener("click", async () => {
+  const currentSessionId = sessionId; // 备份当前ID用于API调用
+  if (currentSessionId) {
+      try {
+          await fetch("/llm/api/conversation/clear", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(jwtToken ? { "Authorization": "Bearer " + jwtToken } : {}) },
+              body: JSON.stringify({ session_id: currentSessionId })
+          });
+
+        // <-- 【修改点 2.2】: 添加 503 维护检查
+          if (resp.status === 503) {
+              console.warn("检测到服务器正在维护(清空会话)...");
+              window.location.reload();
+              throw new Error("服务器维护中，正在刷新...");
+          }
+          // -- 检查结束
+
+      } catch (e) {
+          console.warn("调用后端清空接口失败，将仅在前端清除。");
+      }
+  }
+
+  // 🔥 修复点 1: 无论API调用成功与否，都彻底重置前端状态
+  localStorage.removeItem(STORAGE_SESSION_KEY);
+  sessionId = null; // 显式重置JS变量
+  updateLoginUI();  // 调用统一的UI更新函数，确保所有显示同步
+
+  // 清空UI显示区域
+  conversation.innerHTML = '<div class="small-muted" id="welcomeNote">会话已清空，请重新发送问题以开始新的会话。</div>';
+  references.innerHTML = '';
+  refCountEl.textContent = '0 条';
+  appendSystemMessage("本地会话已清空。");
+});
+
+
+/* ------------------ 折叠/展开参考来源 ------------------ */
+let refsExpanded = false;
+toggleRefsBtn.addEventListener("click", () => {
+  refsExpanded = !refsExpanded;
+  if (refsExpanded) {
+    sidebar.classList.remove('references-collapsed');
+    sidebar.classList.add('references-expanded');
+    toggleRefsBtn.innerText = '收起 ▴';
+  } else {
+    sidebar.classList.remove('references-expanded');
+    sidebar.classList.add('references-collapsed');
+    toggleRefsBtn.innerText = '更多来源 ▾';
+  }
+});
+
+/* ------------------ 发送/接收流式 (已修复) ------------------ */
+submitBtn.addEventListener("click", handleSubmit);
+questionInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } });
+
+let abortController = null;
+let totalReferences = 0;
+
+async function handleSubmit() {
+  const question = questionInput.value.trim();
+  if (!question) { alert("问题不能为空"); return; }
+  if (!jwtToken) { alert("请先登录"); return; }
+
+  submitBtn.disabled = true;
+  liveLoader.style.display = 'inline-block';
+  welcomeNote && (welcomeNote.style.display = "none");
+
+  appendUserMessage(question);
+  questionInput.value = "";
+
+  const payload = {
+    question: question,
+    session_id: sessionId || null,
+    thinking: !!thinkingModeToggle.checked,
+    model_id: modelSelector.value,
+    rerank_top_n: Number(rerankTopNInput.value || 10),
+    use_insert_block: !!insertBlockToggle.checked
+  };
+
+  try {
+    abortController && abortController.abort();
+    abortController = new AbortController();
+
+    const resp = await fetch(CHAT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + jwtToken },
+      body: JSON.stringify(payload),
+      signal: abortController.signal
+    });
+
+    if (!resp.ok) throw new Error("服务器返回错误: " + resp.status);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    const assistantBubbleEl = appendAssistantContainer();
+    totalReferences = 0;
+    refCountEl.innerText = `${totalReferences} 条`;
+    references.innerHTML = '';
+
+    let thinkingSoFar = "";
+    let finalSoFar = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let parts = buffer.split("\n\n");
+      buffer = parts.pop();
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        let raw = trimmed;
+        if (raw.startsWith("data:")) raw = raw.substring(5).trim();
+
+        if (raw.startsWith("SESSION:")) {
+          const sid = raw.substring("SESSION:".length).trim();
+          if (sid) {
+            sessionId = sid;
+            localStorage.setItem(STORAGE_SESSION_KEY, sessionId);
+            updateLoginUI();
+          }
+        } else if (raw.startsWith("THINK:")) {
+          thinkingSoFar += raw.substring("THINK:".length);
+          updateAssistantThinking(assistantBubbleEl, thinkingSoFar);
+        } else if (raw.startsWith("CONTENT:")) {
+          finalSoFar += raw.substring("CONTENT:".length);
+          updateAssistantFinal(assistantBubbleEl, finalSoFar);
+        } else if (raw.startsWith("SOURCE:")) {
+          try {
+            const src = JSON.parse(raw.substring("SOURCE:".length).trim());
+            prependReference(src);
+            totalReferences++;
+            refCountEl.innerText = `${totalReferences} 条`;
+          } catch (e) { console.warn("解析 SOURCE 失败：", e, raw); }
+        } else if (raw.startsWith("ERROR:")) {
+          updateAssistantFinal(assistantBubbleEl, "发生错误：" + raw.substring("ERROR:".length).trim());
+        } else if (raw.startsWith("DONE:")) {
+            // 🔥 修复点 2: 捕获DONE消息，并在此处执行流结束后的操作
+            console.log("Stream finished.");
+            // 可以在这里添加一些流结束后才执行的UI逻辑，例如显示反馈按钮等
+        } else {
+          finalSoFar += raw;
+          updateAssistantFinal(assistantBubbleEl, finalSoFar);
+        }
+      }
+    }
+  } catch (err) {
+    // 只有在不是 503 错误时才提示
+    if (err.name === 'AbortError') {
+      appendSystemMessage("请求已中止。");
+    } else if (err.message.indexOf("维护中") === -1) {
+      appendSystemMessage("请求失败：" + (err.message || err));
+    }
+  } finally {
+    liveLoader.style.display = 'none';
+    submitBtn.disabled = false;
+    updateLoginUI();
+  }
+}
+
+/* ------------------ 辅助 UI 操作（消息追加） ------------------ */
+function appendUserMessage(text) {
+  const div = document.createElement("div");
+  div.className = "msg user";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.innerText = text;
+  div.appendChild(bubble);
+  conversation.appendChild(div);
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+function appendAssistantContainer() {
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const block = document.createElement("div");
+  block.className = "assistant-block";
+  const thinkingSection = document.createElement("div");
+  thinkingSection.className = "block-section";
+  thinkingSection.style.display = thinkingModeToggle.checked ? "block" : "none";
+  const thinkingTitle = document.createElement("div");
+  thinkingTitle.className = "section-title";
+  thinkingTitle.innerHTML = `<span class="label">思考过程</span><button class="toggle-small">收起</button>`;
+  const thinkingBody = document.createElement("div");
+  thinkingBody.className = "section-body";
+  thinkingBody.style.whiteSpace = "pre-wrap";
+  const finalSection = document.createElement("div");
+  finalSection.className = "block-section";
+  const finalTitle = document.createElement("div");
+  finalTitle.className = "section-title";
+  finalTitle.innerHTML = `<span class="label">正文</span><span class="small-muted">（最终回答）</span>`;
+  const finalBody = document.createElement("div");
+  finalBody.className = "section-body";
+  thinkingSection.appendChild(thinkingTitle);
+  thinkingSection.appendChild(thinkingBody);
+  finalSection.appendChild(finalTitle);
+  finalSection.appendChild(finalBody);
+  block.appendChild(thinkingSection);
+  block.appendChild(finalSection);
+  bubble.appendChild(block);
+  div.appendChild(bubble);
+  conversation.appendChild(div);
+  conversation.scrollTop = conversation.scrollHeight;
+  const tBtn = thinkingTitle.querySelector('button.toggle-small');
+  tBtn.addEventListener('click', () => {
+    if (thinkingBody.style.display === 'none') {
+      thinkingBody.style.display = 'block';
+      tBtn.innerText = '收起';
+    } else {
+      thinkingBody.style.display = 'none';
+      tBtn.innerText = '展开';
+    }
+    conversation.scrollTop = conversation.scrollHeight;
+  });
+  return { thinkingBody, finalBody };
+}
+
+function updateAssistantThinking(container, text) {
+  if (!container) return;
+  container.thinkingBody.innerText = text;
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+function updateAssistantFinal(container, text) {
+  if (!container) return;
+  if (window.marked) {
+    try { container.finalBody.innerHTML = window.marked.parse(text); }
+    catch (e) { container.finalBody.innerText = text; }
+  } else {
+    container.finalBody.innerText = text;
+  }
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+function appendSystemMessage(text) {
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.style.background = "linear-gradient(90deg,#eef6ff,#ffffff)";
+  bubble.style.color = "#0f172a";
+  bubble.innerText = text;
+  div.appendChild(bubble);
+  conversation.appendChild(div);
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
+/* ------------------ 参考来源添加 ------------------ */
+function prependReference(src) {
+  const el = document.createElement('div');
+  el.className = 'reference-item';
+  const title = src.fileName || (`来源 ${src.id || ''}`);
+  const meta = `初始分: ${src.initialScore ?? '-'} | 重排分: ${src.rerankedScore ?? '-'} ${src.canAnswer ? ' | 可回答 ✓' : ''}`;
+  let html = `<div style="font-weight:700;margin-bottom:6px;">${escapeHtml(title)}</div>`;
+  html += `<div class="reference-meta">${escapeHtml(meta)}</div>`;
+  if (src.content) html += `<div>${escapeHtml(src.content).replace(/\n/g,'<br>')}</div>`;
+  if (src.keyPassage) html += `<div class="ref-keypassage">${escapeHtml(src.keyPassage)}</div>`;
+  if (src.url) html += `<div style="margin-top:8px;"><a href="${escapeHtml(src.url)}" target="_blank" rel="noreferrer">打开来源</a></div>`;
+  el.innerHTML = html;
+  references.prepend(el);
+}
+
+/* ------------------ 工具函数 ------------------ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+}
+
+/* ------------------ 页面载入时行为 ------------------ */
+window.addEventListener('load', () => {
+  updateLoginUI();
+  if (!jwtToken) {
+    setTimeout(() => { loginModal.style.display = 'flex'; }, 200);
+  } else {
+    appendSystemMessage("检测到已登录，可继续多轮对话。");
+  }
+});
+
+/* ------------------ 登出 ------------------ */
+function logout() {
+  localStorage.removeItem(STORAGE_TOKEN_KEY);
+  localStorage.removeItem(STORAGE_SESSION_KEY);
+  localStorage.removeItem(STORAGE_USER_KEY);
+  jwtToken = null; sessionId = null; username = null;
+  updateLoginUI();
+  appendSystemMessage("已登出，当前会话失效。");
+}
+</script>
+
+<script src="/static/marked.min.js"></script>
+
+</body>
+</html>
