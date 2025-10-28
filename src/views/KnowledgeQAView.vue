@@ -48,15 +48,15 @@
         </div>
       </div>
 
-      <!-- 加载动画 -->
-      <div v-if="loading" class="loading-box">
-        <div class="spinner"></div>
-        <p>AI正在分析您的问题...</p>
-      </div>
-
       <!-- 回答区域 -->
-      <div v-if="answer || references.length > 0" class="answer-card">
+      <div v-if="loading || answer || references.length > 0" class="answer-card">
         <h2 class="answer-title">💡 回答</h2>
+
+        <!-- 加载提示 -->
+        <div v-if="loading && !answer" class="loading-hint">
+          <div class="spinner-small"></div>
+          <span>AI正在思考中...</span>
+        </div>
 
         <!-- 正文 -->
         <div v-if="answer" class="answer-content">
@@ -290,13 +290,13 @@ export default defineComponent({
       
       switch (message.type) {
         case 'THINK':
-          thinking.value += message.data;
+          thinking.value = thinking.value + message.data;
           break;
 
         case 'CONTENT':
           // 过滤状态消息
           if (!isStatusMessage(message.data)) {
-            answer.value += message.data;
+            answer.value = answer.value + message.data;
           }
           break;
 
@@ -583,6 +583,26 @@ export default defineComponent({
   margin: 0 0 1.5rem 0;
   padding-bottom: 1rem;
   border-bottom: 2px solid #e5e7eb;
+}
+
+.loading-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+.spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .answer-content {
