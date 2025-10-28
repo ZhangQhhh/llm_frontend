@@ -8,15 +8,8 @@ import { UserRole, hasPermission, isAdmin, isSuperAdmin } from "@/config/permiss
 interface UserInfo {
   id: string;
   username: string;
-  photo: string;
   role: string;
   status: string;  // 1 表示没有被封禁，0表示被封禁
-  vip: number;
-  email: string;
-  followingCount: number;
-  followerCount: number;
-  bio: string;
-  location: string;
 }
 
 // [3] 定义 Vuex state 的完整形状
@@ -30,32 +23,34 @@ interface UserPayload extends UserInfo {
   is_login: boolean;
 }
 
-// [5] 定义 API 响应类型
-interface LoginSuccessResponse {
-  error_msg: "success";
-  token: string;
+// [5] 定义统一 API 响应类型 (对应后端 XspaceResult)
+interface XspaceResult<T = any> {
+  success: boolean;
+  code: number;
+  message: string;
+  data: T;
 }
 
-interface GetInfoSuccessResponse extends UserInfo {
-  error_msg: "success";
+// 登录响应数据
+interface LoginResponseData {
+  token?: string;  // 可选，因为失败时可能没有 token
+  error_msg?: string;  // 后端在失败时可能返回此字段
 }
 
-interface ApiErrorResponse {
-  error_msg: string; // 任何非 "success" 的字符串
-  message?: string;
-}
+// 用户信息响应数据
+interface UserInfoResponseData extends UserInfo {}
 
 // [6] 定义 Action 载荷类型
 interface LoginData {
   username: string;
   password: string;
-  success: (resp: LoginSuccessResponse) => void;
-  error: (resp: ApiErrorResponse) => void;
+  success: (resp: XspaceResult<LoginResponseData>) => void;
+  error: (resp: XspaceResult<any>) => void;
 }
 
 interface GetInfoData {
-  success: (resp: GetInfoSuccessResponse) => void;
-  error: (resp: ApiErrorResponse | any) => void;
+  success: (resp: XspaceResult<UserInfoResponseData>) => void;
+  error: (resp: XspaceResult<any> | any) => void;
 }
 
 // [7] 定义 RootState，如果你有根 state 的话。这里我们用 'any' 代替
@@ -66,17 +61,10 @@ type RootState = any;
 const state: UserState = {
   id: "",
   username: "",
-  photo: "",
   token: "",
-  role: "",
+  role: "",   
   is_login: false,
   status: "",  // 1 表示没有被封禁，0表示被封禁
-  vip: 0,
-  email: "",
-  followingCount: 0,
-  followerCount: 0,
-  bio: "", // [重要] 已添加，否则响应式会出问题
-  location: "", // [重要] 已添加
 };
 
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
@@ -107,16 +95,9 @@ export default {
     updateUser(state: UserState, user: UserPayload) {
       state.id = user.id;
       state.username = user.username;
-      state.photo = user.photo;
       state.role = user.role;
       state.is_login = user.is_login;
       state.status = user.status
-      state.vip = user.vip,
-      state.email = user.email,
-      state.followerCount = user.followerCount,
-      state.followingCount = user.followingCount,
-      state.bio = user.bio,
-      state.location = user.location
     },
     // [10] 为 token 参数添加类型
     updateToken(state: UserState, token: string) {
@@ -126,23 +107,16 @@ export default {
       state.id = "";
       state.username = "";
       state.token = "";
-      state.photo = "";
       state.role = "";
       state.is_login = false;
       state.status = "";
-      state.vip = 0;
-      state.email = "";
-      state.followerCount = 0;
-      state.followingCount = 0;
-      state.bio = "";
-      state.location = "";
     }
   },
   actions: {  // 修改state的函数写在actions里边
     // [11] 为 context 和 data 添加类型
     async login(context: ActionContext<UserState, RootState>, data: LoginData) {
       try {
-        const response = await http.post<LoginSuccessResponse | ApiErrorResponse>(
+        const response = await http.post<XspaceResult<LoginResponseData>>(
           API_ENDPOINTS.USER.LOGIN,
           {
             username: data.username,
@@ -151,19 +125,40 @@ export default {
         );
         
         const resp = response.data;
-        if (resp.error_msg === "success") {
-          const successResp = resp as LoginSuccessResponse;
-          localStorage.setItem("jwt_token", successResp.token);
-          context.commit("updateToken", successResp.token);
-          data.success(successResp);
+
+        
+        // 检查是否真的成功
+        // 1. resp.success && resp.code === 200 (外层成功)
+        // 2. resp.data.token 存在 (有 token)
+        // 3. resp.data.error_msg === "success" 或不存在 (内层成功标识)
+        const isSuccess = resp.success && 
+                         resp.code === 200 && 
+                         resp.data.token &&
+                         (!resp.data.error_msg || resp.data.error_msg === "success");
+        
+        if (isSuccess && resp.data.token) {
+          localStorage.setItem("jwt_token", resp.data.token);
+          context.commit("updateToken", resp.data.token);
+          data.success(resp);
         } else {
-          data.error(resp);
+          // 处理登录失败的情况
+          const errorMsg = resp.data?.error_msg && resp.data.error_msg !== "success" 
+            ? resp.data.error_msg 
+            : (resp.message || '登录失败，请检查用户名和密码');
+          data.error({
+            success: false,
+            code: resp.code,
+            message: errorMsg,
+            data: null
+          });
         }
       } catch (error: any) {
         // 捕获HTTP错误，如403等
         data.error({
-          error_msg: "error",
-          message: error.response?.status === 403 ? "用户名或密码错误" : "登录失败，请稍后重试"
+          success: false,
+          code: error.response?.status || 500,
+          message: error.response?.status === 403 ? "用户名或密码错误" : "登录失败，请稍后重试",
+          data: null
         });
       }
     },
@@ -175,23 +170,22 @@ export default {
 
     async getinfo(context: ActionContext<UserState, RootState>, data: GetInfoData) {
       try {
-        const response = await http.get<GetInfoSuccessResponse | ApiErrorResponse>(
-          API_ENDPOINTS.USER.INFO,
-          {
-            headers: {
-              Authorization: "Bearer " + context.state.token,
-            }
-          }
+        const response = await http.get<XspaceResult<UserInfoResponseData>>(
+          API_ENDPOINTS.USER.INFO
         );
         
         const resp = response.data;
-        if (resp.error_msg === "success") {
-          const successResp = resp as GetInfoSuccessResponse;
-          context.commit("updateUser", {
-            ...resp,
+
+        if (resp.success && resp.code === 200) {
+          // 将后端返回的 role 转换为小写，以匹配前端的 UserRole 枚举
+          const userData = {
+            ...resp.data,
+            role: resp.data.role?.toLowerCase() || '',
             is_login: true,
-          });
-          data.success(successResp);
+          };
+
+          context.commit("updateUser", userData);
+          data.success(resp);
         } else {
           data.error(resp);
         }

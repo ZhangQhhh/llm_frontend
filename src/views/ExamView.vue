@@ -133,7 +133,7 @@
         </template>
         <div class="score-display">
           <div class="score-main">
-            <span class="score-value">{{ gradeReport.total_score.toFixed(2) }}</span>
+            <span class="score-value">{{ (gradeReport.total_score || 0).toFixed(2) }}</span>
             <span class="score-total">/ {{ questions.length }}</span>
           </div>
           <el-progress
@@ -144,7 +144,7 @@
         </div>
         <div class="score-grid">
           <div
-            v-for="(item, idx) in gradeReport.items"
+            v-for="(item, idx) in (gradeReport.items || [])"
             :key="idx"
             :class="['score-cell', getScoreClass(item)]"
             :title="getScoreTitle(item, idx)"
@@ -316,7 +316,7 @@ export default defineComponent({
     })
 
     const scorePercentage = computed(() => {
-      if (!gradeReport.value) return 0
+      if (!gradeReport.value || gradeReport.value.total_score === undefined) return 0
       const total = questions.value.length || 1
       return Math.round((gradeReport.value.total_score / total) * 100)
     })

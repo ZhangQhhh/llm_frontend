@@ -3,7 +3,7 @@ export const API_BASE_URL = process.env.VUE_APP_API_BASE_URL;
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
-    USERS: `${API_BASE_URL}/admin/users`,
+    USERS: `/admin/users`,
     // 题库管理
     IMPORT_TEMPLATE: '/admin/import_template/public_file',
     EXPORT_TEACHER_DOCX: '/admin/export_teacher_docx',
@@ -11,9 +11,9 @@ export const API_ENDPOINTS = {
     EXPORT_SCORES_DOCX: '/admin/export_scores_docx',
   },
   USER: {
-    LOGIN: `${API_BASE_URL}/user/account/token/`,
-    REGISTER: `${API_BASE_URL}/user/account/register/`,
-    INFO: `${API_BASE_URL}/user/account/info/`,
+    LOGIN: `/user/account/token/`,
+    REGISTER: `/user/account/register/`,
+    INFO: `/user/account/info/`,
   },
   // 知识问答相关API
   KNOWLEDGE: {
@@ -23,13 +23,13 @@ export const API_ENDPOINTS = {
   },
   // 反馈相关API
   FEEDBACK: {
-    LIKE: `${API_BASE_URL}/feedback/like`,
-    DISLIKE: `${API_BASE_URL}/feedback/dislike`,
+    LIKE: `/feedback/like`,
+    DISLIKE: `/feedback/dislike`,
   },
   // 认证相关API
   AUTH: {
-    CHANGE_PASSWORD: `${API_BASE_URL}/auth/change_password`,
-    RESET_PASSWORD: `${API_BASE_URL}/auth/reset_password`,
+    CHANGE_PASSWORD: `/auth/change_password`,
+    RESET_PASSWORD: `/auth/reset_password`,
   },
   // 题库管理API
   QUESTIONS: {
