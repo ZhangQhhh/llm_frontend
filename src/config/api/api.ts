@@ -1,5 +1,5 @@
 export const API_BASE_URL = process.env.VUE_APP_API_BASE_URL;
-
+export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
@@ -17,11 +17,11 @@ export const API_ENDPOINTS = {
   },
   // 知识问答相关API
   KNOWLEDGE: {
-    CHAT: '/api/knowledge_chat',
-    CONVERSATION_CHAT: '/llm/api/knowledge_chat_conversation',
-    CONVERSATION_CLEAR: '/llm/api/conversation/clear',
+    CHAT: `${LLM_BASE_URL}/knowledge_chat`,
+    CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
+    CONVERSATION_CLEAR: `${LLM_BASE_URL}/conversation/clear`,
   },
-  // 反馈相关API
+  // 反馈相关API（在 3000 端口的主后端）
   FEEDBACK: {
     LIKE: `/feedback/like`,
     DISLIKE: `/feedback/dislike`,

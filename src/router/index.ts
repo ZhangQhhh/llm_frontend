@@ -32,7 +32,10 @@ const routes: Array<RouteRecordRaw> = [
     path: '/knowledge-qa',
     name: 'knowledge-qa',
     component: KnowledgeQAView,
-    meta: { title: '知识问答' }
+    meta: { 
+      requiresAuth: true,
+      title: '知识问答' 
+    }
   },
   {
     path: '/conversation',

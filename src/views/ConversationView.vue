@@ -99,7 +99,13 @@
                       <span class="icon">✨</span>
                       <span class="title">回答</span>
                     </div>
-                    <div class="section-body" v-html="renderMarkdown(msg.content)"></div>
+                    <!-- 流式输出时显示原始文本，完成后显示 Markdown -->
+                    <div v-if="loading && index === messages.length - 1" 
+                         class="section-body" 
+                         style="white-space: pre-wrap;">{{ msg.content }}</div>
+                    <div v-else 
+                         class="section-body markdown-content" 
+                         v-html="renderMarkdown(msg.content)"></div>
                   </div>
                 </div>
               </div>
@@ -134,8 +140,8 @@
                   <span v-if="ref.canAnswer" class="badge">✓ 已选中</span>
                 </div>
                 <div class="ref-meta">
-                  <span>初始分: {{ ref.initialScore?.toFixed(2) || '-' }}</span>
-                  <span>重排分: {{ ref.rerankedScore?.toFixed(2) || '-' }}</span>
+                  <span>初始分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
+                  <span>重排分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
                 </div>
                 <div class="ref-content">{{ ref.content }}</div>
                 <div v-if="ref.keyPassage" class="key-passage">
@@ -152,7 +158,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, nextTick, computed } from 'vue';
+import { defineComponent, ref, nextTick, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import {
@@ -163,6 +169,10 @@ import {
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
 import { getStorageItem, setStorageItem, removeStorageItem } from '@/utils/storageUtils';
+import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
+import 'highlight.js/styles/atom-one-dark.css';  // 代码高亮主题
+import 'katex/dist/katex.min.css';                // 数学公式样式
+import '@/assets/styles/markdown.css';            // Markdown 样式
 
 interface Message {
   role: 'user' | 'assistant';
@@ -216,13 +226,10 @@ export default defineComponent({
       });
     };
 
-    // Markdown渲染（简单版本，可以后续集成marked.js）
-    const renderMarkdown = (text: string) => {
-      return text
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>');
-    };
+    // 初始化复制代码功能
+    onMounted(() => {
+      setupCopyCode();
+    });
 
     // 发送消息
     const handleSubmit = async () => {
@@ -276,6 +283,9 @@ export default defineComponent({
 
     // 处理流式消息
     const handleStreamMessage = (message: StreamMessage, assistantMessage: Message) => {
+      // 获取当前助手消息在数组中的索引
+      const msgIndex = messages.value.indexOf(assistantMessage);
+      
       switch (message.type) {
         case 'SESSION':
           sessionId.value = message.data;
@@ -283,14 +293,16 @@ export default defineComponent({
           break;
 
         case 'THINK':
-          if (assistantMessage.thinking !== undefined) {
-            assistantMessage.thinking += message.data;
+          if (msgIndex !== -1 && messages.value[msgIndex].thinking !== undefined) {
+            messages.value[msgIndex].thinking += message.data;
           }
           scrollToBottom();
           break;
 
         case 'CONTENT':
-          assistantMessage.content += message.data;
+          if (msgIndex !== -1) {
+            messages.value[msgIndex].content += message.data;
+          }
           scrollToBottom();
           break;
 
@@ -304,7 +316,9 @@ export default defineComponent({
           break;
 
         case 'ERROR':
-          assistantMessage.content = `错误: ${message.data}`;
+          if (msgIndex !== -1) {
+            messages.value[msgIndex].content = `错误: ${message.data}`;
+          }
           break;
 
         case 'DONE':

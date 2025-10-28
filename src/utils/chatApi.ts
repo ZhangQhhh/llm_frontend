@@ -135,13 +135,17 @@ export async function clearSession(sessionId: string, token: string): Promise<vo
 export async function submitLikeFeedback(
   question: string,
   answer: string,
+  modelId: string,
+  feedbackType: string,
   sources: ReferenceSource[]
 ): Promise<void> {
   try {
     await http.post(API_ENDPOINTS.FEEDBACK.LIKE, {
       question,
       answer,
-      source: JSON.stringify(sources)
+      modelId,
+      feedbackType,
+      source: sources
     });
   } catch (error: any) {
     throw new Error(error.response?.data?.message || `提交失败: ${error.response?.status || 'unknown'}`);
@@ -156,6 +160,8 @@ export async function submitDislikeFeedback(
   answer: string,
   sources: ReferenceSource[],
   reason: string,
+  feedbackType: string,
+  modelId: string,
   reporterName?: string,
   reporterUnit?: string
 ): Promise<void> {
@@ -163,8 +169,10 @@ export async function submitDislikeFeedback(
     await http.post(API_ENDPOINTS.FEEDBACK.DISLIKE, {
       question,
       answer,
-      source: JSON.stringify(sources),
+      source: sources,
       reason,
+      feedbackType,
+      modelId,
       reporterName,
       reporterUnit
     });

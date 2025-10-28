@@ -60,7 +60,9 @@
 
         <!-- 正文 -->
         <div v-if="answer" class="answer-content">
-          <div v-html="renderMarkdown(answer)"></div>
+          <!-- 流式输出时显示原始文本，完成后显示 Markdown -->
+          <div v-if="loading" style="white-space: pre-wrap;">{{ answer }}</div>
+          <div v-else v-html="renderMarkdown(answer)"></div>
         </div>
 
         <!-- 思考过程 -->
@@ -93,8 +95,8 @@
               </div>
 
               <div class="ref-scores">
-                <span>初始检索分: {{ ref.initialScore?.toFixed(2) || '-' }}</span>
-                <span>重排序分: {{ ref.rerankedScore?.toFixed(2) || '-' }}</span>
+                <span>初始检索分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
+                <span>重排序分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
                 <span
                   v-if="ref.canAnswer !== undefined"
                   :class="ref.canAnswer ? 'can-answer' : 'cannot-answer'"
@@ -183,6 +185,7 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
+import { useStore } from 'vuex';
 import {
   sendStreamChatRequest,
   submitLikeFeedback,
@@ -192,10 +195,14 @@ import {
 } from '@/utils/chatApi';
 import { API_ENDPOINTS } from '@/config/api/api';
 import { isStatusMessage } from '@/utils/htmlUtils';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 export default defineComponent({
   name: 'KnowledgeQAView',
   setup() {
+    const store = useStore();
+    
     // 状态
     const question = ref('');
     const answer = ref('');
@@ -221,13 +228,21 @@ export default defineComponent({
     const lastQuestion = ref('');
     const lastAnswer = ref('');
 
+    // 配置 marked
+    marked.setOptions({
+      breaks: true,  // 支持 GitHub 风格的换行
+      gfm: true,     // 启用 GitHub Flavored Markdown
+    });
+
     // Markdown渲染
     const renderMarkdown = (text: string) => {
-      return text
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>');
+      try {
+        const html = marked.parse(text) as string;
+        return DOMPurify.sanitize(html);
+      } catch (error) {
+        console.error('Markdown 渲染失败:', error);
+        return text;
+      }
     };
 
     // 发送问题
@@ -252,7 +267,7 @@ export default defineComponent({
             use_insert_block: insertBlock.value,
             insert_block_llm_id: modelId.value
           },
-          '', // 知识问答不需要token
+          store.state.user.token,
           (message: StreamMessage) => {
             handleStreamMessage(message);
           }
@@ -271,6 +286,8 @@ export default defineComponent({
 
     // 处理流式消息
     const handleStreamMessage = (message: StreamMessage) => {
+      console.log('收到消息:', message.type, message.data ? message.data.substring(0, 100) : '');
+      
       switch (message.type) {
         case 'THINK':
           thinking.value += message.data;
@@ -284,11 +301,14 @@ export default defineComponent({
           break;
 
         case 'SOURCE':
+          console.log('收到SOURCE消息，原始数据:', message.data);
           try {
             const source = JSON.parse(message.data) as ReferenceSource;
+            console.log('解析后的SOURCE:', source);
             references.value.push(source);
+            console.log('当前references数量:', references.value.length);
           } catch (e) {
-            console.error('解析SOURCE失败:', e);
+            console.error('解析SOURCE失败:', e, '原始数据:', message.data);
           }
           break;
 
@@ -297,7 +317,12 @@ export default defineComponent({
           break;
 
         case 'DONE':
-          console.log('流式响应完成');
+          console.log('流式响应完成，最终references数量:', references.value.length);
+          loading.value = false;
+          break;
+          
+        case 'UNKNOWN':
+          console.warn('未知消息类型:', message.data ? message.data.substring(0, 100) : '');
           break;
       }
     };
@@ -305,7 +330,7 @@ export default defineComponent({
     // 点赞
     const handleLike = async () => {
       try {
-        await submitLikeFeedback(lastQuestion.value, lastAnswer.value, references.value);
+        await submitLikeFeedback(lastQuestion.value, lastAnswer.value, modelId.value, 'LIKE', references.value);
         feedbackSubmitted.value = true;
         alert('感谢您的反馈！');
       } catch (error: any) {
@@ -328,6 +353,8 @@ export default defineComponent({
           lastAnswer.value,
           references.value,
           feedbackReason.value,
+          'DISLIKE',
+          modelId.value,
           reporterName.value,
           reporterUnit.value
         );
@@ -563,6 +590,117 @@ export default defineComponent({
   line-height: 1.8;
   color: #374151;
   margin-bottom: 2rem;
+}
+
+/* Markdown 样式 */
+.answer-content :deep(h1),
+.answer-content :deep(h2),
+.answer-content :deep(h3),
+.answer-content :deep(h4) {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.answer-content :deep(h1) {
+  font-size: 2em;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.answer-content :deep(h2) {
+  font-size: 1.75em;
+}
+
+.answer-content :deep(h3) {
+  font-size: 1.5em;
+}
+
+.answer-content :deep(h4) {
+  font-size: 1.25em;
+}
+
+.answer-content :deep(p) {
+  margin-bottom: 1rem;
+}
+
+.answer-content :deep(ul),
+.answer-content :deep(ol) {
+  margin-left: 2rem;
+  margin-bottom: 1rem;
+}
+
+.answer-content :deep(li) {
+  margin-bottom: 0.5rem;
+}
+
+.answer-content :deep(code) {
+  background-color: #f3f4f6;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #dc2626;
+}
+
+.answer-content :deep(pre) {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.answer-content :deep(pre code) {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.answer-content :deep(blockquote) {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  margin-left: 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.answer-content :deep(strong) {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.answer-content :deep(em) {
+  font-style: italic;
+}
+
+.answer-content :deep(a) {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.answer-content :deep(a:hover) {
+  color: #2563eb;
+}
+
+.answer-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.answer-content :deep(th),
+.answer-content :deep(td) {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.answer-content :deep(th) {
+  background-color: #f3f4f6;
+  font-weight: 600;
 }
 
 /* 思考过程 */

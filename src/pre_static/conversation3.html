@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -255,7 +254,176 @@ select,input[type=number]{
   color:var(--text-primary);
   white-space:pre-wrap;
   word-break:break-word;
-  line-height:1.8; /* 增加行高 */
+  line-height:1.9; /* 增加行高到1.9 */
+}
+
+/* 🔥 核心优化：正文内部元素样式 */
+.section-body p {
+  margin: 1.2em 0; /* 段落间距 */
+  line-height: 1.9;
+}
+
+.section-body p:first-child {
+  margin-top: 0;
+}
+
+.section-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* 标题样式 */
+.section-body h1, .section-body h2, .section-body h3,
+.section-body h4, .section-body h5, .section-body h6 {
+  margin: 1.5em 0 0.8em 0;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.section-body h1 { font-size: 1.8em; border-bottom: 2px solid #e0e7ef; padding-bottom: 0.3em; }
+.section-body h2 { font-size: 1.5em; border-bottom: 1px solid #e0e7ef; padding-bottom: 0.3em; }
+.section-body h3 { font-size: 1.3em; }
+.section-body h4 { font-size: 1.1em; }
+
+/* 列表样式 */
+.section-body ul, .section-body ol {
+  margin: 1em 0;
+  padding-left: 2em;
+  line-height: 1.9;
+}
+
+.section-body ul {
+  list-style-type: disc;
+}
+
+.section-body ol {
+  list-style-type: decimal;
+}
+
+.section-body li {
+  margin: 0.6em 0;
+  padding-left: 0.3em;
+}
+
+.section-body li > p {
+  margin: 0.4em 0;
+}
+
+/* 嵌套列表 */
+.section-body ul ul, .section-body ol ul {
+  margin: 0.5em 0;
+  list-style-type: circle;
+}
+
+.section-body ul ol, .section-body ol ol {
+  margin: 0.5em 0;
+}
+
+/* 代码块样式 */
+.section-body code {
+  background: #f5f7fa;
+  padding: 0.2em 0.5em;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #e91e63;
+  border: 1px solid #e0e7ef;
+}
+
+.section-body pre {
+  background: #f5f7fa;
+  border: 1px solid #e0e7ef;
+  border-radius: 8px;
+  padding: 1.2em;
+  margin: 1.2em 0;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.section-body pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: #1a202c;
+  font-size: 0.95em;
+}
+
+/* 引用块样式 */
+.section-body blockquote {
+  margin: 1.2em 0;
+  padding: 1em 1.2em;
+  border-left: 4px solid var(--accentA);
+  background: #f8f9ff;
+  color: #4a5568;
+  font-style: italic;
+  border-radius: 4px;
+}
+
+.section-body blockquote p {
+  margin: 0.5em 0;
+}
+
+/* 表格样式 */
+.section-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.95em;
+}
+
+.section-body th, .section-body td {
+  border: 1px solid #e0e7ef;
+  padding: 0.8em 1em;
+  text-align: left;
+}
+
+.section-body th {
+  background: #f5f7fa;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.section-body tr:hover {
+  background: #fafbfc;
+}
+
+/* 水平线样式 */
+.section-body hr {
+  border: none;
+  border-top: 2px solid #e0e7ef;
+  margin: 2em 0;
+}
+
+/* 链接样式 */
+.section-body a {
+  color: var(--accentA);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-bottom 0.2s;
+}
+
+.section-body a:hover {
+  border-bottom: 1px solid var(--accentA);
+}
+
+/* 强调样式 */
+.section-body strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.section-body em {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* 图片样式 */
+.section-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1em 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 /* 思考过程部分 */
@@ -375,6 +543,7 @@ select,input[type=number]{
   .card{padding:18px;}
 }
 </style>
+<script src="/static/marked.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -450,7 +619,7 @@ select,input[type=number]{
     </div>
 
     <div class="footer">
-      <div class="small-muted">内部静态资源优先 · 不依赖 CDN</div>
+      <div class="small-muted">内部</div>
       <div class="small-muted">© 多轮知识对话系统</div>
     </div>
   </div>
@@ -459,7 +628,7 @@ select,input[type=number]{
 <div id="loginModal" class="modal-overlay" style="display:none;">
   <div class="login-modal" role="dialog" aria-modal="true">
     <h3>系统登录</h3>
-    <div class="small-muted">登录成功后后端返回 map.put("token", jwt); map.put("error_msg", "success"); token 将被用于 Authorization: Bearer &lt;token&gt;</div>
+    <div class="small-muted">登录返回 map.put("token", jwt); map.put("error_msg", "success"); token 将被用于 Authorization: Bearer &lt;token&gt;</div>
 
     <div class="login-row">
       <input id="loginUsername" placeholder="用户名 / 工号" />
@@ -616,22 +785,21 @@ clearSessionBtn.addEventListener("click", async () => {
   const currentSessionId = sessionId; // 备份当前ID用于API调用
   if (currentSessionId) {
       try {
-          await fetch("/llm/api/conversation/clear", {
+          const resp = await fetch("/llm/api/conversation/clear", {
               method: "POST",
               headers: { "Content-Type": "application/json", ...(jwtToken ? { "Authorization": "Bearer " + jwtToken } : {}) },
               body: JSON.stringify({ session_id: currentSessionId })
           });
 
-        // <-- 【修改点 2.2】: 添加 503 维护检查
+          // 添加 503 维护检查
           if (resp.status === 503) {
               console.warn("检测到服务器正在维护(清空会话)...");
               window.location.reload();
               throw new Error("服务器维护中，正在刷新...");
           }
-          // -- 检查结束
 
       } catch (e) {
-          console.warn("调用后端清空接口失败，将仅在前端清除。");
+          console.warn("调用后端清空接口失败，将仅在前端清除。", e);
       }
   }
 
@@ -641,10 +809,10 @@ clearSessionBtn.addEventListener("click", async () => {
   updateLoginUI();  // 调用统一的UI更新函数，确保所有显示同步
 
   // 清空UI显示区域
-  conversation.innerHTML = '<div class="small-muted" id="welcomeNote">会话已清空，请重新发送问题以开始新的会话。</div>';
+  conversation.innerHTML = '<div class="small-muted" id="welcomeNote">✨ 会话已清空，发送新问题将自动创建新的会话。</div>';
   references.innerHTML = '';
   refCountEl.textContent = '0 条';
-  appendSystemMessage("本地会话已清空。");
+  appendSystemMessage("✅ 本地会话已清空，下次发送将创建新对话。");
 });
 
 
@@ -750,12 +918,13 @@ async function handleSubmit() {
         } else if (raw.startsWith("ERROR:")) {
           updateAssistantFinal(assistantBubbleEl, "发生错误：" + raw.substring("ERROR:".length).trim());
         } else if (raw.startsWith("DONE:")) {
-            // 🔥 修复点 2: 捕获DONE消息，并在此处执行流结束后的操作
-            console.log("Stream finished.");
-            // 可以在这里添加一些流结束后才执行的UI逻辑，例如显示反馈按钮等
+          console.log("Stream finished.");
         } else {
-          finalSoFar += raw;
-          updateAssistantFinal(assistantBubbleEl, finalSoFar);
+          // 🔥 修复：移除自动追加到正文的逻辑，改为警告
+          console.warn("收到未识别的数据格式:", raw);
+          // 如果确实需要兜底处理，可以取消下面的注释（但建议后端规范化输出）
+          // finalSoFar += raw;
+          // updateAssistantFinal(assistantBubbleEl, finalSoFar);
         }
       }
     }
@@ -834,17 +1003,37 @@ function appendAssistantContainer() {
 
 function updateAssistantThinking(container, text) {
   if (!container) return;
-  container.thinkingBody.innerText = text;
+  // 🔥 修复：将后端的 \u2029 转换回 \n
+  const normalizedText = text.replace(/\u2029/g, '\n');
+  container.thinkingBody.innerText = normalizedText;
   conversation.scrollTop = conversation.scrollHeight;
 }
 
 function updateAssistantFinal(container, text) {
   if (!container) return;
+  // 🔥 修复：将后端的 \u2029 转换回 \n
+  const normalizedText = text.replace(/\u2029/g, '\n');
+
   if (window.marked) {
-    try { container.finalBody.innerHTML = window.marked.parse(text); }
-    catch (e) { container.finalBody.innerText = text; }
+    try {
+      // 配置 marked 选项，确保正确处理换行和GFM格式
+      container.finalBody.innerHTML = window.marked.parse(normalizedText, {
+        breaks: true,  // 将单个换行符转换为 <br>
+        gfm: true,     // 启用 GitHub Flavored Markdown
+        headerIds: false,  // 禁用标题ID避免冲突
+        mangle: false  // 禁用邮箱混淆
+      });
+    }
+    catch (e) {
+      console.error("Markdown解析失败:", e);
+      // 降级处理：使用pre-wrap保留换行
+      container.finalBody.style.whiteSpace = 'pre-wrap';
+      container.finalBody.innerText = normalizedText;
+    }
   } else {
-    container.finalBody.innerText = text;
+    // 如果marked.js未加载，使用pre-wrap保留换行
+    container.finalBody.style.whiteSpace = 'pre-wrap';
+    container.finalBody.innerText = normalizedText;
   }
   conversation.scrollTop = conversation.scrollHeight;
 }
@@ -904,7 +1093,8 @@ function logout() {
 }
 </script>
 
-<script src="/static/marked.min.js"></script>
+
 
 </body>
 </html>
+

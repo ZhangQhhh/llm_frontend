@@ -280,7 +280,7 @@
 
                 <div class="switch-container">
                     <label class="switch">
-                        <input type="checkbox" id="thinkingModeToggle" checked>
+                        <input type="checkbox" id="thinkingModeToggle" >
                         <span class="slider"></span>
                     </label>
                     <span>思考模式</span>
@@ -465,8 +465,10 @@
                 // <-- 修改点 2: 在请求体中添加 source 字段
                 body: JSON.stringify({
                     question: lastQuestion,
+                    feedback_type: "LIKE",
                     answer: lastAnswer,
-                    source: JSON.stringify(lastSources) // 将source数组转为JSON字符串
+                    modelId: modelSelector.value,
+                    source: lastSources // 直接传递数组对象，不要用JSON.stringify
                 }),
             });
 
@@ -504,14 +506,16 @@
             const response = await fetch(API_B_ENDPOINT, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                // <-- 修改点 3: 在请求体中添加 source 字段
+                // <-- 修改点 3: 在请求体中添加 source 字段和 feedbackType 字段
                 body: JSON.stringify({
+                    feedbackType: "DISLIKE",
                     question: lastQuestion,
                     answer: lastAnswer,
                     reason: reason,
                     reporterName: reporterName,
                     reporterUnit: reporterUnit,
-                    source: JSON.stringify(lastSources) // 将source数组转为JSON字符串
+                    modelId: modelSelector.value,
+                    source: lastSources
                 }),
             });
             // <-- 【修改点 2】: 添加 503 维护检查
@@ -646,7 +650,7 @@
                             try {
                                 const sourceData = JSON.parse(jsonString);
                                 lastSources.push(sourceData);
-                                if sourceData.canAnswer === true) {
+                                if (sourceData.canAnswer === true) {
                                     selectedNodeIds.add(sourceData.id);
                                 }
 

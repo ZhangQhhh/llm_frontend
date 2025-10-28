@@ -3,8 +3,8 @@ import { STORAGE_KEYS } from './api'; // 假设 api.ts 导出了 STORAGE_KEYS
 
 // 为你的 LLM/Knowledge API 定义单独的 baseURL
 // 你需要将这个环境变量添加到你的 .env 文件中
-// 例如：VUE_APP_LLM_API_BASE_URL=http://another-service.com
-const LLM_API_BASE_URL = process.env.LLM_BASE_URL;
+// 例如：VUE_APP_LLM_BASE_URL=/llm
+const LLM_API_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 
 // 创建一个专门用于 LLM 服务的 Axios 实例
 const llmHttp: AxiosInstance = axios.create({
