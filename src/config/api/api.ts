@@ -7,6 +7,10 @@ export const API_ENDPOINTS = {
     USER_LIST: `/api/admin/users/`,
     USER_BAN: `/api/admin/users/ban/`,
     USER_UNBAN: `/api/admin/users/unban/`,
+    // 账号审核
+    PENDING_USERS: `/api/admin/users/pending/`,
+    APPROVE_USER: `/api/admin/users/approve/`,
+    REJECT_USER: `/api/admin/users/reject/`,
     // 题库管理
     IMPORT_TEMPLATE: '/admin/import_template/public_file',
     EXPORT_TEACHER_DOCX: '/admin/export_teacher_docx',

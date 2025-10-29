@@ -8,6 +8,71 @@
       </header>
 
       <el-tabs v-model="activeTab" type="border-card">
+        <!-- 账号审核 -->
+        <el-tab-pane label="账号审核" name="approval">
+          <div class="tab-content">
+            <div class="action-bar">
+              <el-button type="primary" @click="loadPendingUsers" :loading="loadingPending" :icon="Refresh">
+                刷新待审核列表
+              </el-button>
+              <el-tag type="warning" v-if="pendingUsers.length > 0">
+                待审核：{{ pendingUsers.length }} 个账号
+              </el-tag>
+            </div>
+
+            <div v-if="loadingPending" style="text-align: center; padding: 40px">
+              <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+            </div>
+            <el-empty v-else-if="pendingUsers.length === 0" description="暂无待审核账号" />
+            <el-table
+              v-else
+              :data="pendingUsers"
+              border
+              size="small"
+              stripe
+              style="width: 100%; margin-top: 1rem"
+            >
+              <el-table-column prop="username" label="用户名" min-width="140" />
+              <el-table-column prop="policeId" label="警号" min-width="120">
+                <template #default="scope">{{ scope.row.policeId || scope.row.police_id || '—' }}</template>
+              </el-table-column>
+              <el-table-column prop="idCardNumber" label="身份证号" min-width="180">
+                <template #default="scope">
+                  <span v-if="scope.row.idCardNumber || scope.row.id_card_number">
+                    {{ maskIdCard(scope.row.idCardNumber || scope.row.id_card_number) }}
+                  </span>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="created_at" label="注册时间" min-width="160">
+                <template #default="scope">{{ scope.row.created_at || scope.row.createdAt || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="200" fixed="right">
+                <template #default="scope">
+                  <el-button
+                    type="success"
+                    plain
+                    size="small"
+                    :loading="approvalLoadingId === (scope.row.id || scope.row.username)"
+                    @click="approveUser(scope.row)"
+                  >
+                    批准
+                  </el-button>
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :loading="rejectLoadingId === (scope.row.id || scope.row.username)"
+                    @click="rejectUser(scope.row)"
+                  >
+                    拒绝
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
         <!-- 密码管理 -->
         <el-tab-pane label="密码管理" name="password">
           <div class="tab-content">
@@ -279,6 +344,10 @@ export default defineComponent({
     const users = ref<ManagedUser[]>([])
     const loadingUsers = ref(false)
     const actionLoadingId = ref<string | null>(null)
+    const pendingUsers = ref<ManagedUser[]>([])
+    const loadingPending = ref(false)
+    const approvalLoadingId = ref<string | null>(null)
+    const rejectLoadingId = ref<string | null>(null)
 
 
     const filteredQuestions = computed(() => {
@@ -628,10 +697,89 @@ export default defineComponent({
       }
     }
 
+    const loadPendingUsers = async () => {
+      loadingPending.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.PENDING_USERS))
+        if (response.ok) {
+          // 支持新的 API 格式: { success: true, code: 200, message: "...", data: { list: [...] } }
+          const raw = response.data?.data?.list || response.data?.list || response.data?.users || response.data || []
+          const list = Array.isArray(raw) ? raw : (raw.items || [])
+          pendingUsers.value = list
+        } else {
+          throw new Error(response.data?.message || '加载待审核用户列表失败')
+        }
+      } catch (error: any) {
+        pendingUsers.value = []
+        ElMessage.error(error?.message || '加载待审核用户列表失败')
+      } finally {
+        loadingPending.value = false
+      }
+    }
+
+    const approveUser = async (user: ManagedUser) => {
+      approvalLoadingId.value = user.id || user.username
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.APPROVE_USER), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('账号已批准')
+          await loadPendingUsers()
+          await loadUsers()
+        } else {
+          throw new Error(response.data?.message || '批准失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '批准失败，请稍后重试')
+      } finally {
+        approvalLoadingId.value = null
+      }
+    }
+
+    const rejectUser = async (user: ManagedUser) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要拒绝用户【${user.username}】的注册申请吗？`,
+          '确认操作',
+          {
+            type: 'warning',
+            confirmButtonText: '确定',
+            cancelButtonText: '取消'
+          }
+        )
+        rejectLoadingId.value = user.id || user.username
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.REJECT_USER), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('已拒绝该用户的注册申请')
+          await loadPendingUsers()
+        } else {
+          throw new Error(response.data?.message || '拒绝失败，请稍后重试')
+        }
+      } catch (error: any) {
+        if (error === 'cancel') return
+        ElMessage.error(error?.message || '拒绝失败，请稍后重试')
+      } finally {
+        rejectLoadingId.value = null
+      }
+    }
+
+    const maskIdCard = (idCard: string) => {
+      if (!idCard || idCard.length < 8) return idCard
+      return idCard.slice(0, 6) + '********' + idCard.slice(-4)
+    }
+
     onMounted(() => {
       loadQuestions()
       loadExportPapers()
       loadUsers()
+      loadPendingUsers()
     })
 
     return {
@@ -641,10 +789,12 @@ export default defineComponent({
       paperTitle, creatingPaper, paperMessage, exportPapers, selectedExportPaper,
       loadingExportPapers, exportingZip, exportingDocx, exportMessage,
       userSearch, users, loadingUsers, actionLoadingId,
+      pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion,
       approveAll, exportTeacher, createPaper, loadExportPapers, exportZip, exportDocx,
       loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,
+      loadPendingUsers, approveUser, rejectUser, maskIdCard,
       getStatusTagType, getStatusText, Refresh
     }
   }
@@ -727,5 +877,20 @@ export default defineComponent({
   border: 1px dashed #e5e7eb;
   white-space: pre-wrap;
   color: #374151;
+}
+.user-management-card {
+  margin-top: 1.5rem;
+  border-radius: 12px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 </style>

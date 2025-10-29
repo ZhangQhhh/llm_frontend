@@ -123,6 +123,27 @@
               />
             </div>
 
+            <div class="form-group">
+              <label>警号</label>
+              <input
+                type="text"
+                v-model="registerForm.policeId"
+                placeholder="请输入警号"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label>身份证号</label>
+              <input
+                type="text"
+                v-model="registerForm.idCardNumber"
+                placeholder="请输入身份证号"
+                required
+                maxlength="18"
+              />
+            </div>
+
             <button type="submit" class="submit-btn" :disabled="registerLoading">
               {{ registerLoading ? '注册中...' : '注册' }}
             </button>
@@ -146,6 +167,7 @@
 import { defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import http from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
 
@@ -171,7 +193,9 @@ export default defineComponent({
     const registerForm = ref({
       username: '',
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      policeId: '',
+      idCardNumber: ''
     });
     const registerLoading = ref(false);
     const registerError = ref('');
@@ -226,27 +250,35 @@ export default defineComponent({
       http.post(API_ENDPOINTS.USER.REGISTER, {
         username: registerForm.value.username,
         password: registerForm.value.password,
-        confirmPassword: registerForm.value.confirmPassword
+        policeId: registerForm.value.policeId,
+        idCardNumber: registerForm.value.idCardNumber
       })
         .then(response => {
           registerLoading.value = false;
           const data = response.data;
-          if (data.error_msg === 'success') {
-            alert('注册成功！请登录');
+          if (data.success || data.code === 200 || data.error_msg === 'success') {
+            ElMessage({
+              type: 'success',
+              message: '注册成功！您的账号需要等待管理员审批通过后方可使用，请耐心等待。',
+              duration: 5000,
+              showClose: true
+            });
             isLogin.value = true;
             loginForm.value.username = registerForm.value.username;
             registerForm.value = {
               username: '',
               password: '',
-              confirmPassword: ''
+              confirmPassword: '',
+              policeId: '',
+              idCardNumber: ''
             };
           } else {
-            registerError.value = data.error_msg || '注册失败，请重试';
+            registerError.value = data.message || data.error_msg || '注册失败，请重试';
           }
         })
         .catch((error) => {
           registerLoading.value = false;
-          registerError.value = error.response?.data?.error_msg || '注册失败，请检查网络连接';
+          registerError.value = error.response?.data?.message || error.response?.data?.error_msg || '注册失败，请检查网络连接';
         });
     };
 

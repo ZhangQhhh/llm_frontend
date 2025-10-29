@@ -18,6 +18,78 @@
 
       <el-row :gutter="20">
         <el-col :xs="24" :md="16">
+          <!-- 账号审核 -->
+          <el-card class="card approval-card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>账号审核</span>
+                <div class="card-actions">
+                  <el-tag type="warning" v-if="pendingUsers.length > 0">
+                    待审核：{{ pendingUsers.length }} 个
+                  </el-tag>
+                  <el-button type="primary" plain @click="loadPendingUsers" :loading="loadingPending" :icon="Refresh" size="small">
+                    刷新
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <div class="approval-body">
+              <div v-if="loadingPending" class="list-loading">
+                <el-skeleton :rows="3" animated />
+              </div>
+              <el-empty v-else-if="pendingUsers.length === 0" description="暂无待审核账号">
+                <el-button type="primary" plain @click="loadPendingUsers">刷新数据</el-button>
+              </el-empty>
+              <el-table
+                v-else
+                :data="pendingUsers"
+                border
+                size="small"
+                stripe
+                style="width: 100%"
+              >
+                <el-table-column prop="username" label="用户名" min-width="120" />
+                <el-table-column prop="policeId" label="警号" min-width="100">
+                  <template #default="scope">{{ scope.row.policeId || scope.row.police_id || '—' }}</template>
+                </el-table-column>
+                <el-table-column prop="idCardNumber" label="身份证" min-width="140">
+                  <template #default="scope">
+                    <span v-if="scope.row.idCardNumber || scope.row.id_card_number">
+                      {{ maskIdCard(scope.row.idCardNumber || scope.row.id_card_number) }}
+                    </span>
+                    <span v-else>—</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="created_at" label="注册时间" min-width="150">
+                  <template #default="scope">{{ scope.row.created_at || scope.row.createdAt || '—' }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="180" fixed="right">
+                  <template #default="scope">
+                    <el-button
+                      type="success"
+                      plain
+                      size="small"
+                      :loading="approvalLoadingId === (scope.row.id || scope.row.username)"
+                      @click="approveUser(scope.row)"
+                    >
+                      批准
+                    </el-button>
+                    <el-button
+                      type="danger"
+                      plain
+                      size="small"
+                      :loading="rejectLoadingId === (scope.row.id || scope.row.username)"
+                      @click="rejectUser(scope.row)"
+                    >
+                      拒绝
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-card>
+
           <el-card class="card" shadow="hover">
             <template #header>
               <div class="card-header">
@@ -248,6 +320,10 @@ export default defineComponent({
     const adminList = ref<AdminUser[]>([])
     const loadingAdmins = ref(false)
     const searchKeyword = ref('')
+    const pendingUsers = ref<AdminUser[]>([])
+    const loadingPending = ref(false)
+    const approvalLoadingId = ref<string | null>(null)
+    const rejectLoadingId = ref<string | null>(null)
 
     const rules = reactive<FormRules<CreateAdminPayload>>({
       username: [
@@ -383,8 +459,85 @@ export default defineComponent({
       searchKeyword.value = searchKeyword.value.trim()
     }
 
+    const loadPendingUsers = async () => {
+      loadingPending.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.PENDING_USERS))
+        if (response.ok) {
+          const raw = response.data?.data || response.data?.users || response.data || []
+          const list = Array.isArray(raw) ? raw : (raw.items || [])
+          pendingUsers.value = list
+        } else {
+          throw new Error(response.data?.message || '加载待审核用户列表失败')
+        }
+      } catch (error: any) {
+        pendingUsers.value = []
+        ElMessage.error(error?.message || '加载待审核用户列表失败')
+      } finally {
+        loadingPending.value = false
+      }
+    }
+
+    const approveUser = async (user: AdminUser) => {
+      approvalLoadingId.value = user.id || user.username
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.APPROVE_USER), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('账号已批准')
+          await loadPendingUsers()
+        } else {
+          throw new Error(response.data?.message || '批准失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '批准失败，请稍后重试')
+      } finally {
+        approvalLoadingId.value = null
+      }
+    }
+
+    const rejectUser = async (user: AdminUser) => {
+      try {
+        await ElMessageBox.confirm(
+          `确定要拒绝用户【${user.username}】的注册申请吗？`,
+          '确认操作',
+          {
+            type: 'warning',
+            confirmButtonText: '确定',
+            cancelButtonText: '取消'
+          }
+        )
+        rejectLoadingId.value = user.id || user.username
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.REJECT_USER), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('已拒绝该用户的注册申请')
+          await loadPendingUsers()
+        } else {
+          throw new Error(response.data?.message || '拒绝失败，请稍后重试')
+        }
+      } catch (error: any) {
+        if (error === 'cancel') return
+        ElMessage.error(error?.message || '拒绝失败，请稍后重试')
+      } finally {
+        rejectLoadingId.value = null
+      }
+    }
+
+    const maskIdCard = (idCard: string) => {
+      if (!idCard || idCard.length < 8) return idCard
+      return idCard.slice(0, 6) + '********' + idCard.slice(-4)
+    }
+
     onMounted(() => {
       loadAdmins()
+      loadPendingUsers()
     })
 
     return {
@@ -397,6 +550,10 @@ export default defineComponent({
       loadingAdmins,
       searchKeyword,
       filteredAdmins,
+      pendingUsers,
+      loadingPending,
+      approvalLoadingId,
+      rejectLoadingId,
       CirclePlus,
       RefreshRight,
       User,
@@ -409,7 +566,11 @@ export default defineComponent({
       resetForm,
       loadAdmins,
       handleDowngrade,
-      applySearch
+      applySearch,
+      loadPendingUsers,
+      approveUser,
+      rejectUser,
+      maskIdCard
     }
   }
 })
@@ -586,5 +747,13 @@ export default defineComponent({
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.approval-card {
+  margin-bottom: 1.5rem;
+}
+
+.approval-body {
+  min-height: 200px;
 }
 </style>

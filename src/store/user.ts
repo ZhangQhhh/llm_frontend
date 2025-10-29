@@ -10,6 +10,9 @@ interface UserInfo {
   username: string;
   role: string;
   status: string;  // 1 表示没有被封禁，0表示被封禁
+  email?: string | null;
+  policeId?: string | null;
+  idCardNumber?: string | null;
 }
 
 // [3] 定义 Vuex state 的完整形状
@@ -65,6 +68,9 @@ const state: UserState = {
   role: "",   
   is_login: false,
   status: "",  // 1 表示没有被封禁，0表示被封禁
+  email: null,
+  policeId: null,
+  idCardNumber: null,
 };
 
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
@@ -97,7 +103,10 @@ export default {
       state.username = user.username;
       state.role = user.role;
       state.is_login = user.is_login;
-      state.status = user.status
+      state.status = user.status;
+      state.email = user.email || null;
+      state.policeId = user.policeId || null;
+      state.idCardNumber = user.idCardNumber || null;
     },
     // [10] 为 token 参数添加类型
     updateToken(state: UserState, token: string) {
@@ -110,6 +119,9 @@ export default {
       state.role = "";
       state.is_login = false;
       state.status = "";
+      state.email = null;
+      state.policeId = null;
+      state.idCardNumber = null;
     }
   },
   actions: {  // 修改state的函数写在actions里边
@@ -170,17 +182,25 @@ export default {
 
     async getinfo(context: ActionContext<UserState, RootState>, data: GetInfoData) {
       try {
-        const response = await http.get<XspaceResult<UserInfoResponseData>>(
+        const response = await http.get<XspaceResult<any>>(
           API_ENDPOINTS.USER.INFO
         );
         
         const resp = response.data;
 
         if (resp.success && resp.code === 200) {
+          // 处理嵌套的 data.data 结构
+          const userInfo = resp.data?.data || resp.data;
+          
           // 将后端返回的 role 转换为小写，以匹配前端的 UserRole 枚举
           const userData = {
-            ...resp.data,
-            role: resp.data.role?.toLowerCase() || '',
+            id: userInfo.id?.toString() || '',
+            username: userInfo.username || '',
+            role: userInfo.role?.toLowerCase() || '',
+            status: userInfo.status?.toString() || '',
+            email: userInfo.email || null,
+            policeId: userInfo.policeId || null,
+            idCardNumber: userInfo.idCardNumber || null,
             is_login: true,
           };
 

@@ -17,6 +17,11 @@
               <el-tag :type="roleTagType">{{ roleText }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="邮箱">{{ email || '未设置' }}</el-descriptions-item>
+            <el-descriptions-item label="警号">{{ policeId || '未设置' }}</el-descriptions-item>
+            <el-descriptions-item label="身份证号">
+              <span v-if="idCardNumber">{{ maskedIdCard }}</span>
+              <span v-else>未设置</span>
+            </el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag type="success">正常</el-tag>
             </el-descriptions-item>
@@ -39,6 +44,8 @@ export default defineComponent({
     
     const username = computed(() => store.state.user.username);
     const email = computed(() => store.state.user.email);
+    const policeId = computed(() => store.state.user.policeId);
+    const idCardNumber = computed(() => store.state.user.idCardNumber);
     const userRole = computed(() => store.getters.userRole);
     
     const roleText = computed(() => {
@@ -52,12 +59,22 @@ export default defineComponent({
       if (role === UserRole.ADMIN) return 'warning';
       return 'info';
     });
+    
+    // 身份证号脱敏处理
+    const maskedIdCard = computed(() => {
+      const id = idCardNumber.value;
+      if (!id || id.length < 8) return id;
+      return id.slice(0, 6) + '********' + id.slice(-4);
+    });
 
     return {
       username,
       email,
+      policeId,
+      idCardNumber,
       roleText,
-      roleTagType
+      roleTagType,
+      maskedIdCard
     };
   }
 });
