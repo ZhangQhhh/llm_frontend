@@ -11,6 +11,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     requiresAdmin?: boolean
+    requiresSuperAdmin?: boolean
     title?: string
   }
 }
@@ -57,6 +58,16 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/super-admin',
+    name: 'super-admin',
+    component: () => import('../views/SuperAdminView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSuperAdmin: true,
+      title: '超级管理员中心'
+    }
+  },
+  {
     path: '/profile',
     name: 'profile',
     component: () => import('../views/ProfileView.vue'),
@@ -94,6 +105,7 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('jwt_token')
   const isLoggedIn = (store.state as any).user.is_login
   const isAdmin = store.getters.isAdmin
+  const isSuperAdmin = store.getters.isSuperAdmin
   
   // 设置页面标题
   if (to.meta.title) {
@@ -116,7 +128,13 @@ router.beforeEach((to, from, next) => {
     next({ name: 'home' })
     return
   }
-  
+
+  if (to.meta.requiresSuperAdmin && !isSuperAdmin) {
+    ElMessage.error('无权访问，需要超级管理员权限')
+    next({ name: 'home' })
+    return
+  }
+
   // 已登录用户访问登录页，跳转到首页
   if (to.name === 'login' && isLoggedIn) {
     next({ name: 'home' })

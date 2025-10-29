@@ -1,5 +1,18 @@
 <template>
   <div class="conversation-page">
+    <!-- 会话列表侧边栏 -->
+    <SessionList
+      :sessions="sessionList"
+      :current-session-id="sessionId || undefined"
+      :loading="sessionsLoading"
+      :current-page="sessionsPage"
+      :total-pages="sessionsTotalPages"
+      @new-session="handleNewSession"
+      @select-session="handleSelectSession"
+      @delete-session="handleDeleteSession"
+      @page-change="handlePageChange"
+    />
+
     <div class="container">
       <!-- 头部 -->
       <header class="page-header">
@@ -54,7 +67,10 @@
             </div>
 
             <div class="controls-right">
-              <button class="btn-secondary" @click="clearSession" :disabled="!sessionId">
+              <button class="btn-secondary" @click="handleNewSession" :disabled="loading">
+                新建会话
+              </button>
+              <button class="btn-secondary" @click="handleClearSession" :disabled="!sessionId || loading">
                 清空会话
               </button>
               <button class="btn-primary" @click="handleSubmit" :disabled="loading || !question.trim()">
@@ -94,15 +110,15 @@
                   </div>
 
                   <!-- 正文 -->
-                  <div class="answer-section">
+                  <div class="answer-section" v-if="msg.content || (loading && index === messages.length - 1)">
                     <div class="section-header">
                       <span class="icon">✨</span>
                       <span class="title">回答</span>
                     </div>
                     <!-- 流式输出时显示原始文本，完成后显示 Markdown -->
                     <div v-if="loading && index === messages.length - 1" 
-                         class="section-body" 
-                         style="white-space: pre-wrap;">{{ msg.content }}</div>
+                         class="section-body streaming-content" 
+                         style="white-space: pre-wrap;">{{ msg.content }}<span class="cursor">▊</span></div>
                     <div v-else 
                          class="section-body markdown-content" 
                          v-html="renderMarkdown(msg.content)"></div>
@@ -161,14 +177,20 @@
 import { defineComponent, ref, nextTick, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import SessionList from '@/components/SessionList.vue';
 import {
   sendStreamChatRequest,
+  createNewSession,
   clearSession as clearSessionApi,
+  getSessionHistory,
+  getSessionList,
+  deleteSession,
   type ReferenceSource,
-  type StreamMessage
+  type StreamMessage,
+  type SessionListItem
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
-import { getStorageItem, setStorageItem, removeStorageItem } from '@/utils/storageUtils';
+import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
 import 'highlight.js/styles/atom-one-dark.css';  // 代码高亮主题
 import 'katex/dist/katex.min.css';                // 数学公式样式
@@ -183,6 +205,9 @@ interface Message {
 
 export default defineComponent({
   name: 'ConversationView',
+  components: {
+    SessionList
+  },
   setup() {
     const store = useStore();
     const router = useRouter();
@@ -193,6 +218,12 @@ export default defineComponent({
     const references = ref<ReferenceSource[]>([]);
     const loading = ref(false);
     const sessionId = ref<string | null>(getStorageItem(STORAGE_KEYS.SESSION_ID));
+
+    // 会话列表状态
+    const sessionList = ref<SessionListItem[]>([]);
+    const sessionsLoading = ref(false);
+    const sessionsPage = ref(1);
+    const sessionsTotalPages = ref(1);
 
     // 配置
     const modelId = ref('qwen3-32b');
@@ -226,10 +257,140 @@ export default defineComponent({
       });
     };
 
-    // 初始化复制代码功能
-    onMounted(() => {
+    // 初始化
+    onMounted(async () => {
       setupCopyCode();
+      await initializeSession();
+      await loadSessionList();
     });
+
+    // 初始化会话
+    const initializeSession = async () => {
+      if (!checkAuth()) return;
+
+      // 如果没有会话ID，创建新会话
+      if (!sessionId.value) {
+        try {
+          const result = await createNewSession(store.state.user.token);
+          sessionId.value = result.session_id;
+          setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
+          console.log('新会话已创建:', result.session_id);
+        } catch (error: any) {
+          console.error('创建会话失败:', error);
+        }
+      } else {
+        // 尝试加载历史消息
+        try {
+          const history = await getSessionHistory(sessionId.value, store.state.user.token);
+          // 将历史消息转换为当前格式
+          history.messages.forEach(msg => {
+            messages.value.push({
+              role: 'user',
+              content: msg.user_query
+            });
+            messages.value.push({
+              role: 'assistant',
+              content: msg.assistant_response,
+              thinking: '',
+              thinkingCollapsed: false
+            });
+          });
+          scrollToBottom();
+        } catch (error) {
+          console.warn('加载历史消息失败，可能是新会话');
+        }
+      }
+    };
+
+    // 加载会话列表
+    const loadSessionList = async (page: number = 1) => {
+      if (!checkAuth()) return;
+
+      sessionsLoading.value = true;
+      try {
+        const result = await getSessionList(store.state.user.token, {
+          page,
+          page_size: 20,
+          sort_by: 'last_update'
+        });
+        sessionList.value = result.sessions;
+        sessionsPage.value = result.page;
+        sessionsTotalPages.value = Math.ceil(result.total / result.page_size);
+      } catch (error) {
+        console.error('加载会话列表失败:', error);
+      } finally {
+        sessionsLoading.value = false;
+      }
+    };
+
+    // 创建新会话
+    const handleNewSession = async () => {
+      if (!checkAuth()) return;
+
+      try {
+        const result = await createNewSession(store.state.user.token);
+        sessionId.value = result.session_id;
+        setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
+        messages.value = [];
+        references.value = [];
+        console.log('新会话已创建:', result.session_id);
+        await loadSessionList(); // 刷新会话列表
+      } catch (error: any) {
+        console.error('创建会话失败:', error);
+      }
+    };
+
+    // 选择会话
+    const handleSelectSession = async (selectedSessionId: string) => {
+      if (selectedSessionId === sessionId.value) return;
+
+      sessionId.value = selectedSessionId;
+      setStorageItem(STORAGE_KEYS.SESSION_ID, selectedSessionId);
+      messages.value = [];
+      references.value = [];
+
+      // 加载历史消息
+      try {
+        const history = await getSessionHistory(selectedSessionId, store.state.user.token);
+        history.messages.forEach(msg => {
+          messages.value.push({
+            role: 'user',
+            content: msg.user_query
+          });
+          messages.value.push({
+            role: 'assistant',
+            content: msg.assistant_response,
+            thinking: '',
+            thinkingCollapsed: false
+          });
+        });
+        scrollToBottom();
+      } catch (error) {
+        console.error('加载会话历史失败:', error);
+      }
+    };
+
+    // 删除会话
+    const handleDeleteSession = async (sessionIdToDelete: string) => {
+      if (!confirm('确定要删除这个会话吗？')) return;
+
+      try {
+        await deleteSession(sessionIdToDelete, store.state.user.token);
+        await loadSessionList(); // 刷新列表
+
+        // 如果删除的是当前会话，创建新会话
+        if (sessionIdToDelete === sessionId.value) {
+          await handleNewSession();
+        }
+      } catch (error) {
+        console.error('删除会话失败:', error);
+      }
+    };
+
+    // 分页切换
+    const handlePageChange = (page: number) => {
+      loadSessionList(page);
+    };
 
     // 发送消息
     const handleSubmit = async () => {
@@ -328,19 +489,17 @@ export default defineComponent({
     };
 
     // 清空会话
-    const clearSession = async () => {
+    const handleClearSession = async () => {
       if (!sessionId.value) return;
 
       try {
         await clearSessionApi(sessionId.value, store.state.user.token);
+        messages.value = [];
+        references.value = [];
+        console.log('会话已清空，会话ID保留');
       } catch (error) {
-        console.warn('清空会话API调用失败，仅清空本地');
+        console.error('清空会话失败:', error);
       }
-
-      sessionId.value = null;
-      removeStorageItem(STORAGE_KEYS.SESSION_ID);
-      messages.value = [];
-      references.value = [];
     };
 
     return {
@@ -355,8 +514,16 @@ export default defineComponent({
       insertBlock,
       conversationBox,
       sessionDisplay,
+      sessionList,
+      sessionsLoading,
+      sessionsPage,
+      sessionsTotalPages,
       handleSubmit,
-      clearSession,
+      handleNewSession,
+      handleSelectSession,
+      handleDeleteSession,
+      handlePageChange,
+      handleClearSession,
       renderMarkdown
     };
   }
@@ -368,6 +535,8 @@ export default defineComponent({
   min-height: 100vh;
   background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
   padding: 2rem;
+  padding-left: calc(320px + 2rem); /* 为侧边栏留出空间 */
+  transition: padding-left 0.3s ease;
 }
 
 .container {
@@ -673,6 +842,19 @@ export default defineComponent({
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 流式输出光标动画 */
+.streaming-content .cursor {
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+  color: #2563eb;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 /* 参考来源侧边栏 */

@@ -4,11 +4,20 @@ export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const API_ENDPOINTS = {
   ADMIN: {
     USERS: `/admin/users`,
+    USER_LIST: `/api/admin/users/`,
+    USER_BAN: `/api/admin/users/ban/`,
+    USER_UNBAN: `/api/admin/users/unban/`,
     // 题库管理
     IMPORT_TEMPLATE: '/admin/import_template/public_file',
     EXPORT_TEACHER_DOCX: '/admin/export_teacher_docx',
     EXPORT_SCORES_ZIP: '/admin/export_scores_zip',
     EXPORT_SCORES_DOCX: '/admin/export_scores_docx',
+  },
+  SUPER_ADMIN: {
+    CREATE_ADMIN: `/api/admin/create-admin/`,
+    LIST_ADMINS: `/api/admin/list-admins/`,
+    DOWNGRADE_ADMIN: `/api/admin/downgrade-admin/`,
+    RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
   },
   USER: {
     LOGIN: `/user/account/token/`,
@@ -17,9 +26,18 @@ export const API_ENDPOINTS = {
   },
   // 知识问答相关API
   KNOWLEDGE: {
+    // 单轮对话（无会话）- 使用完整URL（用于fetch流式请求）
     CHAT: `${LLM_BASE_URL}/knowledge_chat`,
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
-    CONVERSATION_CLEAR: `${LLM_BASE_URL}/conversation/clear`,
+    // 会话管理 - 使用相对路径（用于llmHttp）
+    CONVERSATION_NEW: `/conversation/new`,
+    CONVERSATION_CLEAR: `/conversation/clear`,
+    CONVERSATION_STATISTICS: `/conversation/statistics`,
+    CONVERSATION_SESSIONS_LIST: `/conversation/sessions/list`,
+    CONVERSATION_SESSION_HISTORY: (sessionId: string) => `/conversation/sessions/${sessionId}/history`,
+    CONVERSATION_SESSION_INFO: (sessionId: string) => `/conversation/sessions/${sessionId}/info`,
+    CONVERSATION_SESSION_DELETE: (sessionId: string) => `/conversation/sessions/${sessionId}/delete`,
+    CONVERSATION_CACHE_CLEAR: `/conversation/cache/clear`,
   },
   // 反馈相关API（在 3000 端口的主后端）
   FEEDBACK: {

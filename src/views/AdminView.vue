@@ -111,6 +111,96 @@
           </div>
         </el-tab-pane>
       </el-tabs>
+
+      <el-card class="user-management-card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>用户账号管理</span>
+            <div class="card-actions">
+              <el-input
+                v-model="userSearch"
+                size="small"
+                placeholder="搜索用户名/邮箱"
+                clearable
+                @clear="applyUserSearch"
+                @keyup.enter="applyUserSearch"
+                style="width: 240px"
+              >
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+              <el-button type="primary" plain size="small" :loading="loadingUsers" :icon="Refresh" @click="loadUsers">
+                刷新
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <div class="user-list-body">
+          <div v-if="loadingUsers" class="list-loading"><el-skeleton :rows="3" animated /></div>
+          <el-empty v-else-if="filteredUsers.length === 0" description="暂无用户数据">
+            <el-button type="primary" plain @click="loadUsers">刷新</el-button>
+          </el-empty>
+          <el-table
+            v-else
+            :data="filteredUsers"
+            border
+            size="small"
+            stripe
+            style="width: 100%"
+          >
+            <el-table-column prop="username" label="用户名" min-width="140" />
+            <el-table-column prop="email" label="邮箱" min-width="200">
+              <template #default="scope">{{ scope.row.email || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="role" label="角色" min-width="120">
+              <template #default="scope">
+                <el-tag :type="scope.row.role === 'admin' ? 'warning' : 'info'">
+                  {{ roleName(scope.row.role) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" min-width="120">
+              <template #default="scope">
+                <el-tag v-if="scope.row.status === 'banned'" type="danger" effect="plain">已封禁</el-tag>
+                <el-tag v-else type="success" effect="plain">正常</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220">
+              <template #default="scope">
+                <template v-if="isRegularUser(scope.row)">
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :loading="actionLoadingId === (scope.row.id || scope.row.username) && scope.row.status !== 'banned'"
+                    @click="banUser(scope.row)"
+                    :disabled="scope.row.status === 'banned'"
+                  >
+                    封禁
+                  </el-button>
+                  <el-button
+                    v-if="scope.row.status === 'banned'"
+                    type="success"
+                    plain
+                    size="small"
+                    :loading="actionLoadingId === (scope.row.id || scope.row.username) && scope.row.status === 'banned'"
+                    @click="unbanUser(scope.row)"
+                  >
+                    解封
+                  </el-button>
+                </template>
+                <el-tooltip v-else effect="dark" content="仅可封禁普通用户" placement="top">
+                  <span>
+                    <el-button type="danger" plain size="small" disabled>封禁</el-button>
+                  </span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-card>
     </div>
   </div>
 </template>
@@ -123,6 +213,7 @@ import { Loading } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
+import { Refresh, Search } from '@element-plus/icons-vue'
 
 interface Question {
   qid: string
@@ -139,7 +230,7 @@ interface Paper {
 
 export default defineComponent({
   name: 'AdminView',
-  components: { Loading },
+  components: { Loading, Search },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
@@ -176,6 +267,18 @@ export default defineComponent({
     const exportingZip = ref(false)
     const exportingDocx = ref(false)
     const exportMessage = ref('')
+    const userSearch = ref('')
+    interface ManagedUser {
+      id?: string
+      username: string
+      email?: string
+      role?: string
+      status?: string
+    }
+
+    const users = ref<ManagedUser[]>([])
+    const loadingUsers = ref(false)
+    const actionLoadingId = ref<string | null>(null)
 
 
     const filteredQuestions = computed(() => {
@@ -434,9 +537,101 @@ export default defineComponent({
       ElMessage.success('导出成功')
     }
 
+    const normalizeRole = (role?: string) => (role || '').toLowerCase()
+
+    const roleName = (role?: string) => {
+      const key = normalizeRole(role)
+      if (key === UserRole.SUPER_ADMIN) return RoleNames[UserRole.SUPER_ADMIN]
+      if (key === UserRole.ADMIN) return RoleNames[UserRole.ADMIN]
+      if (key === UserRole.USER) return RoleNames[UserRole.USER]
+      return role || '未知角色'
+    }
+
+    const loadUsers = async () => {
+      loadingUsers.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_LIST))
+        if (response.ok) {
+          const raw = response.data?.data || response.data?.users || response.data || []
+          const list = Array.isArray(raw) ? raw : (raw.items || [])
+          users.value = list
+        } else {
+          throw new Error(response.data?.message || '加载用户列表失败')
+        }
+      } catch (error: any) {
+        users.value = []
+        ElMessage.error(error?.message || '加载用户列表失败')
+      } finally {
+        loadingUsers.value = false
+      }
+    }
+
+    const filteredUsers = computed(() => {
+      const keyword = userSearch.value.trim().toLowerCase()
+      if (!keyword) return users.value
+      return users.value.filter((user) => {
+        const username = user.username?.toLowerCase() || ''
+        const email = user.email?.toLowerCase() || ''
+        return username.includes(keyword) || email.includes(keyword)
+      })
+    })
+
+    const applyUserSearch = () => {
+      userSearch.value = userSearch.value.trim()
+    }
+
+    const isRegularUser = (user: ManagedUser) => normalizeRole(user.role) === UserRole.USER
+
+    const banUser = async (user: ManagedUser) => {
+      if (!isRegularUser(user)) {
+        ElMessage.warning('仅可封禁普通用户')
+        return
+      }
+      actionLoadingId.value = user.id || user.username
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_BAN), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('封禁成功')
+          await loadUsers()
+        } else {
+          throw new Error(response.data?.message || '封禁失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '封禁失败，请稍后重试')
+      } finally {
+        actionLoadingId.value = null
+      }
+    }
+
+    const unbanUser = async (user: ManagedUser) => {
+      actionLoadingId.value = user.id || user.username
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_UNBAN), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, username: user.username })
+        })
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success('已解除封禁')
+          await loadUsers()
+        } else {
+          throw new Error(response.data?.message || '解除封禁失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '解除封禁失败，请稍后重试')
+      } finally {
+        actionLoadingId.value = null
+      }
+    }
+
     onMounted(() => {
       loadQuestions()
       loadExportPapers()
+      loadUsers()
     })
 
     return {
@@ -445,10 +640,12 @@ export default defineComponent({
       questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage, exportPapers, selectedExportPaper,
       loadingExportPapers, exportingZip, exportingDocx, exportMessage,
+      userSearch, users, loadingUsers, actionLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion,
       approveAll, exportTeacher, createPaper, loadExportPapers, exportZip, exportDocx,
-      getStatusTagType, getStatusText
+      loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,
+      getStatusTagType, getStatusText, Refresh
     }
   }
 })

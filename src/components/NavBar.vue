@@ -46,15 +46,6 @@
     </el-menu-item>
 
     <!-- 管理入口（仅管理员可见） -->
-    <el-menu-item 
-      index="/admin" 
-      @click="navigateTo('/admin')"
-      v-if="isAdmin"
-    >
-      <el-icon><Setting /></el-icon>
-      <span>管理中心</span>
-    </el-menu-item>
-
     <!-- 右侧用户区域 -->
     <div class="navbar-right">
       <template v-if="isLoggedIn">
@@ -79,6 +70,14 @@
               <el-dropdown-item disabled>
                 <el-icon><User /></el-icon>
                 <span>{{ username }}</span>
+              </el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="admin">
+                <el-icon><Setting /></el-icon>
+                <span>管理中心</span>
+              </el-dropdown-item>
+              <el-dropdown-item v-if="isSuperAdmin" command="super-admin">
+                <el-icon><Setting /></el-icon>
+                <span>超管中心</span>
               </el-dropdown-item>
               <el-dropdown-item divided command="profile">
                 <el-icon><Setting /></el-icon>
@@ -141,6 +140,7 @@ export default defineComponent({
     const userPhoto = computed(() => store.state.user.photo)
     const userRole = computed(() => store.getters.userRole)
     const isAdmin = computed(() => store.getters.isAdmin)
+    const isSuperAdmin = computed(() => store.getters.isSuperAdmin)
 
     // 角色标签类型
     const roleTagType = computed(() => {
@@ -165,6 +165,10 @@ export default defineComponent({
         store.dispatch('logout')
       } else if (command === 'profile') {
         router.push('/profile')
+      } else if (command === 'admin') {
+        router.push('/admin')
+      } else if (command === 'super-admin') {
+        router.push('/super-admin')
       }
     }
 
@@ -174,6 +178,7 @@ export default defineComponent({
       username,
       userPhoto,
       isAdmin,
+      isSuperAdmin,
       roleTagType,
       roleText,
       navigateTo,
