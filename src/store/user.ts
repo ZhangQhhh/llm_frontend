@@ -137,26 +137,20 @@ export default {
         );
         
         const resp = response.data;
+    
 
-        
-        // 检查是否真的成功
-        // 1. resp.success && resp.code === 200 (外层成功)
-        // 2. resp.data.token 存在 (有 token)
-        // 3. resp.data.error_msg === "success" 或不存在 (内层成功标识)
-        const isSuccess = resp.success && 
-                         resp.code === 200 && 
-                         resp.data.token &&
-                         (!resp.data.error_msg || resp.data.error_msg === "success");
-        
-        if (isSuccess && resp.data.token) {
+        // 检查后端返回的成功状态
+        // 成功：{ success: true, code: 200, data: { token: "..." } }
+        // 失败：{ success: false, code: xxx, message: "错误信息" }
+        if (resp.success && resp.code === 200 && resp.data?.token) {
+          // 登录成功
           localStorage.setItem("jwt_token", resp.data.token);
           context.commit("updateToken", resp.data.token);
           data.success(resp);
         } else {
-          // 处理登录失败的情况
-          const errorMsg = resp.data?.error_msg && resp.data.error_msg !== "success" 
-            ? resp.data.error_msg 
-            : (resp.message || '登录失败，请检查用户名和密码');
+          // 登录失败 - 优先使用后端返回的 message
+          const errorMsg = resp.message || resp.data?.error_msg || '登录失败，请检查用户名和密码';
+      
           data.error({
             success: false,
             code: resp.code,

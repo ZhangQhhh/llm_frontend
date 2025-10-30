@@ -112,6 +112,20 @@
                   </template>
                 </el-input>
               </el-form-item>
+              <el-form-item label="警号" prop="policeId">
+                <el-input v-model="form.policeId" placeholder="请输入警号">
+                  <template #prefix>
+                    <el-icon><Postcard /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              <el-form-item label="身份证号" prop="idCardNumber">
+                <el-input v-model="form.idCardNumber" placeholder="请输入身份证号" maxlength="18">
+                  <template #prefix>
+                    <el-icon><CreditCard /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
               <el-form-item label="邮箱（可选）" prop="email">
                 <el-input v-model="form.email" placeholder="请输入管理员邮箱（可选）">
                   <template #prefix>
@@ -206,7 +220,7 @@
                     </div>
                     <el-descriptions :column="1" size="small" class="admin-meta">
                       <el-descriptions-item label="创建时间">
-                        {{ admin.created_at || '—' }}
+                        {{ formatDate(admin.create_at || admin.created_at || admin.createAt) }}
                       </el-descriptions-item>
                       <el-descriptions-item label="账号状态">
                         <el-tag v-if="admin.status" size="small" type="info">{{ admin.status }}</el-tag>
@@ -214,6 +228,15 @@
                       </el-descriptions-item>
                     </el-descriptions>
                     <div class="admin-card-actions">
+                      <el-button 
+                        type="primary" 
+                        plain 
+                        size="small" 
+                        :icon="Lock"
+                        @click="openResetPasswordDialog(admin)"
+                      >
+                        重置密码
+                      </el-button>
                       <el-popconfirm
                         title="确认降级为普通用户？"
                         confirm-button-text="确定"
@@ -227,14 +250,69 @@
                           </el-button>
                         </template>
                       </el-popconfirm>
-                      <el-button type="info" plain size="small" :disabled="true">
-                        更多功能待定
-                      </el-button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+          </el-card>
+
+          <!-- 提升用户为管理员 -->
+          <el-card class="card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>提升用户为管理员</span>
+                <el-tag type="warning" effect="plain">权限提升</el-tag>
+              </div>
+            </template>
+
+            <el-alert
+              title="提示"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            >
+              输入现有普通用户的用户名，将其提升为管理员
+            </el-alert>
+
+            <el-form
+              ref="upgradeFormRef"
+              :model="upgradeForm"
+              :rules="upgradeRules"
+              label-width="100px"
+              status-icon
+            >
+              <el-form-item label="用户名" prop="username">
+                <el-input 
+                  v-model="upgradeForm.username" 
+                  placeholder="请输入要提升的用户名"
+                  clearable
+                >
+                  <template #prefix>
+                    <el-icon><User /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              <el-form-item>
+                <el-space>
+                  <el-button 
+                    type="success" 
+                    @click="handleUpgrade" 
+                    :loading="upgrading"
+                    icon="Top"
+                  >
+                    提升为管理员
+                  </el-button>
+                  <el-button 
+                    @click="resetUpgradeForm" 
+                    :disabled="upgrading"
+                  >
+                    重置
+                  </el-button>
+                </el-space>
+              </el-form-item>
+            </el-form>
           </el-card>
         </el-col>
 
@@ -253,7 +331,7 @@
             <el-divider content-position="left">操作流程</el-divider>
             <el-timeline>
               <el-timeline-item type="primary" :timestamp="'Step 1'">
-                填写管理员基本信息（用户名 / 邮箱 / 初始密码）
+                填写管理员基本信息（用户名 / 警号 / 身份证号 / 邮箱 / 初始密码）
               </el-timeline-item>
               <el-timeline-item type="success" :timestamp="'Step 2'">
                 提交创建，系统校验并调用后端接口
@@ -279,6 +357,78 @@
         </ul>
       </el-card>
     </div>
+
+    <!-- 重置密码对话框 -->
+    <el-dialog
+      v-model="resetPasswordDialogVisible"
+      title="重置管理员密码"
+      width="500px"
+      :close-on-click-modal="false"
+      @close="handleResetDialogClose"
+    >
+      <el-alert
+        title="安全提示"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 1.5rem"
+      >
+        重置后请立即通知管理员修改密码
+      </el-alert>
+      
+      <el-form
+        ref="resetPasswordFormRef"
+        :model="resetPasswordForm"
+        :rules="resetPasswordRules"
+        label-width="100px"
+        status-icon
+      >
+        <el-form-item label="管理员">
+          <el-input :value="currentResetAdmin?.username" disabled>
+            <template #prefix>
+              <el-icon><User /></el-icon>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input
+            v-model="resetPasswordForm.newPassword"
+            type="password"
+            show-password
+            placeholder="请输入新密码（至少6位）"
+            autocomplete="new-password"
+          >
+            <template #prefix>
+              <el-icon><Lock /></el-icon>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input
+            v-model="resetPasswordForm.confirmPassword"
+            type="password"
+            show-password
+            placeholder="请再次输入新密码"
+            autocomplete="new-password"
+          >
+            <template #prefix>
+              <el-icon><Lock /></el-icon>
+            </template>
+          </el-input>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-space>
+          <el-button @click="resetPasswordDialogVisible = false" :disabled="resettingPassword">
+            取消
+          </el-button>
+          <el-button type="primary" @click="handleResetPassword" :loading="resettingPassword">
+            确认重置
+          </el-button>
+        </el-space>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -286,12 +436,14 @@
 import { defineComponent, reactive, ref, computed, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CirclePlus, RefreshRight, User, Message, Lock, ArrowDownBold, Refresh, Search } from '@element-plus/icons-vue'
+import { CirclePlus, RefreshRight, User, Message, Lock, ArrowDownBold, Refresh, Search, Postcard, CreditCard, Top } from '@element-plus/icons-vue'
 import { API_ENDPOINTS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
 
 interface CreateAdminPayload {
   username: string
+  policeId: string
+  idCardNumber: string
   email: string
   password: string
 }
@@ -302,6 +454,8 @@ interface AdminUser {
   email?: string
   role?: string
   created_at?: string
+  create_at?: string
+  createAt?: string
   status?: string
 }
 
@@ -310,6 +464,8 @@ export default defineComponent({
   setup() {
     const form = reactive<CreateAdminPayload>({
       username: '',
+      policeId: '',
+      idCardNumber: '',
       email: '',
       password: ''
     })
@@ -325,10 +481,45 @@ export default defineComponent({
     const approvalLoadingId = ref<string | null>(null)
     const rejectLoadingId = ref<string | null>(null)
 
+    // 重置密码相关状态
+    const resetPasswordDialogVisible = ref(false)
+    const resetPasswordFormRef = ref<FormInstance>()
+    const currentResetAdmin = ref<AdminUser | null>(null)
+    const resettingPassword = ref(false)
+    const resetPasswordForm = reactive({
+      newPassword: '',
+      confirmPassword: ''
+    })
+
+    // 提升用户相关状态
+    const upgradeFormRef = ref<FormInstance>()
+    const upgrading = ref(false)
+    const upgradeForm = reactive({
+      username: ''
+    })
+
     const rules = reactive<FormRules<CreateAdminPayload>>({
       username: [
         { required: true, message: '请输入管理员用户名', trigger: 'blur' },
         { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }
+      ],
+      policeId: [
+        { required: true, message: '请输入警号', trigger: 'blur' },
+        { pattern: /^[0-9]+$/, message: '警号只能包含数字', trigger: 'blur' }
+      ],
+      idCardNumber: [
+        { required: true, message: '请输入身份证号', trigger: 'blur' },
+        {
+          validator: (_rule, value, callback) => {
+            const idCardRegex = /(^\d{15}$)|(^\d{18}$)|(^\d{17}(\d|X|x)$)/
+            if (!idCardRegex.test(value)) {
+              callback(new Error('身份证号格式不正确'))
+            } else {
+              callback()
+            }
+          },
+          trigger: 'blur'
+        }
       ],
       email: [
         {
@@ -353,6 +544,33 @@ export default defineComponent({
       ]
     })
 
+    const resetPasswordRules = reactive<FormRules>({
+      newPassword: [
+        { required: true, message: '请输入新密码', trigger: 'blur' },
+        { min: 6, message: '密码至少 6 位', trigger: 'blur' }
+      ],
+      confirmPassword: [
+        { required: true, message: '请再次输入密码', trigger: 'blur' },
+        {
+          validator: (_rule, value, callback) => {
+            if (value !== resetPasswordForm.newPassword) {
+              callback(new Error('两次输入的密码不一致'))
+            } else {
+              callback()
+            }
+          },
+          trigger: 'blur'
+        }
+      ]
+    })
+
+    const upgradeRules = reactive<FormRules>({
+      username: [
+        { required: true, message: '请输入用户名', trigger: 'blur' },
+        { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }
+      ]
+    })
+
     const resetForm = () => {
       formRef.value?.resetFields()
     }
@@ -368,6 +586,8 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username: form.username,
+            policeId: form.policeId,
+            idCardNumber: form.idCardNumber,
             email: form.email,
             password: form.password
           })
@@ -382,8 +602,9 @@ export default defineComponent({
           resetForm()
           loadAdmins()
         } else {
-          const message = response.data?.message || '创建失败，请稍后重试'
+          const message = response.data?.message || response.data?.detail || '创建失败，请稍后重试'
           ElMessage.error(message)
+          console.error('创建管理员失败:', response.data)
         }
       } catch (error: any) {
         ElMessage.error(error?.message || '创建失败，请稍后重试')
@@ -397,7 +618,7 @@ export default defineComponent({
       try {
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.LIST_ADMINS))
         if (response.ok) {
-          const dataSource = response.data?.data || response.data?.admins || response.data || []
+          const dataSource = response.data?.data?.list || response.data?.data?.admins || response.data || []
           adminList.value = Array.isArray(dataSource) ? dataSource : (dataSource.items || [])
         } else {
           throw new Error(response.data?.message || '加载管理员列表失败')
@@ -464,7 +685,8 @@ export default defineComponent({
       try {
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.PENDING_USERS))
         if (response.ok) {
-          const raw = response.data?.data || response.data?.users || response.data || []
+          // 支持新的 API 格式: { success: true, code: 200, message: "...", data: { list: [...] } }
+          const raw = response.data?.data?.list || response.data?.list || response.data?.users || response.data || []
           const list = Array.isArray(raw) ? raw : (raw.items || [])
           pendingUsers.value = list
         } else {
@@ -530,6 +752,118 @@ export default defineComponent({
       }
     }
 
+    const openResetPasswordDialog = (admin: AdminUser) => {
+      currentResetAdmin.value = admin
+      resetPasswordForm.newPassword = ''
+      resetPasswordForm.confirmPassword = ''
+      resetPasswordDialogVisible.value = true
+      // 清除之前的验证错误
+      setTimeout(() => {
+        resetPasswordFormRef.value?.clearValidate()
+      }, 0)
+    }
+
+    const handleResetDialogClose = () => {
+      resetPasswordForm.newPassword = ''
+      resetPasswordForm.confirmPassword = ''
+      currentResetAdmin.value = null
+      resetPasswordFormRef.value?.clearValidate()
+    }
+
+    const handleResetPassword = async () => {
+      if (!resetPasswordFormRef.value || !currentResetAdmin.value) return
+      
+      const valid = await resetPasswordFormRef.value.validate().catch(() => false)
+      if (!valid) return
+
+      resettingPassword.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.RESET_ADMIN_PASSWORD), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentResetAdmin.value.id,
+            username: currentResetAdmin.value.username,
+            newPassword: resetPasswordForm.newPassword,
+            // rawPassword: "NONE" // 这里不需要填写原密码
+          })
+        })
+
+        if (response.ok && response.data?.code === 200) {
+          ElMessage.success(`已成功重置管理员【${currentResetAdmin.value.username}】的密码`)
+          resetPasswordDialogVisible.value = false
+          handleResetDialogClose()
+        } else {
+          throw new Error(response.data?.message || '重置密码失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '重置密码失败，请稍后重试')
+      } finally {
+        resettingPassword.value = false
+      }
+    }
+
+    const resetUpgradeForm = () => {
+      upgradeFormRef.value?.resetFields()
+    }
+
+    const handleUpgrade = async () => {
+      if (!upgradeFormRef.value) return
+      const valid = await upgradeFormRef.value.validate().catch(() => false)
+      if (!valid) return
+
+      try {
+        await ElMessageBox.confirm(
+          `确定要将用户【${upgradeForm.username}】提升为管理员吗？`,
+          '确认操作',
+          {
+            type: 'warning',
+            confirmButtonText: '确定',
+            cancelButtonText: '取消'
+          }
+        )
+
+        upgrading.value = true
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.UPGRADE_ADMIN), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: upgradeForm.username
+          })
+        })
+
+        if (response.ok && response.data?.code === 200) {
+          ElMessage.success(`已成功将用户【${upgradeForm.username}】提升为管理员`)
+          resetUpgradeForm()
+          loadAdmins()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '提升失败，请稍后重试')
+        }
+      } catch (error: any) {
+        if (error === 'cancel') return
+        ElMessage.error(error?.message || '提升失败，请稍后重试')
+      } finally {
+        upgrading.value = false
+      }
+    }
+
+    const formatDate = (dateStr?: string) => {
+      if (!dateStr) return '—'
+      try {
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) return dateStr
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      } catch {
+        return dateStr
+      }
+    }
+
     const maskIdCard = (idCard: string) => {
       if (!idCard || idCard.length < 8) return idCard
       return idCard.slice(0, 6) + '********' + idCard.slice(-4)
@@ -554,6 +888,16 @@ export default defineComponent({
       loadingPending,
       approvalLoadingId,
       rejectLoadingId,
+      resetPasswordDialogVisible,
+      resetPasswordFormRef,
+      resetPasswordForm,
+      resetPasswordRules,
+      currentResetAdmin,
+      resettingPassword,
+      upgradeFormRef,
+      upgradeForm,
+      upgradeRules,
+      upgrading,
       CirclePlus,
       RefreshRight,
       User,
@@ -562,6 +906,9 @@ export default defineComponent({
       ArrowDownBold,
       Refresh,
       Search,
+      Postcard,
+      CreditCard,
+      Top,
       handleCreate,
       resetForm,
       loadAdmins,
@@ -570,6 +917,12 @@ export default defineComponent({
       loadPendingUsers,
       approveUser,
       rejectUser,
+      openResetPasswordDialog,
+      handleResetDialogClose,
+      handleResetPassword,
+      handleUpgrade,
+      resetUpgradeForm,
+      formatDate,
       maskIdCard
     }
   }

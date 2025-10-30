@@ -4,7 +4,7 @@ export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const API_ENDPOINTS = {
   ADMIN: {
     USERS: `/admin/users`,
-    USER_LIST: `/api/admin/users/`,
+    USER_LIST: `/api/admin/users/list/`,
     USER_BAN: `/api/admin/users/ban/`,
     USER_UNBAN: `/api/admin/users/unban/`,
     // 账号审核
@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
     LIST_ADMINS: `/api/admin/list-admins/`,
     DOWNGRADE_ADMIN: `/api/admin/downgrade-admin/`,
     RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
+    UPGRADE_ADMIN: `/api/admin/upgrade-admin/`,
   },
   USER: {
     LOGIN: `/user/account/token/`,

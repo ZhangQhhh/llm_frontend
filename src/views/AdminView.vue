@@ -3,7 +3,7 @@
     <div class="container">
       <!-- 头部 -->
       <header class="page-header">
-        <h1>管理中心 - 边检智能家教</h1>
+        <h1>管理中心</h1>
         <p class="subtitle">{{ username }} ({{ roleText }})</p>
       </header>
 
@@ -228,29 +228,32 @@
             </el-table-column>
             <el-table-column prop="status" label="状态" min-width="120">
               <template #default="scope">
-                <el-tag v-if="scope.row.status === 'banned'" type="danger" effect="plain">已封禁</el-tag>
-                <el-tag v-else type="success" effect="plain">正常</el-tag>
+                <el-tag v-if="scope.row.status === 1" type="success" effect="plain">正常</el-tag>
+                <el-tag v-else-if="scope.row.status === 0" type="warning" effect="plain">待审核</el-tag>
+                <el-tag v-else-if="scope.row.status === -1" type="danger" effect="plain">已封禁</el-tag>
+                <el-tag v-else-if="scope.row.status === -2" type="info" effect="plain">审核未通过</el-tag>
+                <el-tag v-else type="info" effect="plain">未知</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="220">
               <template #default="scope">
                 <template v-if="isRegularUser(scope.row)">
                   <el-button
+                    v-if="scope.row.status !== -1"
                     type="danger"
                     plain
                     size="small"
-                    :loading="actionLoadingId === (scope.row.id || scope.row.username) && scope.row.status !== 'banned'"
+                    :loading="actionLoadingId === (scope.row.id || scope.row.username)"
                     @click="banUser(scope.row)"
-                    :disabled="scope.row.status === 'banned'"
                   >
                     封禁
                   </el-button>
                   <el-button
-                    v-if="scope.row.status === 'banned'"
+                    v-if="scope.row.status === -1"
                     type="success"
                     plain
                     size="small"
-                    :loading="actionLoadingId === (scope.row.id || scope.row.username) && scope.row.status === 'banned'"
+                    :loading="actionLoadingId === (scope.row.id || scope.row.username)"
                     @click="unbanUser(scope.row)"
                   >
                     解封
@@ -338,7 +341,7 @@ export default defineComponent({
       username: string
       email?: string
       role?: string
-      status?: string
+      status?: number  // 1=正常，0=待审核，-1=封禁，-2=审核未通过
     }
 
     const users = ref<ManagedUser[]>([])
@@ -372,7 +375,12 @@ export default defineComponent({
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.AUTH.CHANGE_PASSWORD), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ old_password: myOldPassword.value, new_password: myNewPassword.value })
+          body: JSON.stringify({
+             id: store.state.user.id,
+             username: store.state.user.username,
+             oldPassword: myOldPassword.value, 
+             newPassword: myNewPassword.value 
+            })
         })
         if (response.data.ok) {
           ElMessage.success('修改成功，请重新登录')
@@ -393,7 +401,11 @@ export default defineComponent({
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.AUTH.RESET_PASSWORD), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: resetUsername.value, new_password: resetPassword.value })
+          body: JSON.stringify({
+            id: store.state.user.id,
+            username: resetUsername.value,
+            newPassword: resetPassword.value
+          })
         })
         if (response.data.ok) {
           ElMessage.success('重置成功')
@@ -616,12 +628,22 @@ export default defineComponent({
       return role || '未知角色'
     }
 
+    // 状态码常量
+    const UserStatus = {
+      NORMAL: 1,        // 正常
+      PENDING: 0,       // 待审核
+      BANNED: -1,       // 封禁
+      REJECTED: -2      // 审核未通过
+    }
+
+    const isBanned = (user: ManagedUser) => user.status === UserStatus.BANNED
+
     const loadUsers = async () => {
       loadingUsers.value = true
       try {
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_LIST))
         if (response.ok) {
-          const raw = response.data?.data || response.data?.users || response.data || []
+          const raw = response.data?.data?.list || response.data?.data?.users || response.data || []
           const list = Array.isArray(raw) ? raw : (raw.items || [])
           users.value = list
         } else {
@@ -795,7 +817,7 @@ export default defineComponent({
       approveAll, exportTeacher, createPaper, loadExportPapers, exportZip, exportDocx,
       loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,
       loadPendingUsers, approveUser, rejectUser, maskIdCard,
-      getStatusTagType, getStatusText, Refresh
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh
     }
   }
 })
