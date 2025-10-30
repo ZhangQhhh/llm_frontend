@@ -754,6 +754,11 @@ loginSubmit.addEventListener("click", async () => {
     username = user;
     localStorage.setItem(STORAGE_TOKEN_KEY, jwtToken);
     localStorage.setItem(STORAGE_USER_KEY, username);
+    
+    // 🔥 修复：用户切换时清除之前的会话ID，避免看到其他用户的对话记录
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+    sessionId = null;
+    
     loginModal.style.display = "none";
     updateLoginUI();
     appendSystemMessage(`登录成功：${username}`);
@@ -1078,7 +1083,18 @@ window.addEventListener('load', () => {
   if (!jwtToken) {
     setTimeout(() => { loginModal.style.display = 'flex'; }, 200);
   } else {
-    appendSystemMessage("检测到已登录，可继续多轮对话。");
+    // 🔥 修复：检查token和用户信息的一致性
+    const storedToken = localStorage.getItem(STORAGE_TOKEN_KEY);
+    const storedUser = localStorage.getItem(STORAGE_USER_KEY);
+    
+    // 如果token存在但用户信息不匹配，清除会话数据
+    if (storedToken && (!storedUser || storedUser !== username)) {
+      localStorage.removeItem(STORAGE_SESSION_KEY);
+      sessionId = null;
+      appendSystemMessage("检测到用户切换，已清除会话数据。");
+    } else {
+      appendSystemMessage("检测到已登录，可继续多轮对话。");
+    }
   }
 });
 

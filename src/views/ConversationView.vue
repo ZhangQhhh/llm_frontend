@@ -260,6 +260,23 @@ export default defineComponent({
     // 初始化
     onMounted(async () => {
       setupCopyCode();
+      
+      // 🔥 修复：检查用户切换，如果检测到token不一致则清除会话数据
+      const currentToken = store.state.user.token;
+      const storedChatToken = getStorageItem(STORAGE_KEYS.CHAT_TOKEN);
+      
+      if (storedChatToken && storedChatToken !== currentToken) {
+        // 用户已切换，清除会话数据
+        localStorage.removeItem(STORAGE_KEYS.SESSION_ID);
+        sessionId.value = null;
+        console.log('检测到用户切换，已清除会话数据');
+      }
+      
+      // 同步设置当前token
+      if (currentToken) {
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+      }
+      
       await initializeSession();
       await loadSessionList();
     });
@@ -268,10 +285,14 @@ export default defineComponent({
     const initializeSession = async () => {
       if (!checkAuth()) return;
 
+      // 🔥 修复：确保使用当前用户的最新token
+      const currentToken = store.state.user.token;
+      setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+
       // 如果没有会话ID，创建新会话
       if (!sessionId.value) {
         try {
-          const result = await createNewSession(store.state.user.token);
+          const result = await createNewSession(currentToken);
           sessionId.value = result.session_id;
           setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
           console.log('新会话已创建:', result.session_id);
@@ -281,16 +302,18 @@ export default defineComponent({
       } else {
         // 尝试加载历史消息
         try {
-          const history = await getSessionHistory(sessionId.value, store.state.user.token);
+          const history = await getSessionHistory(sessionId.value, currentToken);
           // 将历史消息转换为当前格式
           history.messages.forEach(msg => {
             messages.value.push({
               role: 'user',
-              content: msg.user_query
+              // 历史消息可能包含 \\n，需要转换
+              content: msg.user_query.replace(/\\n/g, '\n')
             });
             messages.value.push({
               role: 'assistant',
-              content: msg.assistant_response,
+              // 历史消息可能包含 \\n，需要转换
+              content: msg.assistant_response.replace(/\\n/g, '\n'),
               thinking: '',
               thinkingCollapsed: false
             });
@@ -308,7 +331,11 @@ export default defineComponent({
 
       sessionsLoading.value = true;
       try {
-        const result = await getSessionList(store.state.user.token, {
+        // 🔥 修复：确保使用当前用户的最新token
+        const currentToken = store.state.user.token;
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+        
+        const result = await getSessionList(currentToken, {
           page,
           page_size: 20,
           sort_by: 'last_update'
@@ -328,7 +355,11 @@ export default defineComponent({
       if (!checkAuth()) return;
 
       try {
-        const result = await createNewSession(store.state.user.token);
+        // 🔥 修复：确保使用当前用户的最新token
+        const currentToken = store.state.user.token;
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+        
+        const result = await createNewSession(currentToken);
         sessionId.value = result.session_id;
         setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
         messages.value = [];
@@ -344,6 +375,10 @@ export default defineComponent({
     const handleSelectSession = async (selectedSessionId: string) => {
       if (selectedSessionId === sessionId.value) return;
 
+      // 🔥 修复：确保使用当前用户的最新token
+      const currentToken = store.state.user.token;
+      setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+
       sessionId.value = selectedSessionId;
       setStorageItem(STORAGE_KEYS.SESSION_ID, selectedSessionId);
       messages.value = [];
@@ -351,15 +386,17 @@ export default defineComponent({
 
       // 加载历史消息
       try {
-        const history = await getSessionHistory(selectedSessionId, store.state.user.token);
+        const history = await getSessionHistory(selectedSessionId, currentToken);
         history.messages.forEach(msg => {
           messages.value.push({
             role: 'user',
-            content: msg.user_query
+            // 历史消息可能包含 \\n，需要转换
+            content: msg.user_query.replace(/\\n/g, '\n')
           });
           messages.value.push({
             role: 'assistant',
-            content: msg.assistant_response,
+            // 历史消息可能包含 \\n，需要转换
+            content: msg.assistant_response.replace(/\\n/g, '\n'),
             thinking: '',
             thinkingCollapsed: false
           });
@@ -375,7 +412,11 @@ export default defineComponent({
       if (!confirm('确定要删除这个会话吗？')) return;
 
       try {
-        await deleteSession(sessionIdToDelete, store.state.user.token);
+        // 🔥 修复：确保使用当前用户的最新token
+        const currentToken = store.state.user.token;
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+        
+        await deleteSession(sessionIdToDelete, currentToken);
         await loadSessionList(); // 刷新列表
 
         // 如果删除的是当前会话，创建新会话
@@ -419,6 +460,10 @@ export default defineComponent({
       references.value = [];
 
       try {
+        // 🔥 修复：确保使用当前用户的最新token
+        const currentToken = store.state.user.token;
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+        
         await sendStreamChatRequest(
           API_ENDPOINTS.KNOWLEDGE.CONVERSATION_CHAT,
           {
@@ -429,7 +474,7 @@ export default defineComponent({
             rerank_top_n: rerankTopN.value,
             use_insert_block: insertBlock.value
           },
-          store.state.user.token,
+          currentToken,
           (message: StreamMessage) => {
             handleStreamMessage(message, assistantMessage);
           }
@@ -455,6 +500,7 @@ export default defineComponent({
 
         case 'THINK':
           if (msgIndex !== -1 && messages.value[msgIndex].thinking !== undefined) {
+            // parseSSEMessage 已经处理了 \\n 转换
             messages.value[msgIndex].thinking += message.data;
           }
           scrollToBottom();
@@ -462,6 +508,7 @@ export default defineComponent({
 
         case 'CONTENT':
           if (msgIndex !== -1) {
+            // parseSSEMessage 已经处理了 \\n 转换
             messages.value[msgIndex].content += message.data;
           }
           scrollToBottom();
@@ -493,7 +540,11 @@ export default defineComponent({
       if (!sessionId.value) return;
 
       try {
-        await clearSessionApi(sessionId.value, store.state.user.token);
+        // 🔥 修复：确保使用当前用户的最新token
+        const currentToken = store.state.user.token;
+        setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
+        
+        await clearSessionApi(sessionId.value, currentToken);
         messages.value = [];
         references.value = [];
         console.log('会话已清空，会话ID保留');

@@ -237,7 +237,9 @@ export default defineComponent({
     // Markdown渲染
     const renderMarkdown = (text: string) => {
       try {
-        const html = marked.parse(text) as string;
+        // 规范化：将转义的换行符 \\n 转换为真实换行符 \n
+        let normalizedText = text.replace(/\\n/g, '\n');
+        const html = marked.parse(normalizedText) as string;
         return DOMPurify.sanitize(html);
       } catch (error) {
         console.error('Markdown 渲染失败:', error);
@@ -290,12 +292,14 @@ export default defineComponent({
       
       switch (message.type) {
         case 'THINK':
+          // parseSSEMessage 已经处理了 \\n 转换
           thinking.value = thinking.value + message.data;
           break;
 
         case 'CONTENT':
           // 过滤状态消息
           if (!isStatusMessage(message.data)) {
+            // parseSSEMessage 已经处理了 \\n 转换
             answer.value = answer.value + message.data;
           }
           break;

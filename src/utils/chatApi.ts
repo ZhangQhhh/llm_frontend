@@ -23,9 +23,19 @@ export function parseSSEMessage(raw: string): StreamMessage {
   if (data.startsWith("SESSION:")) {
     return { type: 'SESSION', data: data.substring(8).trim() };
   } else if (data.startsWith("THINK:")) {
-    return { type: 'THINK', data: data.substring(6) };
+    const rawData = data.substring(6);
+    // 调试日志：查看原始数据
+    if (rawData.length < 100) {
+      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData));
+    }
+    return { type: 'THINK', data: rawData.replace(/\\n/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
-    return { type: 'CONTENT', data: data.substring(8).replace(/\u2029/g, "\n") };
+    const rawData = data.substring(8);
+    // 调试日志：查看原始数据（只显示前100个字符）
+    if (rawData.length < 100) {
+      console.log('[DEBUG] CONTENT 原始数据:', JSON.stringify(rawData));
+    }
+    return { type: 'CONTENT', data: rawData.replace(/\\n/g, "\n") };
   } else if (data.startsWith("SOURCE:")) {
     return { type: 'SOURCE', data: data.substring(7).trim() };
   } else if (data.startsWith("ERROR:")) {

@@ -39,8 +39,11 @@ export function renderMarkdown(markdown: string): string {
   if (!markdown) return '';
   
   try {
+    // 0. 预处理：将转义的换行符 \\n 转换为真实换行符 \n
+    const normalizedMarkdown = markdown.replace(/\\n/g, '\n');
+    
     // 1. 预处理：提取并替换数学公式（避免被 Markdown 解析）
-    const { text: processedMarkdown, mathBlocks } = extractMathBlocks(markdown);
+    const { text: processedMarkdown, mathBlocks } = extractMathBlocks(normalizedMarkdown);
     
     // 2. 使用 marked 转换 Markdown 为 HTML
     let html = marked.parse(processedMarkdown) as string;

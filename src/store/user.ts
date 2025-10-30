@@ -145,6 +145,8 @@ export default {
         if (resp.success && resp.code === 200 && resp.data?.token) {
           // 登录成功
           localStorage.setItem("jwt_token", resp.data.token);
+          // 🔥 修复：同步设置LLM服务的token
+          localStorage.setItem("multi_turn_chat_jwt", resp.data.token);
           context.commit("updateToken", resp.data.token);
           data.success(resp);
         } else {
@@ -169,7 +171,12 @@ export default {
       }
     },
     logout(context: ActionContext<UserState, RootState>) {
+      // 清除Vue应用的token
       localStorage.removeItem("jwt_token");
+      // 🔥 修复：清除LLM服务的token和会话数据
+      localStorage.removeItem("multi_turn_chat_jwt");
+      localStorage.removeItem("multi_turn_chat_session_id");
+      
       context.commit("logout");
       router.push({ name: 'home' });
     },
