@@ -105,6 +105,46 @@
                 </span>
               </div>
 
+              <!-- 检索来源标签 -->
+              <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="mb-2">
+                <span
+                  v-for="(source, idx) in ref.retrievalSources"
+                  :key="idx"
+                  class="badge me-1"
+                  :class="source === 'vector' ? 'bg-primary' : 'bg-success'"
+                >
+                  {{ source === 'vector' ? '🔍 向量检索' : '🔑 关键词检索' }}
+                </span>
+              </div>
+
+              <!-- 详细分数 -->
+              <div v-if="ref.vectorScore || ref.bm25Score || ref.vectorRank || ref.bm25Rank" class="mb-2">
+                <small class="d-flex flex-wrap gap-2">
+                  <span v-if="ref.vectorScore" class="badge bg-info text-dark">
+                    📊 向量分: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                    <span v-if="ref.vectorRank" class="ms-1">(排名#{{ ref.vectorRank }})</span>
+                  </span>
+                  <span v-if="ref.bm25Score" class="badge bg-info text-dark">
+                    📈 BM25分: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                    <span v-if="ref.bm25Rank" class="ms-1">(排名#{{ ref.bm25Rank }})</span>
+                  </span>
+                </small>
+              </div>
+
+              <!-- 匹配关键词 -->
+              <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="mb-2">
+                <div class="text-muted small mb-1"><strong>🏷️ 匹配关键词</strong></div>
+                <div class="d-flex flex-wrap gap-1">
+                  <span
+                    v-for="(keyword, idx) in ref.matchedKeywords"
+                    :key="idx"
+                    class="badge bg-warning text-dark"
+                  >
+                    {{ keyword }}
+                  </span>
+                </div>
+              </div>
+
               <div class="ref-text">"{{ ref.content }}"</div>
 
               <div v-if="ref.keyPassage" class="key-passage">
@@ -184,7 +224,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { defineComponent, onMounted, ref } from 'vue';
 import { useStore } from 'vuex';
 import {
   sendStreamChatRequest,
@@ -197,6 +237,12 @@ import { API_ENDPOINTS } from '@/config/api/api';
 import { isStatusMessage } from '@/utils/htmlUtils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import {
+  getMockAnswer,
+  getMockReferences,
+  getMockThinking,
+  shouldUseReferenceMocks
+} from '@/mocks/referenceMocks';
 
 export default defineComponent({
   name: 'KnowledgeQAView',
@@ -247,9 +293,36 @@ export default defineComponent({
       }
     };
 
+    const mockReferencesEnabled = shouldUseReferenceMocks();
+
+    const applyReferenceMocks = () => {
+      references.value = getMockReferences();
+      if (!answer.value) {
+        answer.value = getMockAnswer();
+      }
+      if (!thinking.value) {
+        thinking.value = getMockThinking();
+      }
+    };
+
+    onMounted(() => {
+      if (mockReferencesEnabled) {
+        applyReferenceMocks();
+      }
+    });
+
+
+
+
     // 发送问题
     const handleSubmit = async () => {
       if (!question.value.trim() || loading.value) return;
+
+      if (mockReferencesEnabled) {
+        applyReferenceMocks();
+        return;
+      }
+
 
       lastQuestion.value = question.value.trim();
       answer.value = '';
@@ -288,6 +361,10 @@ export default defineComponent({
 
     // 处理流式消息
     const handleStreamMessage = (message: StreamMessage) => {
+      if (mockReferencesEnabled) {
+        return;
+      }
+
       console.log('收到消息:', message.type, message.data ? message.data.substring(0, 100) : '');
       
       switch (message.type) {
@@ -308,7 +385,11 @@ export default defineComponent({
           console.log('收到SOURCE消息，原始数据:', message.data);
           try {
             const source = JSON.parse(message.data) as ReferenceSource;
-            console.log('解析后的SOURCE:', source);
+            console.log('📦 解析后的SOURCE:', source);
+            console.log('  - retrievalSources:', source.retrievalSources);
+            console.log('  - vectorScore:', source.vectorScore, 'vectorRank:', source.vectorRank);
+            console.log('  - bm25Score:', source.bm25Score, 'bm25Rank:', source.bm25Rank);
+            console.log('  - matchedKeywords:', source.matchedKeywords);
             references.value.push(source);
             console.log('当前references数量:', references.value.length);
           } catch (e) {
@@ -860,6 +941,37 @@ export default defineComponent({
   flex-wrap: wrap;
 }
 
+.retrieval-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.retrieval-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.retrieval-badge.source-vector {
+  background: rgba(37, 99, 235, 0.15);
+  color: #1d4ed8;
+}
+
+.retrieval-badge.source-keyword {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.retrieval-badge.source-other {
+  background: rgba(107, 114, 128, 0.15);
+  color: #374151;
+}
+
 .can-answer {
   color: #059669;
   font-weight: 600;
@@ -899,6 +1011,77 @@ export default defineComponent({
   font-size: 13px;
   color: #92400e;
   line-height: 1.6;
+}
+
+/* 新增字段样式 */
+.retrieval-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.source-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.source-tag.tag-vector {
+  background: rgba(37, 99, 235, 0.15);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.source-tag.tag-keyword {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.detailed-scores {
+  display: flex;
+  gap: 1rem;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+  font-family: 'Courier New', monospace;
+  flex-wrap: wrap;
+}
+
+.detailed-scores span {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+}
+
+.matched-keywords {
+  margin-bottom: 0.75rem;
+  font-size: 12px;
+}
+
+.matched-keywords strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #065f46;
+  font-weight: 600;
+}
+
+.keyword-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 /* 反馈按钮 */

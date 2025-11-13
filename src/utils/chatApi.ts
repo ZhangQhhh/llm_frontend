@@ -48,17 +48,43 @@ export function parseSSEMessage(raw: string): StreamMessage {
 }
 
 /**
+ * 参考来源的元数据
+ */
+export interface ReferenceMetadata {
+  retrieval_sources?: string[] | string;
+  vector_rank?: number;
+  bm25_rank?: number;
+  vector_score?: number;
+  bm25_score?: number;
+}
+
+/**
  * 参考来源数据结构
  */
 export interface ReferenceSource {
   id: string | number;
   fileName: string;
   content: string;
-  initialScore?: number;
-  rerankedScore?: number;
+  initialScore?: number | string;
+  rerankedScore?: number | string;
   canAnswer?: boolean;
   keyPassage?: string;
   url?: string;
+  
+  // 新增字段
+  retrievalSources?: string[];      // 检索来源: ["vector"], ["keyword"], 或 ["vector", "keyword"]
+  vectorScore?: number | string;    // 向量检索分数
+  bm25Score?: number | string;      // BM25 检索分数
+  vectorRank?: number;              // 向量检索排名（可选，仅当 retrievalSources 包含 "vector" 时）
+  bm25Rank?: number;                // BM25 检索排名（可选，仅当 retrievalSources 包含 "keyword" 时）
+  matchedKeywords?: string[];       // 匹配的关键词（仅当 retrievalSources 包含 "keyword" 时）
+  
+  metadata?: ReferenceMetadata;
+  node?: {
+    metadata?: ReferenceMetadata;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
 }
 
 /**

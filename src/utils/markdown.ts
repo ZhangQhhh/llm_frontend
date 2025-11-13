@@ -40,7 +40,16 @@ export function renderMarkdown(markdown: string): string {
   
   try {
     // 0. 预处理：将转义的换行符 \\n 转换为真实换行符 \n
-    const normalizedMarkdown = markdown.replace(/\\n/g, '\n');
+    let normalizedMarkdown = markdown.replace(/\\n/g, '\n');
+    
+    // 0.5. 确保 marked 能正确处理换行：
+    // 1. 先将所有 \n 替换为临时标记（避免重复处理）
+    // 2. 将单个换行符标记替换为两个空格+换行符（Markdown 硬换行）
+    // 3. 将双换行符标记恢复为双换行（段落分隔）
+    normalizedMarkdown = normalizedMarkdown
+      .replace(/\n\n/g, '___DOUBLE_NEWLINE___')  // 保护双换行
+      .replace(/\n/g, '  \n')                      // 单换行转为硬换行
+      .replace(/___DOUBLE_NEWLINE___/g, '\n\n');   // 恢复双换行
     
     // 1. 预处理：提取并替换数学公式（避免被 Markdown 解析）
     const { text: processedMarkdown, mathBlocks } = extractMathBlocks(normalizedMarkdown);

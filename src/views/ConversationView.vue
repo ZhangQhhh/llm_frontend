@@ -153,12 +153,53 @@
               >
                 <div class="ref-header">
                   <span class="ref-title">{{ ref.fileName }}</span>
-                  <span v-if="ref.canAnswer" class="badge">✓ 已选中</span>
+                  <span v-if="ref.canAnswer" class="badge bg-success">✓ 已选中</span>
                 </div>
                 <div class="ref-meta">
                   <span>初始分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
                   <span>重排分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
                 </div>
+                
+                <!-- 检索来源标签 -->
+                <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="mb-2">
+                  <span
+                    v-for="(source, idx) in ref.retrievalSources"
+                    :key="idx"
+                    class="badge me-1"
+                    :class="source === 'vector' ? 'bg-primary' : 'bg-success'"
+                  >
+                    {{ source === 'vector' ? '🔍 向量检索' : '🔑 关键词检索' }}
+                  </span>
+                </div>
+                
+                <!-- 详细分数 -->
+                <div v-if="ref.vectorScore || ref.bm25Score || ref.vectorRank || ref.bm25Rank" class="mb-2">
+                  <small class="d-flex flex-wrap gap-2">
+                    <span v-if="ref.vectorScore" class="badge bg-info text-dark">
+                      📊 向量分: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                      <span v-if="ref.vectorRank" class="ms-1">(排名#{{ ref.vectorRank }})</span>
+                    </span>
+                    <span v-if="ref.bm25Score" class="badge bg-info text-dark">
+                      📈 BM25分: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                      <span v-if="ref.bm25Rank" class="ms-1">(排名#{{ ref.bm25Rank }})</span>
+                    </span>
+                  </small>
+                </div>
+                
+                <!-- 匹配关键词 -->
+                <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="mb-2">
+                  <div class="text-muted small mb-1"><strong>🏷️ 匹配关键词</strong></div>
+                  <div class="d-flex flex-wrap gap-1">
+                    <span
+                      v-for="(keyword, idx) in ref.matchedKeywords"
+                      :key="idx"
+                      class="badge bg-warning text-dark"
+                    >
+                      {{ keyword }}
+                    </span>
+                  </div>
+                </div>
+                
                 <div class="ref-content">{{ ref.content }}</div>
                 <div v-if="ref.keyPassage" class="key-passage">
                   <strong>🔍 关键段落：</strong>
@@ -192,6 +233,13 @@ import {
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
+import {
+  getMockAnswer,
+  getMockConversation,
+  getMockReferences,
+  getMockThinking,
+  shouldUseReferenceMocks
+} from '@/mocks/referenceMocks';
 import 'highlight.js/styles/atom-one-dark.css';  // 代码高亮主题
 import 'katex/dist/katex.min.css';                // 数学公式样式
 import '@/assets/styles/markdown.css';            // Markdown 样式
@@ -233,6 +281,36 @@ export default defineComponent({
 
     // DOM引用
     const conversationBox = ref<HTMLElement | null>(null);
+    const mockReferencesEnabled = shouldUseReferenceMocks();
+
+    const applyConversationMocks = () => {
+      const mockHistory = getMockConversation();
+      if (messages.value.length === 0) {
+        messages.value.push(
+          {
+            role: 'user',
+            content: mockHistory.user
+          },
+          {
+            role: 'assistant',
+            content: getMockAnswer(),
+            thinking: getMockThinking(),
+            thinkingCollapsed: false
+          }
+        );
+      }
+      references.value = getMockReferences();
+    };
+
+    const guardMockRequests = (): boolean => {
+      if (!mockReferencesEnabled) {
+        return false;
+      }
+      applyConversationMocks();
+      return true;
+    };
+
+
 
     // 计算属性
     const sessionDisplay = computed(() => {
@@ -260,6 +338,12 @@ export default defineComponent({
     // 初始化
     onMounted(async () => {
       setupCopyCode();
+
+      if (mockReferencesEnabled) {
+        applyConversationMocks();
+        return;
+      }
+
       
       // 🔥 修复：检查用户切换，如果检测到token不一致则清除会话数据
       const currentToken = store.state.user.token;
@@ -283,6 +367,9 @@ export default defineComponent({
 
     // 初始化会话
     const initializeSession = async () => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!checkAuth()) return;
 
       // 🔥 修复：确保使用当前用户的最新token
@@ -327,6 +414,9 @@ export default defineComponent({
 
     // 加载会话列表
     const loadSessionList = async (page: number = 1) => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!checkAuth()) return;
 
       sessionsLoading.value = true;
@@ -352,6 +442,9 @@ export default defineComponent({
 
     // 创建新会话
     const handleNewSession = async () => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!checkAuth()) return;
 
       try {
@@ -373,6 +466,9 @@ export default defineComponent({
 
     // 选择会话
     const handleSelectSession = async (selectedSessionId: string) => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (selectedSessionId === sessionId.value) return;
 
       // 🔥 修复：确保使用当前用户的最新token
@@ -409,6 +505,9 @@ export default defineComponent({
 
     // 删除会话
     const handleDeleteSession = async (sessionIdToDelete: string) => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!confirm('确定要删除这个会话吗？')) return;
 
       try {
@@ -430,12 +529,20 @@ export default defineComponent({
 
     // 分页切换
     const handlePageChange = (page: number) => {
+      if (guardMockRequests()) {
+        return;
+      }
       loadSessionList(page);
     };
 
     // 发送消息
     const handleSubmit = async () => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!checkAuth() || !question.value.trim() || loading.value) return;
+
+
 
       const userQuestion = question.value.trim();
       question.value = '';
@@ -489,6 +596,10 @@ export default defineComponent({
 
     // 处理流式消息
     const handleStreamMessage = (message: StreamMessage, assistantMessage: Message) => {
+      if (mockReferencesEnabled) {
+        return;
+      }
+
       // 获取当前助手消息在数组中的索引
       const msgIndex = messages.value.indexOf(assistantMessage);
       
@@ -517,6 +628,11 @@ export default defineComponent({
         case 'SOURCE':
           try {
             const source = JSON.parse(message.data) as ReferenceSource;
+            console.log('📦 接收到SOURCE数据:', source);
+            console.log('  - retrievalSources:', source.retrievalSources);
+            console.log('  - vectorScore:', source.vectorScore, 'vectorRank:', source.vectorRank);
+            console.log('  - bm25Score:', source.bm25Score, 'bm25Rank:', source.bm25Rank);
+            console.log('  - matchedKeywords:', source.matchedKeywords);
             references.value.push(source);
           } catch (e) {
             console.error('解析SOURCE失败:', e);
@@ -537,6 +653,9 @@ export default defineComponent({
 
     // 清空会话
     const handleClearSession = async () => {
+      if (guardMockRequests()) {
+        return;
+      }
       if (!sessionId.value) return;
 
       try {
@@ -984,21 +1103,43 @@ export default defineComponent({
   font-size: 14px;
 }
 
-.badge {
-  background: #10b981;
-  color: white;
-  padding: 0.125rem 0.5rem;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
 .ref-meta {
   display: flex;
   gap: 1rem;
   font-size: 12px;
   color: #6b7280;
   margin-bottom: 0.75rem;
+}
+
+.retrieval-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.retrieval-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.retrieval-badge.source-vector {
+  background: rgba(37, 99, 235, 0.15);
+  color: #1d4ed8;
+}
+
+.retrieval-badge.source-keyword {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.retrieval-badge.source-other {
+  background: rgba(107, 114, 128, 0.15);
+  color: #374151;
 }
 
 .ref-content {
@@ -1025,6 +1166,73 @@ export default defineComponent({
   display: block;
   margin-bottom: 0.5rem;
   color: #b45309;
+}
+
+.retrieval-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.source-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.source-tag.tag-vector {
+  background: rgba(37, 99, 235, 0.15);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.source-tag.tag-keyword {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.detailed-scores {
+  display: flex;
+  gap: 1rem;
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+  font-family: 'Courier New', monospace;
+}
+
+.detailed-scores span {
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.matched-keywords {
+  margin-bottom: 0.75rem;
+  font-size: 12px;
+}
+
+.matched-keywords strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #374151;
+}
+
+.keyword-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 /* 响应式 */

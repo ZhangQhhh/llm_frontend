@@ -34,7 +34,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'knowledge-qa',
     component: KnowledgeQAView,
     meta: { 
-      requiresAuth: true,
+      requiresAuth: false,
       title: '知识问答' 
     }
   },
