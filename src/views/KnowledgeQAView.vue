@@ -52,8 +52,23 @@
       <div v-if="loading || answer || references.length > 0" class="answer-card">
         <h2 class="answer-title">💡 回答</h2>
 
+        <!-- 精准检索进度条 -->
+        <div v-if="showProgress" class="progress-container">
+          <div class="progress-header">
+            <span class="progress-icon">🔍</span>
+            <span class="progress-title">精准检索进度</span>
+            <span class="progress-percentage">{{ progressInfo.percentage }}%</span>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar" :style="{ width: progressInfo.percentage + '%' }">
+              <div class="progress-bar-shine"></div>
+            </div>
+          </div>
+          <div class="progress-text">{{ progressMessage }}</div>
+        </div>
+
         <!-- 加载提示 -->
-        <div v-if="loading && !answer" class="loading-hint">
+        <div v-if="loading && !answer && !showProgress" class="loading-hint">
           <div class="spinner-small"></div>
           <span>AI正在思考中...</span>
         </div>
@@ -263,7 +278,14 @@ import {
   type StreamMessage
 } from '@/utils/chatApi';
 import { API_ENDPOINTS } from '@/config/api/api';
-import { isStatusMessage } from '@/utils/htmlUtils';
+import { 
+  isStatusMessage, 
+  isProgressMessage, 
+  parseProgressMessage, 
+  isPreciseRetrievalStart, 
+  parsePreciseRetrievalStart,
+  type ProgressInfo 
+} from '@/utils/htmlUtils';
 import {
   getMockAnswer,
   getMockReferences,
@@ -286,6 +308,11 @@ export default defineComponent({
     const references = ref<ReferenceSource[]>([]);
     const subQuestions = ref<SubQuestionsData | null>(null);
     const loading = ref(false);
+
+    // 进度条状态
+    const showProgress = ref(false);
+    const progressInfo = ref<ProgressInfo>({ current: 0, total: 0, percentage: 0 });
+    const progressMessage = ref('');
 
     // 配置
     const modelId = ref('qwen3-32b');
@@ -346,6 +373,11 @@ export default defineComponent({
       subQuestions.value = null;
       feedbackSubmitted.value = false;
       loading.value = true;
+      
+      // 重置进度条
+      showProgress.value = false;
+      progressInfo.value = { current: 0, total: 0, percentage: 0 };
+      progressMessage.value = '';
 
       try {
         await sendStreamChatRequest(
@@ -372,6 +404,7 @@ export default defineComponent({
         answer.value = `请求失败: ${error.message}`;
       } finally {
         loading.value = false;
+        showProgress.value = false;
       }
     };
 
@@ -390,8 +423,25 @@ export default defineComponent({
           break;
 
         case 'CONTENT':
+          // 检查是否为精准检索开始消息
+          if (isPreciseRetrievalStart(message.data)) {
+            const total = parsePreciseRetrievalStart(message.data);
+            if (total) {
+              showProgress.value = true;
+              progressInfo.value = { current: 0, total, percentage: 0 };
+              progressMessage.value = '正在启动精准检索...';
+            }
+          }
+          // 检查是否为进度消息
+          else if (isProgressMessage(message.data)) {
+            const progress = parseProgressMessage(message.data);
+            if (progress) {
+              progressInfo.value = progress;
+              progressMessage.value = `正在分析文档 ${progress.current}/${progress.total}`;
+            }
+          }
           // 过滤状态消息
-          if (!isStatusMessage(message.data)) {
+          else if (!isStatusMessage(message.data)) {
             // parseSSEMessage 已经处理了 \\n 转换
             answer.value = answer.value + message.data;
           }
@@ -431,6 +481,8 @@ export default defineComponent({
         case 'DONE':
           console.log('流式响应完成，最终references数量:', references.value.length);
           loading.value = false;
+          // 隐藏进度条
+          showProgress.value = false;
           break;
           
         case 'UNKNOWN':
@@ -511,6 +563,9 @@ export default defineComponent({
       reporterName,
       reporterUnit,
       submittingFeedback,
+      showProgress,
+      progressInfo,
+      progressMessage,
       handleSubmit,
       handleLike,
       handleDislikeSubmit,
@@ -707,6 +762,97 @@ export default defineComponent({
   border-radius: 12px;
   color: #6b7280;
   margin-bottom: 1.5rem;
+}
+
+/* 精准检索进度条 */
+.progress-container {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 2px solid #93c5fd;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.progress-icon {
+  font-size: 24px;
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.progress-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e40af;
+  flex: 1;
+}
+
+.progress-percentage {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2563eb;
+  background: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar-wrapper {
+  width: 100%;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.75rem;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+  border-radius: 12px;
+  transition: width 0.5s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+}
+
+.progress-bar-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: shine 2s infinite;
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+.progress-text {
+  font-size: 14px;
+  color: #1e40af;
+  font-weight: 500;
+  text-align: center;
 }
 
 .spinner-small {

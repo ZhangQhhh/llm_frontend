@@ -42,6 +42,17 @@ export function renderMarkdown(markdown: string): string {
     // 0. 预处理：将转义的换行符 \\n 转换为真实换行符 \n
     let normalizedMarkdown = markdown.replace(/\\n/g, '\n');
     
+    // 0.1 防御性处理：检测未闭合的代码块标记
+    // 统计代码块标记（三个反引号）的数量
+    const codeBlockMarkers = (normalizedMarkdown.match(/```/g) || []).length;
+    
+    // 如果代码块标记数量是奇数，说明有未闭合的代码块
+    if (codeBlockMarkers % 2 !== 0) {
+      console.warn('[Markdown] 检测到未闭合的代码块标记，已自动修复');
+      // 在末尾添加闭合标记
+      normalizedMarkdown += '\n```';
+    }
+    
     // 0.5. 确保 marked 能正确处理换行：
     // 1. 先将所有 \n 替换为临时标记（避免重复处理）
     // 2. 将单个换行符标记替换为两个空格+换行符（Markdown 硬换行）
@@ -225,10 +236,13 @@ function processCodeBlocks(html: string): string {
     }
     
     // 返回带样式的代码块
+    // 当语言为 plaintext 时不显示语言标签
+    const languageLabel = language === 'plaintext' ? '' : `<span class="language">${language}</span>`;
+    
     return `
       <div class="code-block">
         <div class="code-header">
-          <span class="language">${language}</span>
+          ${languageLabel}
           <button class="copy-btn" onclick="copyCode(this)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>

@@ -21,7 +21,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <span class="badge-icon">🛡️</span>
-          <span class="badge-text">边境检查站智能助手</span>
+          <span class="badge-text">安徽出入境边防检查总站智能助手</span>
           <span class="badge-pulse"></span>
         </div>
         <h1 class="hero-title">
@@ -29,7 +29,7 @@
           <span class="title-line gradient-text">问答系统</span>
         </h1>
         <p class="hero-subtitle">
-          <span class="typing-text">基于大语言模型的专业知识库，为边境检查工作提供精准、高效的智能问答服务</span>
+          <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</span>
         </p>
         <div class="hero-stats">
           <div class="stat-item">
@@ -257,7 +257,7 @@
         <div class="footer-content">
           <div class="footer-section">
             <h4>边检知识问答系统</h4>
-            <p>为边境检查工作提供专业智能支持</p>
+            <p>为边防检查工作提供专业智能支持</p>
           </div>
           <div class="footer-section">
             <h4>快速链接</h4>
