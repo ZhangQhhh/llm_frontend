@@ -3,6 +3,8 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import KnowledgeQAView from '../views/KnowledgeQAView.vue'
 import ConversationView from '../views/ConversationView.vue'
+import SmartOfficeView from '../views/SmartOfficeView.vue'
+import Immigration12367View from '../views/Immigration12367View.vue'
 import store from '../store'
 import { ElMessage } from 'element-plus'
 
@@ -34,7 +36,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'knowledge-qa',
     component: KnowledgeQAView,
     meta: { 
-      requiresAuth: false,
+      requiresAuth: true,
       title: '知识问答' 
     }
   },
@@ -83,6 +85,24 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       requiresAuth: true,
       title: '边检智能家教'
+    }
+  },
+  {
+    path: '/smart-office',
+    name: 'smart-office',
+    component: SmartOfficeView,
+    meta: { 
+      requiresAuth: true,
+      title: '智慧办公'
+    }
+  },
+  {
+    path: '/immigration-12367',
+    name: 'immigration-12367',
+    component: Immigration12367View,
+    meta: { 
+      requiresAuth: true,
+      title: '移民局12367'
     }
   },
   {

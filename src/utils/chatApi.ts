@@ -10,7 +10,7 @@ import llmHttp from '@/config/api/llmHttp';
  * SSE流式响应处理器
  */
 export interface StreamMessage {
-  type: 'SESSION' | 'THINK' | 'CONTENT' | 'SOURCE' | 'ERROR' | 'DONE' | 'UNKNOWN';
+  type: 'SESSION' | 'THINK' | 'CONTENT' | 'SOURCE' | 'SUB_QUESTIONS' | 'ERROR' | 'DONE' | 'UNKNOWN';
   data: string;
 }
 
@@ -38,6 +38,8 @@ export function parseSSEMessage(raw: string): StreamMessage {
     return { type: 'CONTENT', data: rawData.replace(/\\n/g, "\n") };
   } else if (data.startsWith("SOURCE:")) {
     return { type: 'SOURCE', data: data.substring(7).trim() };
+  } else if (data.startsWith("SUB_QUESTIONS:")) {
+    return { type: 'SUB_QUESTIONS', data: data.substring(14).trim() };
   } else if (data.startsWith("ERROR:")) {
     return { type: 'ERROR', data: data.substring(6).trim() };
   } else if (data.startsWith("DONE:")) {

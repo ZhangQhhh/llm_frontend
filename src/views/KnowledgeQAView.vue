@@ -65,6 +65,35 @@
           <div v-else v-html="renderMarkdown(answer)"></div>
         </div>
 
+        <!-- 子问题分解 -->
+        <div v-if="subQuestions && subQuestions.sub_questions && subQuestions.sub_questions.length > 0" class="sub-questions-box">
+          <div class="sub-questions-header">
+            <span class="icon">🔍</span>
+            <h3>问题分解</h3>
+            <span class="count-badge">{{ subQuestions.count }} 个子问题</span>
+          </div>
+          
+          <div class="sub-questions-list">
+            <div 
+              v-for="(subAnswer, index) in subQuestions.sub_answers" 
+              :key="index"
+              class="sub-question-item"
+            >
+              <div class="sub-question-number">{{ index + 1 }}</div>
+              <div class="sub-question-content">
+                <div class="sub-question-title">
+                  <span class="question-icon">❓</span>
+                  {{ subAnswer.sub_question }}
+                </div>
+                <div class="sub-answer-content">
+                  <span class="answer-icon">💡</span>
+                  <div class="answer-text">{{ subAnswer.answer }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 思考过程 -->
         <div v-if="thinking && thinkingMode" class="thinking-box">
           <div class="thinking-header">
@@ -235,25 +264,27 @@ import {
 } from '@/utils/chatApi';
 import { API_ENDPOINTS } from '@/config/api/api';
 import { isStatusMessage } from '@/utils/htmlUtils';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import {
   getMockAnswer,
   getMockReferences,
   getMockThinking,
-  shouldUseReferenceMocks
+  getMockSubQuestions,
+  shouldUseReferenceMocks,
+  type SubQuestionsData
 } from '@/mocks/referenceMocks';
+import { renderMarkdown } from '@/utils/markdown';
 
 export default defineComponent({
   name: 'KnowledgeQAView',
   setup() {
     const store = useStore();
-    
+
     // 状态
     const question = ref('');
     const answer = ref('');
     const thinking = ref('');
     const references = ref<ReferenceSource[]>([]);
+    const subQuestions = ref<SubQuestionsData | null>(null);
     const loading = ref(false);
 
     // 配置
@@ -274,25 +305,6 @@ export default defineComponent({
     const lastQuestion = ref('');
     const lastAnswer = ref('');
 
-    // 配置 marked
-    marked.setOptions({
-      breaks: true,  // 支持 GitHub 风格的换行
-      gfm: true,     // 启用 GitHub Flavored Markdown
-    });
-
-    // Markdown渲染
-    const renderMarkdown = (text: string) => {
-      try {
-        // 规范化：将转义的换行符 \\n 转换为真实换行符 \n
-        let normalizedText = text.replace(/\\n/g, '\n');
-        const html = marked.parse(normalizedText) as string;
-        return DOMPurify.sanitize(html);
-      } catch (error) {
-        console.error('Markdown 渲染失败:', error);
-        return text;
-      }
-    };
-
     const mockReferencesEnabled = shouldUseReferenceMocks();
 
     const applyReferenceMocks = () => {
@@ -302,6 +314,9 @@ export default defineComponent({
       }
       if (!thinking.value) {
         thinking.value = getMockThinking();
+      }
+      if (!subQuestions.value) {
+        subQuestions.value = getMockSubQuestions();
       }
     };
 
@@ -328,6 +343,7 @@ export default defineComponent({
       answer.value = '';
       thinking.value = '';
       references.value = [];
+      subQuestions.value = null;
       feedbackSubmitted.value = false;
       loading.value = true;
 
@@ -394,6 +410,17 @@ export default defineComponent({
             console.log('当前references数量:', references.value.length);
           } catch (e) {
             console.error('解析SOURCE失败:', e, '原始数据:', message.data);
+          }
+          break;
+
+        case 'SUB_QUESTIONS':
+          console.log('收到SUB_QUESTIONS消息，原始数据:', message.data);
+          try {
+            const subQuestionsData = JSON.parse(message.data) as SubQuestionsData;
+            console.log('🔍 解析后的SUB_QUESTIONS:', subQuestionsData);
+            subQuestions.value = subQuestionsData;
+          } catch (e) {
+            console.error('解析SUB_QUESTIONS失败:', e, '原始数据:', message.data);
           }
           break;
 
@@ -472,6 +499,7 @@ export default defineComponent({
       answer,
       thinking,
       references,
+      subQuestions,
       loading,
       modelId,
       rerankTopN,
@@ -806,6 +834,126 @@ export default defineComponent({
 .answer-content :deep(th) {
   background-color: #f3f4f6;
   font-weight: 600;
+}
+
+/* 子问题分解 */
+.sub-questions-box {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #fbbf24;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.sub-questions-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f59e0b;
+}
+
+.sub-questions-header .icon {
+  font-size: 24px;
+}
+
+.sub-questions-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #92400e;
+  flex: 1;
+}
+
+.count-badge {
+  background: linear-gradient(45deg, #f59e0b, #d97706);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sub-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sub-question-item {
+  display: flex;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 1.25rem;
+  border-left: 4px solid #f59e0b;
+  transition: all 0.3s;
+}
+
+.sub-question-item:hover {
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  transform: translateX(4px);
+}
+
+.sub-question-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.sub-question-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sub-question-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #92400e;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.question-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.sub-answer-content {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  background: #fffbeb;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid #fbbf24;
+}
+
+.answer-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.answer-text {
+  flex: 1;
+  color: #78350f;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 /* 思考过程 */

@@ -2,99 +2,234 @@
   <div class="home-page">
     <!-- Hero Section -->
     <section class="hero">
+      <!-- 3D Canvas Background -->
+      <canvas ref="threeCanvas" class="three-canvas"></canvas>
+      
+      <!-- Animated Grid Background -->
+      <div class="grid-background"></div>
+      
+      <!-- Floating Particles -->
+      <div class="particles">
+        <div class="particle" v-for="i in 50" :key="i" :style="getParticleStyle()"></div>
+      </div>
+      
+      <!-- Glowing Orbs -->
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      
       <div class="hero-content">
-        <div class="hero-badge">🛡️ 边境检查站智能助手</div>
+        <div class="hero-badge">
+          <span class="badge-icon">🛡️</span>
+          <span class="badge-text">边境检查站智能助手</span>
+          <span class="badge-pulse"></span>
+        </div>
         <h1 class="hero-title">
-          边检知识问答系统
+          <span class="title-line">边检知识</span>
+          <span class="title-line gradient-text">问答系统</span>
         </h1>
         <p class="hero-subtitle">
-          基于大语言模型的专业知识库，为边境检查工作提供精准、高效的智能问答服务
+          <span class="typing-text">基于大语言模型的专业知识库，为边境检查工作提供精准、高效的智能问答服务</span>
         </p>
+        <div class="hero-stats">
+          <div class="stat-item">
+            <div class="stat-number">10K+</div>
+            <div class="stat-label">知识条目</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">99.9%</div>
+            <div class="stat-label">准确率</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">&lt;1s</div>
+            <div class="stat-label">响应时间</div>
+          </div>
+        </div>
         <div class="hero-actions">
           <router-link to="/knowledge-qa" class="btn btn-primary">
+            <span class="btn-shine"></span>
             <span class="icon">🎓</span>
-            知识问答
+            <span>知识问答</span>
+            <span class="btn-arrow">→</span>
           </router-link>
           <router-link to="/conversation" class="btn btn-secondary">
+            <span class="btn-shine"></span>
             <span class="icon">💬</span>
-            多轮对话
+            <span>多轮对话</span>
           </router-link>
           <router-link to="/exam" class="btn btn-secondary">
+            <span class="btn-shine"></span>
             <span class="icon">📝</span>
-            智能家教
+            <span>智能家教</span>
           </router-link>
         </div>
       </div>
 
       <div class="hero-visual">
         <div class="floating-card card-1">
+          <div class="card-glow"></div>
           <div class="card-icon">🤖</div>
           <div class="card-text">AI智能分析</div>
+          <div class="card-progress"></div>
         </div>
         <div class="floating-card card-2">
+          <div class="card-glow"></div>
           <div class="card-icon">📚</div>
           <div class="card-text">知识库检索</div>
+          <div class="card-progress"></div>
         </div>
         <div class="floating-card card-3">
+          <div class="card-glow"></div>
           <div class="card-icon">⚡</div>
           <div class="card-text">实时响应</div>
+          <div class="card-progress"></div>
         </div>
+      </div>
+      
+      <!-- Scroll Indicator -->
+      <div class="scroll-indicator">
+        <div class="scroll-mouse">
+          <div class="scroll-wheel"></div>
+        </div>
+        <span>向下滚动探索更多</span>
       </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="features">
+    <!-- Tech Advantages Section -->
+    <section class="tech-advantages">
       <div class="container">
-        <h2 class="section-title">核心功能</h2>
-        <p class="section-subtitle">专业的AI能力，为边检工作提供全方位的智能支持</p>
+        <div class="section-header">
+          <div class="section-badge">⚡ TECHNOLOGY</div>
+          <h2 class="section-title">
+            <span class="gradient-text">技术优势</span>
+          </h2>
+          <p class="section-subtitle">基于前沿AI技术，打造专业可靠的智能问答系统</p>
+        </div>
 
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon">🎯</div>
-            <h3>精准检索</h3>
-            <p>基于向量检索和重排序技术，快速定位最相关的知识内容</p>
+        <div class="advantages-grid">
+          <!-- 大语言模型 -->
+          <div class="advantage-card large">
+            <div class="card-header">
+              <div class="card-icon-large">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                  <line x1="9" y1="9" x2="9.01" y2="9"/>
+                  <line x1="15" y1="9" x2="15.01" y2="9"/>
+                </svg>
+              </div>
+              <div class="card-title-group">
+                <h3>大语言模型驱动</h3>
+                <span class="tech-badge">核心技术</span>
+              </div>
+            </div>
+            <p>集成 Qwen、DeepSeek 等多种先进大模型，支持思考链推理，提供专业、准确的智能回答</p>
+            <div class="tech-tags">
+              <span class="tech-tag">Qwen-32B</span>
+              <span class="tech-tag">DeepSeek-R1</span>
+              <span class="tech-tag">思考模式</span>
+            </div>
           </div>
 
-          <div class="feature-card">
-            <div class="feature-icon">💭</div>
-            <h3>思考过程可视化</h3>
-            <p>展示AI的推理过程，让回答更加透明可信</p>
+          <!-- 向量检索 -->
+          <div class="advantage-card">
+            <div class="card-header">
+              <div class="card-icon-medium">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="m21 21-4.35-4.35"/>
+                </svg>
+              </div>
+              <h3>智能检索引擎</h3>
+            </div>
+            <p>向量检索 + BM25 混合检索，配合重排序算法，精准定位相关知识</p>
+            <div class="tech-stats">
+              <div class="stat-mini">
+                <span class="stat-value">10K+</span>
+                <span class="stat-label">知识库</span>
+              </div>
+              <div class="stat-mini">
+                <span class="stat-value">&lt;100ms</span>
+                <span class="stat-label">检索速度</span>
+              </div>
+            </div>
           </div>
 
-          <div class="feature-card">
-            <div class="feature-icon">🔄</div>
-            <h3>多轮对话</h3>
-            <p>支持上下文理解，实现连续、自然的对话交互</p>
+          <!-- 多轮对话 -->
+          <div class="advantage-card">
+            <div class="card-header">
+              <div class="card-icon-medium">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <h3>上下文记忆</h3>
+            </div>
+            <p>支持多轮对话，自动管理上下文，实现连续自然的交互体验</p>
+            <div class="feature-list">
+              <div class="feature-item-mini">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                会话管理
+              </div>
+              <div class="feature-item-mini">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                历史追溯
+              </div>
+            </div>
           </div>
 
-          <div class="feature-card">
-            <div class="feature-icon">📝</div>
-            <h3>智能家教</h3>
-            <p>在线考试系统，智能评分与详细解析，助力学习提升</p>
+          <!-- 来源追溯 -->
+          <div class="advantage-card">
+            <div class="card-header">
+              <div class="card-icon-medium">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+              </div>
+              <h3>来源可追溯</h3>
+            </div>
+            <p>每个回答标注参考来源和置信度分数，确保信息透明可靠</p>
+            <div class="feature-list">
+              <div class="feature-item-mini">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                文档引用
+              </div>
+              <div class="feature-item-mini">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                评分展示
+              </div>
+            </div>
           </div>
 
-          <div class="feature-card">
-            <div class="feature-icon">📖</div>
-            <h3>来源追溯</h3>
-            <p>每个回答都标注参考来源，确保信息可追溯</p>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">🚀</div>
-            <h3>多模型支持</h3>
-            <p>集成多种先进大模型，满足不同场景需求</p>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">🎓</div>
-            <h3>题目解析</h3>
-            <p>AI智能生成选择题解析，公开访问无需登录</p>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">🎨</div>
-            <h3>优雅界面</h3>
-            <p>现代化的UI设计，提供流畅的用户体验</p>
+          <!-- 智能评测 -->
+          <div class="advantage-card accent">
+            <div class="card-header">
+              <div class="card-icon-medium">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <h3>智能评测系统</h3>
+            </div>
+            <p>在线考试、自动评分、详细解析，助力专业能力提升</p>
+            <div class="accent-badge">NEW</div>
           </div>
         </div>
       </div>
@@ -145,23 +280,141 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
+import * as THREE from 'three';
 
 export default defineComponent({
-  name: 'HomeView'
+  name: 'HomeView',
+  setup() {
+    const threeCanvas = ref<HTMLCanvasElement | null>(null);
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
+    let renderer: THREE.WebGLRenderer;
+    let particles: THREE.Points;
+    let animationId: number;
+
+    // 粒子样式生成
+    const getParticleStyle = () => {
+      const size = Math.random() * 4 + 2;
+      const duration = Math.random() * 20 + 10;
+      const delay = Math.random() * 5;
+      const x = Math.random() * 100;
+      const y = Math.random() * 100;
+      
+      return {
+        width: `${size}px`,
+        height: `${size}px`,
+        left: `${x}%`,
+        top: `${y}%`,
+        animationDuration: `${duration}s`,
+        animationDelay: `${delay}s`
+      };
+    };
+
+    // 初始化Three.js场景
+    const initThree = () => {
+      if (!threeCanvas.value) return;
+
+      // 创建场景
+      scene = new THREE.Scene();
+
+      // 创建相机
+      camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.z = 50;
+
+      // 创建渲染器
+      renderer = new THREE.WebGLRenderer({
+        canvas: threeCanvas.value,
+        alpha: true,
+        antialias: true
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // 创建粒子系统
+      const particlesGeometry = new THREE.BufferGeometry();
+      const particlesCount = 1000;
+      const posArray = new Float32Array(particlesCount * 3);
+
+      for (let i = 0; i < particlesCount * 3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 100;
+      }
+
+      particlesGeometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(posArray, 3)
+      );
+
+      const particlesMaterial = new THREE.PointsMaterial({
+        size: 0.15,
+        color: 0x60a5fa,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending
+      });
+
+      particles = new THREE.Points(particlesGeometry, particlesMaterial);
+      scene.add(particles);
+
+      // 动画循环
+      const animate = () => {
+        animationId = requestAnimationFrame(animate);
+
+        // 旋转粒子
+        particles.rotation.x += 0.0005;
+        particles.rotation.y += 0.0008;
+
+        renderer.render(scene, camera);
+      };
+
+      animate();
+
+      // 窗口大小调整
+      const handleResize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      };
+
+      window.addEventListener('resize', handleResize);
+    };
+
+    onMounted(() => {
+      initThree();
+    });
+
+    onUnmounted(() => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      if (renderer) {
+        renderer.dispose();
+      }
+    });
+
+    return {
+      threeCanvas,
+      getParticleStyle
+    };
+  }
 });
 </script>
 
 <style scoped>
 .home-page {
   min-height: 100vh;
-  background: #ffffff;
+  background: #0a0e27;
 }
 
 /* Hero Section */
 .hero {
-  min-height: 90vh;
-  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 50%, #1f2937 100%);
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1729 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,51 +423,280 @@ export default defineComponent({
   overflow: hidden;
 }
 
-.hero::before {
-  content: '';
+/* 3D Canvas Background */
+.three-canvas {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-  opacity: 0.3;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.6;
 }
 
-.hero-content {
-  max-width: 600px;
-  text-align: center;
-  position: relative;
+/* Animated Grid Background */
+.grid-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(96, 165, 250, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridMove 20s linear infinite;
   z-index: 1;
 }
 
+@keyframes gridMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+/* Floating Particles */
+.particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: particleFloat 15s infinite ease-in-out;
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(50px);
+    opacity: 0;
+  }
+}
+
+/* Glowing Orbs */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: orbFloat 20s infinite ease-in-out;
+}
+
+.orb-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
+  top: -10%;
+  left: -10%;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
+  bottom: -10%;
+  right: -10%;
+  animation-delay: 7s;
+}
+
+.orb-3 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  animation-delay: 14s;
+}
+
+@keyframes orbFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(50px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-50px, 50px) scale(0.9);
+  }
+}
+
+.hero-content {
+  max-width: 700px;
+  text-align: center;
+  position: relative;
+  z-index: 10;
+}
+
 .hero-badge {
-  display: inline-block;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  color: white;
-  padding: 0.5rem 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  backdrop-filter: blur(20px);
+  color: #60a5fa;
+  padding: 0.75rem 1.5rem;
   border-radius: 50px;
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  position: relative;
+  overflow: hidden;
+  animation: badgeGlow 3s ease-in-out infinite;
+}
+
+.badge-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.4) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes badgeGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(96, 165, 250, 0.6);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
 }
 
 .hero-title {
-  font-size: 64px;
-  font-weight: 800;
+  font-size: 72px;
+  font-weight: 900;
   color: white;
   margin: 0 0 1.5rem 0;
-  line-height: 1.2;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  line-height: 1.1;
+  text-shadow: 0 0 40px rgba(96, 165, 250, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title-line {
+  display: block;
+  animation: titleSlideIn 0.8s ease-out;
+}
+
+.title-line:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+@keyframes titleSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 5s ease infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .hero-subtitle {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.95);
-  margin: 0 0 3rem 0;
-  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 2rem 0;
+  line-height: 1.8;
+}
+
+.typing-text {
+  display: inline-block;
+  animation: fadeIn 1s ease-out 0.5s both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Hero Stats */
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  margin-bottom: 3rem;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 36px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 30px rgba(96, 165, 250, 0.5);
+}
+
+.stat-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .hero-actions {
@@ -228,35 +710,62 @@ export default defineComponent({
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 2rem;
+  padding: 1.25rem 2.5rem;
   border-radius: 16px;
   font-size: 18px;
   font-weight: 600;
   text-decoration: none;
-  transition: all 0.3s;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.btn:hover .btn-shine {
+  left: 100%;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   color: white;
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
 }
 
 .btn-primary:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.4);
+  transform: translateY(-6px) scale(1.05);
+  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.5);
+}
+
+.btn-arrow {
+  transition: transform 0.3s;
+}
+
+.btn-primary:hover .btn-arrow {
+  transform: translateX(5px);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
   color: white;
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
   transform: translateY(-4px);
+  box-shadow: 0 15px 35px rgba(255, 255, 255, 0.1);
 }
 
 .btn .icon {
@@ -270,6 +779,7 @@ export default defineComponent({
   top: 50%;
   transform: translateY(-50%);
   display: none;
+  z-index: 10;
 }
 
 @media (min-width: 1200px) {
@@ -292,17 +802,59 @@ export default defineComponent({
 }
 
 .floating-card {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 20px;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   color: white;
   animation: float 3s ease-in-out infinite;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.2) 0%, transparent 70%);
+  animation: cardGlow 4s ease-in-out infinite;
+}
+
+@keyframes cardGlow {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(10%, 10%);
+    opacity: 0.8;
+  }
+}
+
+.card-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  animation: progressBar 3s ease-in-out infinite;
+}
+
+@keyframes progressBar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .card-1 {
@@ -323,11 +875,15 @@ export default defineComponent({
 
 .card-icon {
   font-size: 32px;
+  position: relative;
+  z-index: 1;
 }
 
 .card-text {
   font-size: 16px;
   font-weight: 600;
+  position: relative;
+  z-index: 1;
 }
 
 @keyframes float {
@@ -339,10 +895,77 @@ export default defineComponent({
   }
 }
 
-/* Features Section */
-.features {
-  padding: 6rem 2rem;
-  background: #f9fafb;
+/* Scroll Indicator */
+.scroll-indicator {
+  position: absolute;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  z-index: 10;
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.scroll-mouse {
+  width: 30px;
+  height: 50px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 15px;
+  position: relative;
+}
+
+.scroll-wheel {
+  width: 4px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: scrollWheel 2s ease-in-out infinite;
+}
+
+@keyframes scrollWheel {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-50%) translateY(12px);
+    opacity: 0;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-10px);
+  }
+}
+
+/* Tech Advantages Section */
+.tech-advantages {
+  padding: 8rem 2rem;
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
+  position: relative;
+}
+
+.tech-advantages::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
 }
 
 .container {
@@ -350,78 +973,280 @@ export default defineComponent({
   margin: 0 auto;
 }
 
-.section-title {
+.section-header {
   text-align: center;
-  font-size: 42px;
+  margin-bottom: 4rem;
+}
+
+.section-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  padding: 0.5rem 1.5rem;
+  border-radius: 50px;
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 1.5rem;
+}
+
+.section-title {
+  font-size: 48px;
+  font-weight: 800;
   color: #1f2937;
   margin: 0 0 1rem 0;
 }
 
 .section-subtitle {
-  text-align: center;
   font-size: 18px;
   color: #6b7280;
-  margin: 0 0 4rem 0;
+  margin: 0;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
-.features-grid {
+/* Advantages Grid */
+.advantages-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.advantage-card {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  border: 2px solid #f3f4f6;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.advantage-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+  transform: scaleY(0);
+  transition: transform 0.3s;
+}
+
+.advantage-card:hover::after {
+  transform: scaleY(1);
+}
+
+.advantage-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+}
+
+.advantage-card.large {
+  grid-column: span 2;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: #bae6fd;
+}
+
+.advantage-card.accent {
+  background: linear-gradient(135deg, #fef9f3 0%, #fef3e2 100%);
+  border-color: #fed7aa;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card-icon-large {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  color: #3b82f6;
+}
+
+.card-icon-large svg {
+  width: 100%;
+  height: 100%;
+}
+
+.card-icon-medium {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: #6366f1;
+}
+
+.card-icon-medium svg {
+  width: 100%;
+  height: 100%;
+}
+
+.card-title-group {
+  flex: 1;
+}
+
+.card-title-group h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.advantage-card h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.advantage-card p {
+  font-size: 15px;
+  color: #6b7280;
+  line-height: 1.7;
+  margin: 0 0 1.5rem 0;
+}
+
+.tech-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2);
+}
+
+.tech-tags {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tech-tag {
+  background: rgba(96, 165, 250, 0.08);
+  color: #2563eb;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(96, 165, 250, 0.15);
+  transition: all 0.3s;
+}
+
+.tech-tag:hover {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.3);
+  transform: translateY(-2px);
+}
+
+.tech-stats {
+  display: flex;
   gap: 2rem;
 }
 
-.feature-card {
-  background: white;
-  border-radius: 20px;
-  padding: 2.5rem;
-  text-align: center;
-  transition: all 0.3s;
-  border: 1px solid #e5e7eb;
+.stat-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-.feature-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  border-color: #2563eb;
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.feature-icon {
-  font-size: 48px;
-  margin-bottom: 1.5rem;
+.stat-label {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.feature-card h3 {
-  font-size: 22px;
-  color: #1f2937;
-  margin: 0 0 1rem 0;
+.feature-list {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.feature-item-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  color: #10b981;
   font-weight: 600;
 }
 
-.feature-card p {
-  font-size: 16px;
-  color: #6b7280;
-  line-height: 1.6;
-  margin: 0;
+.feature-item-mini svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+
+.accent-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(251, 146, 60, 0.3);
 }
 
 /* CTA Section */
 .cta {
-  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
-  padding: 6rem 2rem;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+  padding: 8rem 2rem;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="1" fill="rgba(96,165,250,0.3)"/></svg>');
+  opacity: 0.3;
+}
+
+.cta-content {
+  position: relative;
+  z-index: 1;
 }
 
 .cta-content h2 {
-  font-size: 42px;
-  font-weight: 700;
-  color: white;
+  font-size: 48px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0 0 1rem 0;
 }
 
 .cta-content p {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(255, 255, 255, 0.8);
   margin: 0 0 3rem 0;
 }
 
@@ -433,24 +1258,27 @@ export default defineComponent({
 }
 
 .btn-light {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   color: white;
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
 }
 
 .btn-light:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.4);
+  transform: translateY(-6px) scale(1.05);
+  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.5);
 }
 
 .btn-outline {
   background: transparent;
   color: white;
-  border-color: white;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .btn-outline:hover {
   background: rgba(255, 255, 255, 0.1);
+  border-color: white;
   transform: translateY(-4px);
+  box-shadow: 0 15px 35px rgba(255, 255, 255, 0.1);
 }
 
 /* Footer */
@@ -501,20 +1329,91 @@ export default defineComponent({
 
 /* Responsive */
 @media (max-width: 768px) {
+  .hero {
+    min-height: 100vh;
+    padding: 3rem 1.5rem;
+  }
+
   .hero-title {
-    font-size: 42px;
+    font-size: 48px;
   }
 
   .hero-subtitle {
-    font-size: 18px;
+    font-size: 16px;
+  }
+
+  .hero-stats {
+    gap: 2rem;
+  }
+
+  .stat-number {
+    font-size: 28px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .btn {
+    padding: 1rem 1.75rem;
+    font-size: 16px;
+  }
+
+  .scroll-indicator {
+    display: none;
   }
 
   .section-title {
-    font-size: 32px;
+    font-size: 36px;
+  }
+
+  .section-subtitle {
+    font-size: 16px;
+  }
+
+  .tech-advantages {
+    padding: 5rem 1.5rem;
+  }
+
+  .advantages-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .advantage-card.large {
+    grid-column: span 1;
+  }
+
+  .tech-stats {
+    gap: 1.5rem;
+  }
+
+  .cta {
+    padding: 5rem 1.5rem;
   }
 
   .cta-content h2 {
-    font-size: 32px;
+    font-size: 36px;
+  }
+
+  .cta-content p {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-badge {
+    font-size: 12px;
+    padding: 0.5rem 1rem;
+  }
+
+  .hero-stats {
+    flex-direction: column;
+    gap: 1.5rem;
   }
 }
 </style>

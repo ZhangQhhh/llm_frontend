@@ -1,8 +1,19 @@
 import type { ReferenceSource } from '@/utils/chatApi';
 
-interface MockConversationContent {
+export interface MockConversationContent {
   user: string;
   assistant: string;
+}
+
+export interface SubAnswer {
+  sub_question: string;
+  answer: string;
+}
+
+export interface SubQuestionsData {
+  sub_questions: string[];
+  count: number;
+  sub_answers: SubAnswer[];
 }
 
 const BASE_REFERENCES: ReferenceSource[] = [
@@ -95,6 +106,29 @@ const DEFAULT_THINKING =
 ├─检索 90/180 最新政策，确认是否需要提醒；
 └─根据资金证明判断是否需要触发二次询问。</think>`;
 
+const DEFAULT_SUB_QUESTIONS: SubQuestionsData = {
+  sub_questions: [
+    '旅游签证与访问亲友的目的是否匹配？',
+    '如何核查申根签证的90/180停留原则？',
+    '资金证明不足时应采取什么措施？'
+  ],
+  count: 3,
+  sub_answers: [
+    {
+      sub_question: '旅游签证与访问亲友的目的是否匹配？',
+      answer: '旅游签证通常允许访问亲友，但需要旅客提供具体的联系方式、地址或邀请函。如果旅客无法提供这些信息，可能存在目的不符或超范围停留的风险，需要进一步核查。'
+    },
+    {
+      sub_question: '如何核查申根签证的90/180停留原则？',
+      answer: '申根签证遵循90/180原则，即在任意180天内累计停留不超过90天。核查时需检查护照上的既往入境章，计算累计停留天数，确保没有超过限制。可以使用申根计算器辅助核算。'
+    },
+    {
+      sub_question: '资金证明不足时应采取什么措施？',
+      answer: '当旅客的资金证明与行程安排明显不匹配时，应参考《资金不足核查流程》，包括：1) 进行二次询问，了解详细的资金来源；2) 要求提供银行流水或其他财务证明；3) 评估是否存在非法就业或滞留风险。'
+    }
+  ]
+};
+
 const CONVERSATION_HISTORY: MockConversationContent = {
   user: '一名旅客持申根旅游签证准备入境，说是去看表哥，但无法提供具体地址，也拿不出详细行程。我们该关注哪些风险点？',
   assistant: '可以从三个方面着手：首先确认其访问理由是否与旅游签证匹配，其次结合护照记录核查 90/180 原则，最后评估资金证明是否覆盖申报行程，并视情况启动补充询问流程。'
@@ -123,6 +157,8 @@ export const getMockReferences = (): ReferenceSource[] => BASE_REFERENCES.map(cl
 export const getMockAnswer = (): string => DEFAULT_ANSWER;
 
 export const getMockThinking = (): string => DEFAULT_THINKING;
+
+export const getMockSubQuestions = (): SubQuestionsData => JSON.parse(JSON.stringify(DEFAULT_SUB_QUESTIONS));
 
 export const getMockConversation = (): MockConversationContent => ({ ...CONVERSATION_HISTORY });
 

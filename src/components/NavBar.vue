@@ -22,7 +22,11 @@
       <span>首页</span>
     </el-menu-item>
     
-    <el-menu-item index="/knowledge-qa" @click="navigateTo('/knowledge-qa')">
+    <el-menu-item 
+      index="/knowledge-qa" 
+      @click="navigateTo('/knowledge-qa')"
+      v-if="isLoggedIn"
+    >
       <el-icon><Reading /></el-icon>
       <span>知识问答</span>
     </el-menu-item>
@@ -43,6 +47,24 @@
     >
       <el-icon><EditPen /></el-icon>
       <span>边检智能家教</span>
+    </el-menu-item>
+
+    <el-menu-item 
+      index="/smart-office" 
+      @click="navigateTo('/smart-office')"
+      v-if="isLoggedIn"
+    >
+      <el-icon><Briefcase /></el-icon>
+      <span>智慧办公</span>
+    </el-menu-item>
+
+    <el-menu-item 
+      index="/immigration-12367" 
+      @click="navigateTo('/immigration-12367')"
+      v-if="isLoggedIn"
+    >
+      <el-icon><Service /></el-icon>
+      <span>移民局12367</span>
     </el-menu-item>
 
     <!-- 管理入口（仅管理员可见） -->
@@ -110,6 +132,8 @@ import {
   Reading, 
   ChatDotRound,
   EditPen,
+  Briefcase,
+  Service,
   Setting, 
   User, 
   ArrowDown, 
@@ -124,6 +148,8 @@ export default defineComponent({
     Reading,
     ChatDotRound,
     EditPen,
+    Briefcase,
+    Service,
     Setting,
     User,
     ArrowDown,
