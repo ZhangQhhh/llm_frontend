@@ -1,5 +1,6 @@
 export const API_BASE_URL = process.env.VUE_APP_API_BASE_URL;
 export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
+export const SHOW_HIDDEN_NODES = process.env.VUE_APP_SHOW_HIDDEN_NODES === 'true';
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
@@ -33,6 +34,7 @@ export const API_ENDPOINTS = {
   KNOWLEDGE: {
     // 单轮对话（无会话）- 使用完整URL（用于fetch流式请求）
     CHAT: `${LLM_BASE_URL}/knowledge_chat`,
+    CHAT_12367:`${LLM_BASE_URL}/knowledge_chat_12367`,
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
     // 会话管理 - 使用相对路径（用于llmHttp）
     CONVERSATION_NEW: `/conversation/new`,
@@ -44,10 +46,12 @@ export const API_ENDPOINTS = {
     CONVERSATION_SESSION_DELETE: (sessionId: string) => `/conversation/sessions/${sessionId}/delete`,
     CONVERSATION_CACHE_CLEAR: `/conversation/cache/clear`,
   },
-  // 反馈相关API（在 3000 端口的主后端）
+  // 反馈相关API（在 3000 端口的主后端，通过nginx转发）
   FEEDBACK: {
     LIKE: `/feedback/like`,
     DISLIKE: `/feedback/dislike`,
+    LIST: `/feedback/show/list`,
+    DETAIL: (feedbackId: string | number) => `/feedback/show/${feedbackId}`,
   },
   // 认证相关API
   AUTH: {

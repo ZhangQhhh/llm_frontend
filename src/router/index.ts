@@ -112,6 +112,26 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       title: '选择题问答测试'
     }
+  },
+  {
+    path: '/feedback',
+    name: 'feedback-list',
+    component: () => import('../views/FeedbackListView.vue'),
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '反馈记录列表'
+    }
+  },
+  {
+    path: '/feedback/:id',
+    name: 'feedback-detail',
+    component: () => import('../views/FeedbackDetailView.vue'),
+    meta: { 
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '反馈详情'
+    }
   }
 ]
 

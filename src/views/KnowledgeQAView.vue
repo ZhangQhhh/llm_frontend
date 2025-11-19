@@ -1,283 +1,323 @@
 <template>
   <div class="qa-page">
-    <div class="container">
-      <!-- 标题 -->
-      <h1 class="page-title">🎓 边检知识问答助手</h1>
-      <p class="page-desc">基于专业知识库的精准检索与智能回答</p>
-
-      <!-- 问题输入区 -->
-      <div class="input-card">
-        <textarea
-          v-model="question"
-          placeholder="请输入您的问题..."
-          @keydown.enter.exact.prevent="handleSubmit"
-          :disabled="loading"
-        ></textarea>
-
-        <div class="input-controls">
-          <div class="controls-left">
-            <label class="control-group">
-              <span>模型:</span>
-              <select v-model="modelId">
-                <option value="qwen3-32b">Qwen-32B</option>
-                <option value="qwen2025">Qwen满血版</option>
-                <option value="deepseek">DeepSeek-R1</option>
-                <option value="deepseek-32b">DeepSeek-32B</option>
-              </select>
-            </label>
-
-            <label class="control-group">
-              <span>参考数:</span>
-              <input type="number" v-model.number="rerankTopN" min="1" max="15" />
-            </label>
-
-            <label class="switch-control">
-              <input type="checkbox" v-model="insertBlock" />
-              <span>精准检索</span>
-            </label>
-
-            <label class="switch-control">
-              <input type="checkbox" v-model="thinkingMode" />
-              <span>思考模式</span>
-            </label>
+    <el-container class="main-container">
+      <!-- 头部区域 -->
+      <el-header class="page-header">
+        <div class="brand">
+          <div class="logo-icon">
+            <img src="@/assets/allPic/public/4.png" alt="Logo" class="logo-image" />
           </div>
-
-          <button class="submit-btn" @click="handleSubmit" :disabled="loading || !question.trim()">
-            {{ loading ? '生成中...' : '发送' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 回答区域 -->
-      <div v-if="loading || answer || references.length > 0" class="answer-card">
-        <h2 class="answer-title">💡 回答</h2>
-
-        <!-- 精准检索进度条 -->
-        <div v-if="showProgress" class="progress-container">
-          <div class="progress-header">
-            <span class="progress-icon">🔍</span>
-            <span class="progress-title">精准检索进度</span>
-            <span class="progress-percentage">{{ progressInfo.percentage }}%</span>
+          <div class="brand-text">
+            <h1>边检知识问答助手</h1>
+            <p>Intelligent Border Inspection Knowledge Assistant</p>
           </div>
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar" :style="{ width: progressInfo.percentage + '%' }">
-              <div class="progress-bar-shine"></div>
-            </div>
-          </div>
-          <div class="progress-text">{{ progressMessage }}</div>
         </div>
+      </el-header>
 
-        <!-- 加载提示 -->
-        <div v-if="loading && !answer && !showProgress" class="loading-hint">
-          <div class="spinner-small"></div>
-          <span>AI正在思考中...</span>
-        </div>
+      <el-main>
+        <div class="content-wrapper">
+          <!-- 搜索/输入区域 -->
+          <el-card class="search-card glass-effect" :body-style="{ padding: '0' }">
+            <div class="input-area">
+              <el-input
+                v-model="question"
+                type="textarea"
+                :rows="4"
+                placeholder="请输入您的业务问题，例如：'外籍人员入境签证办理流程是什么？'"
+                resize="none"
+                class="custom-textarea"
+                @keydown.enter.exact.prevent="handleSubmit"
+                :disabled="loading"
+              />
+              <div class="input-footer">
+                <div class="controls-area">
+                  <el-select v-model="modelId" placeholder="选择模型" class="control-item" style="width: 160px">
+                    <template #prefix><el-icon><Cpu /></el-icon></template>
+                    <el-option label="Qwen-32B (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen-Max (增强)" value="qwen2025" />
+                    <el-option label="DeepSeek-R1 (深度)" value="deepseek" />
+                    <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" />
+                  </el-select>
+                  
+                  <el-tooltip content="设置检索参考文档的数量" placement="top">
+                    <div class="control-item setting-item">
+                      <span class="label">参考数</span>
+                      <el-input-number v-model="rerankTopN" :min="1" :max="20" size="small" controls-position="right" style="width: 90px" />
+                    </div>
+                  </el-tooltip>
 
-        <!-- 正文 -->
-        <div v-if="answer" class="answer-content">
-          <!-- 流式输出时显示原始文本，完成后显示 Markdown -->
-          <div v-if="loading" style="white-space: pre-wrap;">{{ answer }}</div>
-          <div v-else v-html="renderMarkdown(answer)"></div>
-        </div>
-
-        <!-- 子问题分解 -->
-        <div v-if="subQuestions && subQuestions.sub_questions && subQuestions.sub_questions.length > 0" class="sub-questions-box">
-          <div class="sub-questions-header">
-            <span class="icon">🔍</span>
-            <h3>问题分解</h3>
-            <span class="count-badge">{{ subQuestions.count }} 个子问题</span>
-          </div>
-          
-          <div class="sub-questions-list">
-            <div 
-              v-for="(subAnswer, index) in subQuestions.sub_answers" 
-              :key="index"
-              class="sub-question-item"
-            >
-              <div class="sub-question-number">{{ index + 1 }}</div>
-              <div class="sub-question-content">
-                <div class="sub-question-title">
-                  <span class="question-icon">❓</span>
-                  {{ subAnswer.sub_question }}
+                  <div class="toggles">
+                    <el-checkbox v-model="insertBlock" border size="default">
+                      <span class="toggle-label"><el-icon><Aim /></el-icon> 精准检索</span>
+                    </el-checkbox>
+                    <el-checkbox v-model="thinkingMode" border size="default">
+                      <span class="toggle-label"><el-icon><Operation /></el-icon> 思考模式</span>
+                    </el-checkbox>
+                  </div>
                 </div>
-                <div class="sub-answer-content">
-                  <span class="answer-icon">💡</span>
-                  <div class="answer-text">{{ subAnswer.answer }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- 思考过程 -->
-        <div v-if="thinking && thinkingMode" class="thinking-box">
-          <div class="thinking-header">
-            <span class="icon">💭</span>
-            <h3>思考过程</h3>
-          </div>
-          <div class="thinking-content">{{ thinking }}</div>
-        </div>
-
-        <!-- 参考来源 -->
-        <div v-if="references.length > 0" class="references-box">
-          <div class="references-header">
-            <span class="icon">📚</span>
-            <h3>参考内容（全部检索结果）</h3>
-          </div>
-
-          <div class="references-list">
-            <div
-              v-for="(ref, index) in references"
-              :key="index"
-              class="reference-card"
-              :class="{ selected: ref.canAnswer }"
-            >
-              <div class="ref-header">
-                <span class="ref-id">[{{ ref.id }}]</span>
-                <span class="ref-filename">{{ ref.fileName }}</span>
-                <span v-if="ref.canAnswer" class="selected-badge">✓ 已选中</span>
-              </div>
-
-              <div class="ref-scores">
-                <span>初始检索分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
-                <span>重排序分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
-                <span
-                  v-if="ref.canAnswer !== undefined"
-                  :class="ref.canAnswer ? 'can-answer' : 'cannot-answer'"
+                <el-button 
+                  type="primary" 
+                  :loading="loading" 
+                  round 
+                  class="submit-btn" 
+                  @click="handleSubmit"
+                  :disabled="!question.trim()"
                 >
-                  {{ ref.canAnswer ? '✓ 可回答' : '✗ 不可回答' }}
-                </span>
-              </div>
-
-              <!-- 检索来源标签 -->
-              <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="mb-2">
-                <span
-                  v-for="(source, idx) in ref.retrievalSources"
-                  :key="idx"
-                  class="badge me-1"
-                  :class="source === 'vector' ? 'bg-primary' : 'bg-success'"
-                >
-                  {{ source === 'vector' ? '🔍 向量检索' : '🔑 关键词检索' }}
-                </span>
-              </div>
-
-              <!-- 详细分数 -->
-              <div v-if="ref.vectorScore || ref.bm25Score || ref.vectorRank || ref.bm25Rank" class="mb-2">
-                <small class="d-flex flex-wrap gap-2">
-                  <span v-if="ref.vectorScore" class="badge bg-info text-dark">
-                    📊 向量分: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
-                    <span v-if="ref.vectorRank" class="ms-1">(排名#{{ ref.vectorRank }})</span>
-                  </span>
-                  <span v-if="ref.bm25Score" class="badge bg-info text-dark">
-                    📈 BM25分: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
-                    <span v-if="ref.bm25Rank" class="ms-1">(排名#{{ ref.bm25Rank }})</span>
-                  </span>
-                </small>
-              </div>
-
-              <!-- 匹配关键词 -->
-              <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="mb-2">
-                <div class="text-muted small mb-1"><strong>🏷️ 匹配关键词</strong></div>
-                <div class="d-flex flex-wrap gap-1">
-                  <span
-                    v-for="(keyword, idx) in ref.matchedKeywords"
-                    :key="idx"
-                    class="badge bg-warning text-dark"
-                  >
-                    {{ keyword }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="ref-text">"{{ ref.content }}"</div>
-
-              <div v-if="ref.keyPassage" class="key-passage">
-                <div class="passage-label">🔍 关键段落：</div>
-                <div class="passage-text">{{ ref.keyPassage }}</div>
+                  {{ loading ? '分析中...' : '立即提问' }} 
+                  <el-icon class="el-icon--right"><Promotion /></el-icon>
+                </el-button>
               </div>
             </div>
+          </el-card>
+
+          <!-- 检索进度条 -->
+          <transition name="el-zoom-in-top">
+            <div v-if="showProgress" class="progress-card glass-effect">
+              <div class="progress-header">
+                <span class="progress-title">
+                  <el-icon class="is-loading"><Loading /></el-icon> 
+                  正在进行深度检索分析...
+                </span>
+                <span class="progress-value">{{ progressInfo.percentage }}%</span>
+              </div>
+              <el-progress 
+                :percentage="progressInfo.percentage" 
+                :stroke-width="10" 
+                striped 
+                striped-flow 
+                :show-text="false"
+                color="#409eff"
+              />
+              <div class="progress-status">{{ progressMessage }}</div>
+            </div>
+          </transition>
+
+          <!-- 结果区域 -->
+          <div v-if="loading || answer || references.length > 0" class="result-area">
+            <el-row :gutter="24">
+              <!-- 左侧：回答与思考 -->
+              <el-col :span="16" :xs="24">
+                <!-- 思考过程 -->
+                <transition name="el-fade-in">
+                  <div v-if="thinking && thinkingMode" class="thinking-section mb-4">
+                    <el-collapse v-model="activeThinking">
+                      <el-collapse-item name="1">
+                        <template #title>
+                          <div class="thinking-header">
+                            <el-icon class="is-loading" v-if="loading"><Connection /></el-icon>
+                            <el-icon v-else><Sunny /></el-icon>
+                            <span class="ml-2">AI 深度思考过程</span>
+                          </div>
+                        </template>
+                        <div class="thinking-content custom-scrollbar">
+                          <div class="thinking-text">{{ thinking }}</div>
+                        </div>
+                      </el-collapse-item>
+                    </el-collapse>
+                  </div>
+                </transition>
+
+                <!-- 最终回答 -->
+                <el-card class="answer-card glass-effect" :body-style="{ padding: '0' }">
+                  <div class="card-header">
+                    <div class="title">
+                      <el-icon><ChatDotRound /></el-icon> 智能回答
+                    </div>
+                    <div class="actions" v-if="!loading">
+                      <el-tooltip content="复制回答" placement="top">
+                        <el-button circle size="small" @click="copyAnswer">
+                          <el-icon><CopyDocument /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                    </div>
+                  </div>
+                  
+                  <div class="answer-body">
+                    <div v-if="loading && !answer" class="loading-placeholder">
+                      <el-skeleton :rows="3" animated />
+                    </div>
+                    <div v-else class="markdown-body" v-html="renderMarkdown(answer)"></div>
+                  </div>
+
+                  <!-- 底部反馈 -->
+                  <div class="answer-footer" v-if="answer && !loading">
+                     <div class="feedback-group">
+                        <span class="feedback-label">回答是否有帮助？</span>
+                        <el-button-group>
+                          <el-button 
+                            :type="feedbackSubmitted ? 'success' : 'default'" 
+                            size="small" 
+                            @click="handleLike" 
+                            :disabled="feedbackSubmitted"
+                            plain
+                          >
+                            <el-icon><Select /></el-icon> 有帮助
+                          </el-button>
+                          <el-button 
+                            :type="feedbackSubmitted ? 'danger' : 'default'" 
+                            size="small" 
+                            @click="openFeedbackModal" 
+                            :disabled="feedbackSubmitted"
+                            plain
+                          >
+                            <el-icon><CloseBold /></el-icon> 没帮助
+                          </el-button>
+                        </el-button-group>
+                     </div>
+                  </div>
+                </el-card>
+              </el-col>
+
+              <!-- 右侧：参考资料与元数据 -->
+              <el-col :span="8" :xs="24">
+                <!-- 关键词 -->
+                <transition name="el-zoom-in-top">
+                  <el-card v-if="keywords && (keywords.question.length || keywords.document.length)" class="meta-card glass-effect mb-4">
+                    <template #header>
+                      <div class="meta-header">
+                        <div class="left">
+                           <el-icon><Key /></el-icon> <span>关键词提取</span>
+                        </div>
+                      </div>
+                    </template>
+                    <div class="keywords-container">
+                       <div v-if="keywords.question.length" class="keyword-group">
+                         <span class="group-label">问题:</span>
+                         <div class="tags">
+                           <el-tag v-for="(k, i) in keywords.question" :key="'q'+i" size="small" effect="plain" class="custom-tag">{{ k }}</el-tag>
+                         </div>
+                       </div>
+                       <div v-if="keywords.document.length" class="keyword-group mt-2">
+                         <span class="group-label">文档:</span>
+                         <div class="tags">
+                           <el-tag v-for="(k, i) in keywords.document" :key="'d'+i" size="small" type="info" effect="plain" class="custom-tag">{{ k }}</el-tag>
+                         </div>
+                       </div>
+                    </div>
+                  </el-card>
+                </transition>
+
+                <!-- 问题分解 -->
+                <transition name="el-zoom-in-top">
+                  <el-card v-if="subQuestions && subQuestions.sub_answers && subQuestions.sub_answers.length" class="meta-card glass-effect mb-4">
+                    <template #header>
+                      <div class="meta-header">
+                        <div class="left">
+                           <el-icon><Share /></el-icon> <span>问题分解</span>
+                        </div>
+                      </div>
+                    </template>
+                    <el-timeline>
+                      <el-timeline-item
+                        v-for="(item, index) in subQuestions.sub_answers"
+                        :key="index"
+                        :type="'primary'"
+                        :hollow="true"
+                      >
+                        <h4 class="sub-q-title">{{ item.sub_question }}</h4>
+                        <p class="sub-q-answer">{{ item.answer }}</p>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </el-card>
+                </transition>
+
+                <!-- 参考文献 -->
+                <el-card v-if="references.length" class="meta-card glass-effect references-card">
+                  <template #header>
+                    <div class="meta-header">
+                      <div class="left">
+                        <el-icon><Document /></el-icon> <span>参考来源</span>
+                      </div>
+                      <el-tag size="small" effect="dark" round>{{ filteredReferences.length }}</el-tag>
+                    </div>
+                  </template>
+                  
+                  <el-scrollbar max-height="500px">
+                    <div class="references-list">
+                      <div 
+                        v-for="(ref, idx) in filteredReferences" 
+                        :key="idx" 
+                        class="reference-item"
+                        :class="{ 'is-selected': ref.canAnswer }"
+                      >
+                        <div class="ref-head">
+                          <span class="ref-index">#{{ ref.id }}</span>
+                          <el-tooltip :content="ref.fileName" placement="top">
+                            <span class="ref-name">{{ ref.fileName }}</span>
+                          </el-tooltip>
+                          <el-tag v-if="ref.canAnswer" type="success" size="small" effect="dark">引用</el-tag>
+                        </div>
+                        <div class="ref-scores">
+                          <el-tag size="small" type="warning" effect="plain">Score: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : '-' }}</el-tag>
+                          <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
+                        </div>
+                        <div class="ref-content line-clamp-3">{{ ref.content }}</div>
+                      </div>
+                    </div>
+                  </el-scrollbar>
+                </el-card>
+              </el-col>
+            </el-row>
           </div>
         </div>
-
-        <!-- 反馈按钮 -->
-        <div class="feedback-actions">
-          <button
-            class="feedback-btn like-btn"
-            @click="handleLike"
-            :disabled="feedbackSubmitted"
-          >
-            👍 点赞
-          </button>
-          <button
-            class="feedback-btn dislike-btn"
-            @click="showFeedbackModal = true"
-            :disabled="feedbackSubmitted"
-          >
-            👎 点踩
-          </button>
-        </div>
-      </div>
-    </div>
+      </el-main>
+    </el-container>
 
     <!-- 反馈模态框 -->
-    <div v-if="showFeedbackModal" class="modal-overlay" @click.self="showFeedbackModal = false">
-      <div class="modal-content">
-        <h3>提交反馈</h3>
-        <form @submit.prevent="handleDislikeSubmit">
-          <div class="form-group">
-            <label>错误原因 (必填)</label>
-            <textarea
-              v-model="feedbackReason"
-              placeholder="请具体描述回答中的错误或问题..."
-              required
-            ></textarea>
-          </div>
-
-          <div class="form-group">
-            <label>反映人</label>
-            <input type="text" v-model="reporterName" placeholder="请输入您的姓名" />
-          </div>
-
-          <div class="form-group">
-            <label>反映单位</label>
-            <input type="text" v-model="reporterUnit" placeholder="请输入您的单位" />
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" class="btn-cancel" @click="showFeedbackModal = false">
-              取消
-            </button>
-            <button type="submit" class="btn-submit" :disabled="submittingFeedback">
-              {{ submittingFeedback ? '提交中...' : '提交反馈' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- 滚动到反馈按钮 -->
-    <div
-      v-if="answer && !feedbackSubmitted"
-      class="scroll-to-feedback"
-      @click="scrollToFeedback"
+    <el-dialog
+      v-model="showFeedbackModal"
+      title="提交反馈"
+      width="500px"
+      class="feedback-dialog"
+      destroy-on-close
     >
-      <span>评价</span>
-      <span class="arrow">▼</span>
-    </div>
+      <el-form label-position="top">
+        <el-form-item label="错误原因 (必填)" required>
+          <el-input
+            v-model="feedbackReason"
+            type="textarea"
+            :rows="3"
+            placeholder="请具体描述回答中的错误或问题..."
+          />
+        </el-form-item>
+        <el-form-item label="反映人">
+           <el-input v-model="reporterName" disabled />
+        </el-form-item>
+        <el-form-item label="反映单位">
+           <el-input v-model="reporterUnit" placeholder="请输入您的单位" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showFeedbackModal = false">取消</el-button>
+          <el-button type="primary" @click="handleDislikeSubmit" :loading="submittingFeedback">
+            提交反馈
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref } from 'vue';
+import { computed, defineComponent, onMounted, ref } from 'vue';
 import { useStore } from 'vuex';
+import { ElMessage } from 'element-plus';
+import {
+   Cpu, Aim, Operation, Promotion, Loading, Connection,
+  ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
+  Sunny
+} from '@element-plus/icons-vue';
 import {
   sendStreamChatRequest,
   submitLikeFeedback,
   submitDislikeFeedback,
   type ReferenceSource,
-  type StreamMessage
+  type StreamMessage,
+  type KeywordsData
 } from '@/utils/chatApi';
-import { API_ENDPOINTS } from '@/config/api/api';
+import { API_ENDPOINTS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import { 
   isStatusMessage, 
   isProgressMessage, 
@@ -298,6 +338,11 @@ import { renderMarkdown } from '@/utils/markdown';
 
 export default defineComponent({
   name: 'KnowledgeQAView',
+  components: {
+     Cpu, Aim, Operation, Promotion, Loading, Connection,
+    ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
+    Sunny
+  },
   setup() {
     const store = useStore();
 
@@ -306,7 +351,17 @@ export default defineComponent({
     const answer = ref('');
     const thinking = ref('');
     const references = ref<ReferenceSource[]>([]);
+    const activeThinking = ref(['1']); // 默认展开思考
+    
+    // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
+    const filteredReferences = computed(() => {
+      if (SHOW_HIDDEN_NODES) {
+        return references.value;
+      }
+      return references.value.filter(ref => !ref.isHidden);
+    });
     const subQuestions = ref<SubQuestionsData | null>(null);
+    const keywords = ref<KeywordsData | null>(null);
     const loading = ref(false);
 
     // 进度条状态
@@ -315,7 +370,7 @@ export default defineComponent({
     const progressMessage = ref('');
 
     // 配置
-    const modelId = ref('qwen3-32b');
+    const modelId = ref('deepseek');
     const rerankTopN = ref(10);
     const thinkingMode = ref(true);
     const insertBlock = ref(false);
@@ -324,11 +379,10 @@ export default defineComponent({
     const feedbackSubmitted = ref(false);
     const showFeedbackModal = ref(false);
     const feedbackReason = ref('');
-    const reporterName = ref('');
+    const reporterName = ref(store.state.user.username || ''); 
     const reporterUnit = ref('');
     const submittingFeedback = ref(false);
 
-    // 用于反馈的数据
     const lastQuestion = ref('');
     const lastAnswer = ref('');
 
@@ -353,8 +407,16 @@ export default defineComponent({
       }
     });
 
-
-
+    // 复制回答
+    const copyAnswer = async () => {
+        if(!answer.value) return;
+        try {
+            await navigator.clipboard.writeText(answer.value);
+            ElMessage.success('已复制到剪贴板');
+        } catch(e) {
+            ElMessage.error('复制失败');
+        }
+    };
 
     // 发送问题
     const handleSubmit = async () => {
@@ -365,19 +427,25 @@ export default defineComponent({
         return;
       }
 
-
       lastQuestion.value = question.value.trim();
       answer.value = '';
       thinking.value = '';
       references.value = [];
       subQuestions.value = null;
+      keywords.value = null;
       feedbackSubmitted.value = false;
       loading.value = true;
+      activeThinking.value = ['1'];
       
-      // 重置进度条
-      showProgress.value = false;
-      progressInfo.value = { current: 0, total: 0, percentage: 0 };
-      progressMessage.value = '';
+      if (insertBlock.value) {
+        showProgress.value = true;
+        progressInfo.value = { current: 0, total: 0, percentage: 0 };
+        progressMessage.value = '正在准备精准检索...';
+      } else {
+        showProgress.value = false;
+        progressInfo.value = { current: 0, total: 0, percentage: 0 };
+        progressMessage.value = '';
+      }
 
       try {
         await sendStreamChatRequest(
@@ -396,12 +464,12 @@ export default defineComponent({
           }
         );
 
-        // 组合完整答案用于反馈
         lastAnswer.value = thinking.value
           ? `<think>${thinking.value}</think>\n${answer.value}`
           : answer.value;
       } catch (error: any) {
         answer.value = `请求失败: ${error.message}`;
+        ElMessage.error(`请求失败: ${error.message}`);
       } finally {
         loading.value = false;
         showProgress.value = false;
@@ -410,20 +478,14 @@ export default defineComponent({
 
     // 处理流式消息
     const handleStreamMessage = (message: StreamMessage) => {
-      if (mockReferencesEnabled) {
-        return;
-      }
-
-      console.log('收到消息:', message.type, message.data ? message.data.substring(0, 100) : '');
+      if (mockReferencesEnabled) return;
       
       switch (message.type) {
         case 'THINK':
-          // parseSSEMessage 已经处理了 \\n 转换
           thinking.value = thinking.value + message.data;
           break;
 
         case 'CONTENT':
-          // 检查是否为精准检索开始消息
           if (isPreciseRetrievalStart(message.data)) {
             const total = parsePreciseRetrievalStart(message.data);
             if (total) {
@@ -432,7 +494,6 @@ export default defineComponent({
               progressMessage.value = '正在启动精准检索...';
             }
           }
-          // 检查是否为进度消息
           else if (isProgressMessage(message.data)) {
             const progress = parseProgressMessage(message.data);
             if (progress) {
@@ -440,77 +501,66 @@ export default defineComponent({
               progressMessage.value = `正在分析文档 ${progress.current}/${progress.total}`;
             }
           }
-          // 过滤状态消息
           else if (!isStatusMessage(message.data)) {
-            // parseSSEMessage 已经处理了 \\n 转换
             answer.value = answer.value + message.data;
           }
           break;
 
         case 'SOURCE':
-          console.log('收到SOURCE消息，原始数据:', message.data);
           try {
             const source = JSON.parse(message.data) as ReferenceSource;
-            console.log('📦 解析后的SOURCE:', source);
-            console.log('  - retrievalSources:', source.retrievalSources);
-            console.log('  - vectorScore:', source.vectorScore, 'vectorRank:', source.vectorRank);
-            console.log('  - bm25Score:', source.bm25Score, 'bm25Rank:', source.bm25Rank);
-            console.log('  - matchedKeywords:', source.matchedKeywords);
             references.value.push(source);
-            console.log('当前references数量:', references.value.length);
           } catch (e) {
-            console.error('解析SOURCE失败:', e, '原始数据:', message.data);
+            console.error('解析SOURCE失败', e);
           }
           break;
 
         case 'SUB_QUESTIONS':
-          console.log('收到SUB_QUESTIONS消息，原始数据:', message.data);
           try {
             const subQuestionsData = JSON.parse(message.data) as SubQuestionsData;
-            console.log('🔍 解析后的SUB_QUESTIONS:', subQuestionsData);
             subQuestions.value = subQuestionsData;
           } catch (e) {
-            console.error('解析SUB_QUESTIONS失败:', e, '原始数据:', message.data);
+             console.error('解析SUB_QUESTIONS失败', e);
+          }
+          break;
+
+        case 'KEYWORDS':
+          try {
+            const keywordsData = JSON.parse(message.data) as KeywordsData;
+            keywords.value = keywordsData;
+          } catch (e) {
+             console.error('解析KEYWORDS失败', e);
           }
           break;
 
         case 'ERROR':
           answer.value = `错误: ${message.data}`;
+          ElMessage.error(message.data);
           break;
 
         case 'DONE':
-          console.log('流式响应完成，最终references数量:', references.value.length);
           loading.value = false;
-          // 隐藏进度条
           showProgress.value = false;
-          break;
-          
-        case 'UNKNOWN':
-          console.warn('未知消息类型:', message.data ? message.data.substring(0, 100) : '');
           break;
       }
     };
 
-    // 点赞
     const handleLike = async () => {
       try {
         await submitLikeFeedback(lastQuestion.value, lastAnswer.value, modelId.value, 'LIKE', references.value);
         feedbackSubmitted.value = true;
-        alert('感谢您的反馈！');
+        ElMessage.success('感谢您的反馈！');
       } catch (error: any) {
-        alert(`提交反馈失败: ${error.message}`);
+        ElMessage.error(`提交反馈失败: ${error.message}`);
       }
     };
 
-    // 点踩提交
     const handleDislikeSubmit = async () => {
       if (!feedbackReason.value.trim()) {
-        alert('请填写具体的错误原因');
+        ElMessage.warning('请填写具体的错误原因');
         return;
       }
-
       submittingFeedback.value = true;
-
       try {
         await submitDislikeFeedback(
           lastQuestion.value,
@@ -525,52 +575,28 @@ export default defineComponent({
 
         feedbackSubmitted.value = true;
         showFeedbackModal.value = false;
-        alert('反馈提交成功，感谢您！');
-
-        // 清空表单
+        ElMessage.success('反馈提交成功，感谢您！');
         feedbackReason.value = '';
-        reporterName.value = '';
         reporterUnit.value = '';
       } catch (error: any) {
-        alert(`提交反馈失败: ${error.message}`);
+        ElMessage.error(`提交反馈失败: ${error.message}`);
       } finally {
         submittingFeedback.value = false;
       }
     };
 
-    // 滚动到反馈区域
-    const scrollToFeedback = () => {
-      const feedbackEl = document.querySelector('.feedback-actions');
-      if (feedbackEl) {
-        feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+    const openFeedbackModal = () => {
+      reporterName.value = store.state.user.username || '';
+      showFeedbackModal.value = true;
     };
 
     return {
-      question,
-      answer,
-      thinking,
-      references,
-      subQuestions,
-      loading,
-      modelId,
-      rerankTopN,
-      thinkingMode,
-      insertBlock,
-      feedbackSubmitted,
-      showFeedbackModal,
-      feedbackReason,
-      reporterName,
-      reporterUnit,
-      submittingFeedback,
-      showProgress,
-      progressInfo,
-      progressMessage,
-      handleSubmit,
-      handleLike,
-      handleDislikeSubmit,
-      scrollToFeedback,
-      renderMarkdown
+      question, answer, thinking, references, filteredReferences, subQuestions, keywords,
+      loading, modelId, rerankTopN, thinkingMode, insertBlock,
+      feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
+      showProgress, progressInfo, progressMessage, activeThinking,
+      handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
+      renderMarkdown, copyAnswer
     };
   }
 });
@@ -579,1005 +605,517 @@ export default defineComponent({
 <style scoped>
 .qa-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
-  padding: 3rem 1.5rem;
+  background: url('@/assets/allPic/public/bac.jpg') no-repeat center center;
+  background-size: 101% auto;
+  background-attachment: fixed;
+  padding-bottom: 2rem;
+  background-position: 50% 33%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.container {
-  max-width: 1000px;
-  margin: 0 auto;
+/* 为竖向图片添加渐变遮罩，确保文字可读性 */
+.qa-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.3) 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* 标题 */
-.page-title {
-  text-align: center;
-  color: white;
-  font-size: 48px;
-  margin: 0 0 1rem 0;
-  font-weight: 700;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-}
-
-.page-desc {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 18px;
-  margin: 0 0 3rem 0;
-}
-
-/* 输入卡片 */
-.input-card {
-  background: white;
-  border-radius: 24px;
-  padding: 2rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  margin-bottom: 2rem;
-}
-
-.input-card textarea {
+.main-container {
+  position: relative;
+  z-index: 2;
+  max-width: 1400px;
   width: 100%;
-  min-height: 140px;
-  border: 2px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 1.25rem;
-  font-size: 16px;
-  resize: vertical;
-  transition: border-color 0.3s;
-  font-family: inherit;
-  line-height: 1.6;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
-.input-card textarea:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+/* Header */
+.page-header {
+  margin-bottom: 2rem;
+  padding-top: 0;
+  width: 100%;
 }
 
-.input-controls {
+/* Content Wrapper */
+.content-wrapper {
+  width: 100%;
+  max-width: 1400px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.logo-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  background: white;
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-text h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  letter-spacing: 1px;
+}
+
+.brand-text p {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0.25rem 0 0 0;
+  font-weight: 300;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Glass Effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border-radius: 16px !important;
+}
+
+/* Search Card */
+.search-card {
+  margin-bottom: 2rem;
+  overflow: visible;
+  max-width: 900px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.input-area {
+  padding: 1rem;
+}
+
+.custom-textarea :deep(.el-textarea__inner) {
+  border-radius: 12px;
+  padding: 0.75rem;
+  font-size: 15px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s;
+  min-height: 60px;
+}
+
+.custom-textarea :deep(.el-textarea__inner:focus) {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.input-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   flex-wrap: wrap;
   gap: 1rem;
 }
 
-.controls-left {
+.controls-area {
   display: flex;
   gap: 1.5rem;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.control-group {
+.control-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 14px;
-  color: #6b7280;
 }
 
-.control-group select,
-.control-group input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
+.setting-item {
+  background: rgba(241, 245, 249, 0.8);
+  padding: 4px 8px;
   border-radius: 8px;
-  font-size: 14px;
-  background: white;
 }
 
-.control-group input[type="number"] {
-  width: 60px;
-  text-align: center;
+.setting-item .label {
+  font-size: 12px;
+  color: #64748b;
+  margin-right: 6px;
 }
 
-.switch-control {
+.toggles {
+  display: flex;
+  gap: 1rem;
+}
+
+.toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 14px;
-  color: #6b7280;
-  cursor: pointer;
-}
-
-.switch-control input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
+  gap: 4px;
 }
 
 .submit-btn {
-  background: linear-gradient(45deg, #2563eb, #1e3a8a);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  padding: 0.75rem 2rem;
+  padding: 12px 30px;
   font-size: 16px;
   font-weight: 600;
-  cursor: pointer;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border: none;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
   transition: all 0.3s;
 }
 
-.submit-btn:hover:not(:disabled) {
+.submit-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
 }
 
-.submit-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 加载动画 */
-.loading-box {
-  background: white;
-  border-radius: 16px;
-  padding: 3rem;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #f3f4f6;
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-box p {
-  color: #6b7280;
-  font-size: 16px;
-  margin: 0;
-}
-
-/* 回答卡片 */
-.answer-card {
-  background: white;
-  border-radius: 24px;
-  padding: 2rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.answer-title {
-  font-size: 24px;
-  color: #374151;
-  margin: 0 0 1.5rem 0;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.loading-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+/* Progress Card */
+.progress-card {
   padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 12px;
-  color: #6b7280;
-  margin-bottom: 1.5rem;
-}
-
-/* 精准检索进度条 */
-.progress-container {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 2px solid #93c5fd;
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  margin-bottom: 2rem;
+  background: rgba(255, 255, 255, 0.95) !important;
 }
 
 .progress-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
   margin-bottom: 1rem;
-}
-
-.progress-icon {
-  font-size: 24px;
-  animation: rotate 2s linear infinite;
-}
-
-@keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .progress-title {
-  font-size: 16px;
   font-weight: 600;
   color: #1e40af;
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.progress-percentage {
-  font-size: 18px;
+.progress-value {
   font-weight: 700;
-  color: #2563eb;
-  background: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.progress-bar-wrapper {
-  width: 100%;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 0.75rem;
-}
-
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
-  border-radius: 12px;
-  transition: width 0.5s ease;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
-}
-
-.progress-bar-shine {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.4),
-    transparent
-  );
-  animation: shine 2s infinite;
-}
-
-@keyframes shine {
-  0% { left: -100%; }
-  100% { left: 200%; }
-}
-
-.progress-text {
-  font-size: 14px;
-  color: #1e40af;
-  font-weight: 500;
-  text-align: center;
-}
-
-.spinner-small {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.answer-content {
-  font-size: 16px;
-  line-height: 1.8;
-  color: #374151;
-  margin-bottom: 2rem;
-}
-
-/* Markdown 样式 */
-.answer-content :deep(h1),
-.answer-content :deep(h2),
-.answer-content :deep(h3),
-.answer-content :deep(h4) {
-  margin-top: 1.5rem;
-  margin-bottom: 1rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.answer-content :deep(h1) {
-  font-size: 2em;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 0.5rem;
-}
-
-.answer-content :deep(h2) {
-  font-size: 1.75em;
-}
-
-.answer-content :deep(h3) {
-  font-size: 1.5em;
-}
-
-.answer-content :deep(h4) {
-  font-size: 1.25em;
-}
-
-.answer-content :deep(p) {
-  margin-bottom: 1rem;
-}
-
-.answer-content :deep(ul),
-.answer-content :deep(ol) {
-  margin-left: 2rem;
-  margin-bottom: 1rem;
-}
-
-.answer-content :deep(li) {
-  margin-bottom: 0.5rem;
-}
-
-.answer-content :deep(code) {
-  background-color: #f3f4f6;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9em;
-  color: #dc2626;
-}
-
-.answer-content :deep(pre) {
-  background-color: #1f2937;
-  color: #f9fafb;
-  padding: 1rem;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin-bottom: 1rem;
-}
-
-.answer-content :deep(pre code) {
-  background-color: transparent;
-  color: inherit;
-  padding: 0;
-}
-
-.answer-content :deep(blockquote) {
-  border-left: 4px solid #3b82f6;
-  padding-left: 1rem;
-  margin-left: 0;
-  color: #6b7280;
-  font-style: italic;
-}
-
-.answer-content :deep(strong) {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.answer-content :deep(em) {
-  font-style: italic;
-}
-
-.answer-content :deep(a) {
   color: #3b82f6;
-  text-decoration: underline;
 }
 
-.answer-content :deep(a:hover) {
-  color: #2563eb;
+.progress-status {
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 0.5rem;
 }
 
-.answer-content :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1rem;
-}
-
-.answer-content :deep(th),
-.answer-content :deep(td) {
-  border: 1px solid #e5e7eb;
-  padding: 0.5rem;
-  text-align: left;
-}
-
-.answer-content :deep(th) {
-  background-color: #f3f4f6;
-  font-weight: 600;
-}
-
-/* 子问题分解 */
-.sub-questions-box {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #fbbf24;
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.sub-questions-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+/* Result Area */
+.thinking-section {
   margin-bottom: 1.5rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #f59e0b;
-}
-
-.sub-questions-header .icon {
-  font-size: 24px;
-}
-
-.sub-questions-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #92400e;
-  flex: 1;
-}
-
-.count-badge {
-  background: linear-gradient(45deg, #f59e0b, #d97706);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.sub-questions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.sub-question-item {
-  display: flex;
-  gap: 1rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  padding: 1.25rem;
-  border-left: 4px solid #f59e0b;
-  transition: all 0.3s;
-}
-
-.sub-question-item:hover {
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
-  transform: translateX(4px);
-}
-
-.sub-question-number {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-}
-
-.sub-question-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.sub-question-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-weight: 600;
-  color: #92400e;
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.question-icon {
-  flex-shrink: 0;
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.sub-answer-content {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-  background: #fffbeb;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 3px solid #fbbf24;
-}
-
-.answer-icon {
-  flex-shrink: 0;
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.answer-text {
-  flex: 1;
-  color: #78350f;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-/* 思考过程 */
-.thinking-box {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #bae6fd;
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
 }
 
 .thinking-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #7dd3fc;
-}
-
-.thinking-header .icon {
-  font-size: 24px;
-}
-
-.thinking-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #1e40af;
+  font-weight: 600;
+  color: #6366f1;
 }
 
 .thinking-content {
-  color: #1e3a8a;
-  font-size: 15px;
-  line-height: 1.7;
-  font-style: italic;
-  background: rgba(255, 255, 255, 0.7);
+  background: #f8fafc;
+  border-radius: 8px;
   padding: 1rem;
-  border-radius: 12px;
-  border-left: 4px solid #3b82f6;
+  border: 1px dashed #cbd5e1;
 }
 
-/* 参考来源 */
-.references-box {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border: 2px solid #bbf7d0;
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+.thinking-text {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 14px;
+  color: #475569;
+  white-space: pre-wrap;
+  line-height: 1.6;
 }
 
-.references-header {
+.custom-scrollbar {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Answer Card */
+.answer-card {
+  min-height: 200px;
+}
+
+.answer-card .card-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.answer-card .card-header .title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+}
+
+.answer-body {
+  padding: 2rem;
+}
+
+.markdown-body {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #334155;
+}
+
+.markdown-body :deep(p) {
   margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #86efac;
 }
 
-.references-header .icon {
-  font-size: 24px;
+.answer-footer {
+  padding: 1rem 2rem;
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
 }
 
-.references-header h3 {
+.feedback-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.feedback-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Meta Cards (Right Side) */
+.meta-card {
+  border: none !important;
+  margin-bottom: 1.5rem;
+}
+
+.meta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #334155;
+}
+
+.meta-header .left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.keywords-container {
+  padding: 0.5rem 0;
+}
+
+.group-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 4px;
+  display: block;
+  text-transform: uppercase;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.custom-tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* Sub-questions */
+.sub-q-title {
   margin: 0;
-  font-size: 18px;
-  color: #047857;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
 }
 
+.sub-q-answer {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* References List */
 .references-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding-right: 0.5rem;
 }
 
-.reference-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid #a7f3d0;
-  border-radius: 12px;
-  padding: 1.25rem;
-  transition: all 0.3s;
+.reference-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
-.reference-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.reference-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e1;
 }
 
-.reference-card.selected {
-  border: 2px solid #10b981;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+.reference-item.is-selected {
+  border-left: 3px solid #10b981;
+  background: #f0fdf4;
 }
 
-.ref-header {
+.ref-head {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.ref-id {
-  background: #6b7280;
-  color: white;
-  padding: 0.125rem 0.5rem;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+.ref-index {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
 }
 
-.ref-filename {
+.ref-name {
+  font-size: 13px;
   font-weight: 600;
-  color: #065f46;
-  font-size: 15px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   flex: 1;
-}
-
-.selected-badge {
-  background: linear-gradient(45deg, #10b981, #059669);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .ref-scores {
   display: flex;
-  gap: 1rem;
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 0.75rem;
-  font-style: italic;
-  flex-wrap: wrap;
-}
-
-.retrieval-tags {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.retrieval-badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.retrieval-badge.source-vector {
-  background: rgba(37, 99, 235, 0.15);
-  color: #1d4ed8;
-}
-
-.retrieval-badge.source-keyword {
-  background: rgba(16, 185, 129, 0.15);
-  color: #059669;
-}
-
-.retrieval-badge.source-other {
-  background: rgba(107, 114, 128, 0.15);
-  color: #374151;
-}
-
-.can-answer {
-  color: #059669;
-  font-weight: 600;
-}
-
-.cannot-answer {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-.ref-text {
-  color: #374151;
-  font-size: 14px;
-  line-height: 1.6;
-  background: #f9fafb;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 3px solid #10b981;
-}
-
-.key-passage {
-  background: #fef3c7;
-  border-left: 3px solid #f59e0b;
-  padding: 1rem;
-  margin-top: 0.75rem;
-  border-radius: 8px;
-}
-
-.passage-label {
-  font-weight: 600;
-  color: #b45309;
   margin-bottom: 0.5rem;
-  font-size: 13px;
 }
 
-.passage-text {
-  font-size: 13px;
-  color: #92400e;
-  line-height: 1.6;
-}
-
-/* 新增字段样式 */
-.retrieval-sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.source-tag {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 0.25rem 0.625rem;
-  border-radius: 999px;
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.source-tag.tag-vector {
-  background: rgba(37, 99, 235, 0.15);
-  color: #1d4ed8;
-  border: 1px solid rgba(37, 99, 235, 0.3);
-}
-
-.source-tag.tag-keyword {
-  background: rgba(16, 185, 129, 0.15);
-  color: #059669;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.detailed-scores {
-  display: flex;
-  gap: 1rem;
+.ref-content {
   font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 0.75rem;
-  font-family: 'Courier New', monospace;
-  flex-wrap: wrap;
+  color: #64748b;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.detailed-scores span {
-  background: rgba(255, 255, 255, 0.9);
-  padding: 0.25rem 0.5rem;
+/* Markdown Styles (Minimal override for brevity, assuming main styles exist or are handled by utility) */
+.markdown-body :deep(pre) {
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.markdown-body :deep(code) {
+  background: #f1f5f9;
+  padding: 2px 4px;
   border-radius: 4px;
-  border: 1px solid #d1d5db;
+  font-family: monospace;
+  color: #dc2626;
 }
 
-.matched-keywords {
-  margin-bottom: 0.75rem;
-  font-size: 12px;
+.markdown-body :deep(blockquote) {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
 }
 
-.matched-keywords strong {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #065f46;
-  font-weight: 600;
-}
-
-.keyword-tag {
-  display: inline-block;
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  color: #78350f;
-  padding: 0.25rem 0.625rem;
-  border-radius: 6px;
-  margin-right: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-/* 反馈按钮 */
-.feedback-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
-}
-
-.feedback-btn {
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  padding: 0.75rem 1.5rem;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.3s;
-  font-weight: 500;
-}
-
-.like-btn:hover:not(:disabled) {
-  background: #dcfce7;
-  border-color: #10b981;
-  color: #065f46;
-}
-
-.dislike-btn:hover:not(:disabled) {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #991b1b;
-}
-
-.feedback-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 模态框 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background: white;
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 100%;
-  max-width: 500px;
-}
-
-.modal-content h3 {
-  margin: 0 0 1.5rem 0;
-  font-size: 22px;
-  color: #374151;
-}
-
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
-}
-
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 15px;
-  font-family: inherit;
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-
-.btn-cancel,
-.btn-submit {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-cancel {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-cancel:hover {
-  background: #d1d5db;
-}
-
-.btn-submit {
-  background: linear-gradient(45deg, #2563eb, #1e3a8a);
-  color: white;
-}
-
-.btn-submit:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-}
-
-.btn-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 滚动到反馈按钮 */
-.scroll-to-feedback {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  background: #f59e0b;
-  color: white;
-  border-radius: 50px;
-  padding: 0.75rem 1.5rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-  transition: all 0.3s;
-  animation: bounce 2s ease-in-out infinite;
-  z-index: 100;
-}
-
-.scroll-to-feedback:hover {
-  animation-play-state: paused;
-  background: #d97706;
-  transform: translateY(-2px);
-}
-
-.scroll-to-feedback span {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.arrow {
-  font-size: 12px;
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
-  }
-  40% {
-    transform: translateY(-8px);
-  }
-  60% {
-    transform: translateY(-4px);
-  }
-}
-
-/* 响应式 */
+/* Responsive */
 @media (max-width: 768px) {
-  .page-title {
-    font-size: 32px;
+  .input-footer {
+    flex-direction: column;
+    align-items: stretch;
   }
-
-  .input-controls {
+  
+  .controls-area {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .controls-left {
-    flex-direction: column;
-    align-items: stretch;
+  .control-item {
+    width: 100% !important;
   }
 
   .submit-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 1024px) {
+  .qa-page {
+    background-size: cover;
+    background-position: 25% 45%;
+  }
+}
+
+@media (max-width: 768px) {
+  .qa-page {
+    background-size: cover;
+    background-position: 20% 40%;
+    background-attachment: scroll; /* 移动设备禁用fixed背景 */
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+  
+  .qa-page::before {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.4) 100%);
+  }
+  
+  .main-container {
+    justify-content: flex-start;
   }
 }
 </style>

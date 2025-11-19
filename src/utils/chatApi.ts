@@ -10,7 +10,7 @@ import llmHttp from '@/config/api/llmHttp';
  * SSE流式响应处理器
  */
 export interface StreamMessage {
-  type: 'SESSION' | 'THINK' | 'CONTENT' | 'SOURCE' | 'SUB_QUESTIONS' | 'ERROR' | 'DONE' | 'UNKNOWN';
+  type: 'SESSION' | 'THINK' | 'CONTENT' | 'SOURCE' | 'SUB_QUESTIONS' | 'KEYWORDS' | 'ERROR' | 'DONE' | 'UNKNOWN';
   data: string;
 }
 
@@ -28,18 +28,20 @@ export function parseSSEMessage(raw: string): StreamMessage {
     if (rawData.length < 100) {
       console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData));
     }
-    return { type: 'THINK', data: rawData.replace(/\\n/g, "\n") };
+    return { type: 'THINK', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
     const rawData = data.substring(8);
     // 调试日志：查看原始数据（只显示前100个字符）
     if (rawData.length < 100) {
       console.log('[DEBUG] CONTENT 原始数据:', JSON.stringify(rawData));
     }
-    return { type: 'CONTENT', data: rawData.replace(/\\n/g, "\n") };
+    return { type: 'CONTENT', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("SOURCE:")) {
     return { type: 'SOURCE', data: data.substring(7).trim() };
   } else if (data.startsWith("SUB_QUESTIONS:")) {
     return { type: 'SUB_QUESTIONS', data: data.substring(14).trim() };
+  } else if (data.startsWith("KEYWORDS:")) {
+    return { type: 'KEYWORDS', data: data.substring(9).trim() };
   } else if (data.startsWith("ERROR:")) {
     return { type: 'ERROR', data: data.substring(6).trim() };
   } else if (data.startsWith("DONE:")) {
@@ -47,6 +49,14 @@ export function parseSSEMessage(raw: string): StreamMessage {
   }
   
   return { type: 'UNKNOWN', data };
+}
+
+/**
+ * 关键词数据结构
+ */
+export interface KeywordsData {
+  question: string[];   // 从用户问题中提取的关键词
+  document: string[];   // 从文档中匹配的关键词
 }
 
 /**
@@ -80,6 +90,10 @@ export interface ReferenceSource {
   vectorRank?: number;              // 向量检索排名（可选，仅当 retrievalSources 包含 "vector" 时）
   bm25Rank?: number;                // BM25 检索排名（可选，仅当 retrievalSources 包含 "keyword" 时）
   matchedKeywords?: string[];       // 匹配的关键词（仅当 retrievalSources 包含 "keyword" 时）
+  
+  // 隐藏节点相关字段
+  isHidden?: boolean;               // 标记为隐藏节点
+  hiddenKbName?: string;            // 隐藏知识库名称
   
   metadata?: ReferenceMetadata;
   node?: {

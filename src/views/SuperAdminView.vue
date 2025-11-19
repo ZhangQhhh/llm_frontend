@@ -932,7 +932,9 @@ export default defineComponent({
 <style scoped>
 .super-admin-page {
   min-height: calc(100vh - 60px);
-  background: #f3f4f6;
+  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background-size: cover;
+  background-attachment: fixed;
   padding: 2rem 0;
 }
 

@@ -101,6 +101,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>超管中心</span>
               </el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="feedback">
+                <el-icon><ChatLineSquare /></el-icon>
+                <span>反馈管理</span>
+              </el-dropdown-item>
               <el-dropdown-item divided command="profile">
                 <el-icon><Setting /></el-icon>
                 <span>个人设置</span>
@@ -137,7 +141,8 @@ import {
   Setting, 
   User, 
   ArrowDown, 
-  SwitchButton 
+  SwitchButton,
+  ChatLineSquare
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -153,7 +158,8 @@ export default defineComponent({
     Setting,
     User,
     ArrowDown,
-    SwitchButton
+    SwitchButton,
+    ChatLineSquare
   },
   setup() {
     const store = useStore()
@@ -195,6 +201,8 @@ export default defineComponent({
         router.push('/admin')
       } else if (command === 'super-admin') {
         router.push('/super-admin')
+      } else if (command === 'feedback') {
+        router.push('/feedback')
       }
     }
 

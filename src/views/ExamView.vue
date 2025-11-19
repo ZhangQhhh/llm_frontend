@@ -647,7 +647,9 @@ export default defineComponent({
 <style scoped>
 .exam-page {
   min-height: calc(100vh - 60px);
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+  background: url('@/assets/allPic/public/deepbac.jpg') no-repeat center center;
+  background-size: cover;
+  background-attachment: fixed;
   padding: 2rem 0;
 }
 

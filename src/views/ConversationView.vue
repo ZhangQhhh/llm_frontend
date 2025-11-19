@@ -123,6 +123,43 @@
                          class="section-body markdown-content" 
                          v-html="renderMarkdown(msg.content)"></div>
                   </div>
+
+                  <!-- 关键词提取 -->
+                  <div v-if="msg.keywords && (msg.keywords.question.length > 0 || msg.keywords.document.length > 0)" class="keywords-section">
+                    <div class="section-header">
+                      <span class="icon">🔑</span>
+                      <span class="title">关键词提取</span>
+                    </div>
+                    <div class="section-body keywords-body">
+                      <!-- 问题关键词 -->
+                      <div v-if="msg.keywords.question.length > 0" class="keywords-group">
+                        <div class="keywords-label">💭 问题关键词</div>
+                        <div class="keywords-tags">
+                          <span
+                            v-for="(keyword, idx) in msg.keywords.question"
+                            :key="'q-' + idx"
+                            class="keyword-badge question-keyword"
+                          >
+                            {{ keyword }}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <!-- 文档关键词 -->
+                      <div v-if="msg.keywords.document.length > 0" class="keywords-group">
+                        <div class="keywords-label">📄 文档关键词</div>
+                        <div class="keywords-tags">
+                          <span
+                            v-for="(keyword, idx) in msg.keywords.document"
+                            :key="'d-' + idx"
+                            class="keyword-badge document-keyword"
+                          >
+                            {{ keyword }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -152,27 +189,36 @@
           <div class="references-sidebar">
             <div class="sidebar-header">
               <h3>参考来源</h3>
-              <span class="count">{{ references.length }} 条</span>
+              <span class="count">{{ filteredReferences.length }} 条</span>
             </div>
 
             <div class="references-list">
-              <div v-if="references.length === 0" class="empty-state">
+              <div v-if="filteredReferences.length === 0" class="empty-state">
                 暂无参考来源
               </div>
 
               <div
-                v-for="(ref, index) in references"
+                v-for="(ref, index) in filteredReferences"
                 :key="index"
                 class="reference-item"
-                :class="{ selected: ref.canAnswer }"
+                :class="{ selected: ref.canAnswer, 'hidden-node': ref.isHidden }"
               >
                 <div class="ref-header">
+                  <span class="ref-id">[{{ ref.id }}]</span>
                   <span class="ref-title">{{ ref.fileName }}</span>
-                  <span v-if="ref.canAnswer" class="badge bg-success">✓ 已选中</span>
+                  <span v-if="ref.isHidden" class="hidden-badge"> 隐藏节点</span>
+                  <span v-if="ref.hiddenKbName" class="kb-name-badge">{{ ref.hiddenKbName }}</span>
+                  <span v-if="ref.canAnswer" class="selected-badge">✓ 已选中</span>
                 </div>
                 <div class="ref-meta">
-                  <span>初始分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
-                  <span>重排分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
+                  <span>初始检索分: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(2) : (ref.initialScore || '-') }}</span>
+                  <span>重排序分: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(2) : (ref.rerankedScore || '-') }}</span>
+                  <span
+                    v-if="ref.canAnswer !== undefined"
+                    :class="ref.canAnswer ? 'can-answer' : 'cannot-answer'"
+                  >
+                    {{ ref.canAnswer ? '✓ 可回答' : '✗ 不可回答' }}
+                  </span>
                 </div>
                 
                 <!-- 检索来源标签 -->
@@ -215,10 +261,11 @@
                   </div>
                 </div>
                 
-                <div class="ref-content">{{ ref.content }}</div>
+                <div class="ref-content">"{{ ref.content }}"</div>
+                
                 <div v-if="ref.keyPassage" class="key-passage">
-                  <strong>🔍 关键段落：</strong>
-                  <p>{{ ref.keyPassage }}</p>
+                  <div class="passage-label">🔍 关键段落：</div>
+                  <div class="passage-text">{{ ref.keyPassage }}</div>
                 </div>
               </div>
             </div>
@@ -230,7 +277,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, nextTick, computed, onMounted } from 'vue';
+import { computed, defineComponent, ref, onMounted, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import SessionList from '@/components/SessionList.vue';
@@ -243,9 +290,10 @@ import {
   deleteSession,
   type ReferenceSource,
   type StreamMessage,
-  type SessionListItem
+  type SessionListItem,
+  type KeywordsData
 } from '@/utils/chatApi';
-import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
+import { API_ENDPOINTS, STORAGE_KEYS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
 import { 
@@ -271,6 +319,7 @@ interface Message {
   content: string;
   thinking?: string;
   thinkingCollapsed?: boolean;
+  keywords?: KeywordsData | null;
 }
 
 export default defineComponent({
@@ -286,6 +335,14 @@ export default defineComponent({
     const question = ref('');
     const messages = ref<Message[]>([]);
     const references = ref<ReferenceSource[]>([]);
+    
+    // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
+    const filteredReferences = computed(() => {
+      if (SHOW_HIDDEN_NODES) {
+        return references.value;
+      }
+      return references.value.filter(ref => !ref.isHidden);
+    });
     const loading = ref(false);
     const sessionId = ref<string | null>(getStorageItem(STORAGE_KEYS.SESSION_ID));
 
@@ -421,15 +478,16 @@ export default defineComponent({
           history.messages.forEach(msg => {
             messages.value.push({
               role: 'user',
-              // 历史消息可能包含 \\n，需要转换
-              content: msg.user_query.replace(/\\n/g, '\n')
+              // 历史消息可能包含 <NEWLINE>，需要转换
+              content: msg.user_query.replace(/<NEWLINE>/g, '\n')
             });
             messages.value.push({
               role: 'assistant',
-              // 历史消息可能包含 \\n，需要转换
-              content: msg.assistant_response.replace(/\\n/g, '\n'),
+              // 历史消息可能包含 <NEWLINE>，需要转换
+              content: msg.assistant_response.replace(/<NEWLINE>/g, '\n'),
               thinking: '',
-              thinkingCollapsed: false
+              thinkingCollapsed: false,
+              keywords: null
             });
           });
           scrollToBottom();
@@ -513,15 +571,16 @@ export default defineComponent({
         history.messages.forEach(msg => {
           messages.value.push({
             role: 'user',
-            // 历史消息可能包含 \\n，需要转换
-            content: msg.user_query.replace(/\\n/g, '\n')
+            // 历史消息可能包含 <NEWLINE>，需要转换
+            content: msg.user_query.replace(/<NEWLINE>/g, '\n')
           });
           messages.value.push({
             role: 'assistant',
-            // 历史消息可能包含 \\n，需要转换
-            content: msg.assistant_response.replace(/\\n/g, '\n'),
+            // 历史消息可能包含 <NEWLINE>，需要转换
+            content: msg.assistant_response.replace(/<NEWLINE>/g, '\n'),
             thinking: '',
-            thinkingCollapsed: false
+            thinkingCollapsed: false,
+            keywords: null
           });
         });
         scrollToBottom();
@@ -586,17 +645,24 @@ export default defineComponent({
         role: 'assistant',
         content: '',
         thinking: '',
-        thinkingCollapsed: false
+        thinkingCollapsed: false,
+        keywords: null
       };
       messages.value.push(assistantMessage);
 
       loading.value = true;
       references.value = [];
       
-      // 重置进度条
-      showProgress.value = false;
-      progressInfo.value = { current: 0, total: 0, percentage: 0 };
-      progressMessage.value = '';
+      // 如果启用了精准检索，预先显示进度条
+      if (insertBlock.value) {
+        showProgress.value = true;
+        progressInfo.value = { current: 0, total: 0, percentage: 0 };
+        progressMessage.value = '正在准备精准检索...';
+      } else {
+        showProgress.value = false;
+        progressInfo.value = { current: 0, total: 0, percentage: 0 };
+        progressMessage.value = '';
+      }
 
       try {
         // 🔥 修复：确保使用当前用户的最新token
@@ -611,7 +677,8 @@ export default defineComponent({
             thinking: thinkingMode.value,
             model_id: modelId.value,
             rerank_top_n: rerankTopN.value,
-            use_insert_block: insertBlock.value
+            use_insert_block: insertBlock.value,
+            insert_block_llm_id: modelId.value
           },
           currentToken,
           (message: StreamMessage) => {
@@ -644,7 +711,7 @@ export default defineComponent({
 
         case 'THINK':
           if (msgIndex !== -1 && messages.value[msgIndex].thinking !== undefined) {
-            // parseSSEMessage 已经处理了 \\n 转换
+            // parseSSEMessage 已经处理了 <NEWLINE> 转换
             messages.value[msgIndex].thinking += message.data;
           }
           scrollToBottom();
@@ -670,7 +737,7 @@ export default defineComponent({
           }
           // 普通内容消息
           else if (msgIndex !== -1) {
-            // parseSSEMessage 已经处理了 \\n 转换
+            // parseSSEMessage 已经处理了 <NEWLINE> 转换
             messages.value[msgIndex].content += message.data;
           }
           scrollToBottom();
@@ -687,6 +754,19 @@ export default defineComponent({
             references.value.push(source);
           } catch (e) {
             console.error('解析SOURCE失败:', e);
+          }
+          break;
+
+        case 'KEYWORDS':
+          console.log('收到KEYWORDS消息，原始数据:', message.data);
+          try {
+            const keywordsData = JSON.parse(message.data) as KeywordsData;
+            console.log('🔑 解析后的KEYWORDS:', keywordsData);
+            if (msgIndex !== -1 && messages.value[msgIndex].keywords !== undefined) {
+              messages.value[msgIndex].keywords = keywordsData;
+            }
+          } catch (e) {
+            console.error('解析KEYWORDS失败:', e, '原始数据:', message.data);
           }
           break;
 
@@ -729,6 +809,7 @@ export default defineComponent({
       question,
       messages,
       references,
+      filteredReferences,
       loading,
       sessionId,
       modelId,
@@ -759,7 +840,9 @@ export default defineComponent({
 <style scoped>
 .conversation-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  background: url('@/assets/allPic/public/deepbac.jpg') no-repeat center center;
+  background-size: cover;
+  background-attachment: fixed;
   padding: 2rem;
   padding-left: calc(320px + 2rem); /* 为侧边栏留出空间 */
   transition: padding-left 0.3s ease;
@@ -1048,6 +1131,72 @@ export default defineComponent({
   color: #1e40af;
 }
 
+/* 关键词提取 */
+.keywords-section {
+  margin-bottom: 1rem;
+}
+
+.keywords-section:last-child {
+  margin-bottom: 0;
+}
+
+.keywords-body {
+  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid #ec4899;
+}
+
+.keywords-group {
+  margin-bottom: 1rem;
+}
+
+.keywords-group:last-child {
+  margin-bottom: 0;
+}
+
+.keywords-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9f1239;
+  margin-bottom: 0.5rem;
+}
+
+.keywords-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.keyword-badge {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.keyword-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 问题关键词 - 粉色 */
+.keyword-badge.question-keyword {
+  background: linear-gradient(135deg, #f9a8d4 0%, #ec4899 100%);
+  color: #831843;
+  border: 1px solid #f472b6;
+}
+
+/* 文档关键词 - 红色 */
+.keyword-badge.document-keyword {
+  background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%);
+  color: #7f1d1d;
+  border: 1px solid #f87171;
+}
+
 .loading-indicator {
   display: flex;
   align-items: center;
@@ -1237,17 +1386,68 @@ export default defineComponent({
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
 }
 
+.reference-item.hidden-node {
+  border: 2px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  opacity: 0.85;
+}
+
+.reference-item.hidden-node:hover {
+  opacity: 1;
+}
+
 .ref-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ref-id {
+  background: #6b7280;
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .ref-title {
   font-weight: 600;
-  color: #374151;
+  color: #065f46;
   font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-badge {
+  background: linear-gradient(45deg, #10b981, #059669);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hidden-badge {
+  background: linear-gradient(45deg, #f59e0b, #d97706);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kb-name-badge {
+  background: linear-gradient(45deg, #8b5cf6, #7c3aed);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .ref-meta {
@@ -1256,6 +1456,18 @@ export default defineComponent({
   font-size: 12px;
   color: #6b7280;
   margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  font-style: italic;
+}
+
+.can-answer {
+  color: #059669;
+  font-weight: 600;
+}
+
+.cannot-answer {
+  color: #dc2626;
+  font-weight: 600;
 }
 
 .retrieval-tags {
@@ -1290,29 +1502,34 @@ export default defineComponent({
 }
 
 .ref-content {
+  color: #374151;
   font-size: 13px;
   line-height: 1.6;
-  color: #4b5563;
   background: #f9fafb;
   padding: 0.75rem;
   border-radius: 8px;
   border-left: 3px solid #10b981;
+  margin-bottom: 0.75rem;
 }
 
 .key-passage {
-  margin-top: 0.75rem;
   background: #fef3c7;
   border-left: 3px solid #f59e0b;
   padding: 0.75rem;
   border-radius: 8px;
-  font-size: 12px;
-  color: #92400e;
 }
 
-.key-passage strong {
-  display: block;
-  margin-bottom: 0.5rem;
+.passage-label {
+  font-weight: 600;
   color: #b45309;
+  margin-bottom: 0.5rem;
+  font-size: 12px;
+}
+
+.passage-text {
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.6;
 }
 
 .retrieval-sources {

@@ -39,8 +39,8 @@ export function renderMarkdown(markdown: string): string {
   if (!markdown) return '';
   
   try {
-    // 0. 预处理：将转义的换行符 \\n 转换为真实换行符 \n
-    let normalizedMarkdown = markdown.replace(/\\n/g, '\n');
+    // 0. 预处理：将 <NEWLINE> 转换为真实换行符 \n
+    let normalizedMarkdown = markdown.replace(/<NEWLINE>/g, '\n');
     
     // 0.1 防御性处理：检测未闭合的代码块标记
     // 统计代码块标记（三个反引号）的数量
