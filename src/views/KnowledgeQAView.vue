@@ -95,10 +95,9 @@
 
           <!-- 结果区域 -->
           <div v-if="loading || answer || references.length > 0" class="result-area">
-            <el-row :gutter="24">
-              <!-- 左侧：回答与思考 -->
-              <el-col :span="16" :xs="24">
-                <!-- 思考过程 -->
+            <!-- 回答与思考 -->
+            <div class="answer-section">
+              <!-- 思考过程 -->
                 <transition name="el-fade-in">
                   <div v-if="thinking && thinkingMode" class="thinking-section mb-4">
                     <el-collapse v-model="activeThinking">
@@ -167,10 +166,10 @@
                      </div>
                   </div>
                 </el-card>
-              </el-col>
+            </div>
 
-              <!-- 右侧：参考资料与元数据 -->
-              <el-col :span="8" :xs="24">
+            <!-- 参考资料与元数据 -->
+            <div class="metadata-section">
                 <!-- 关键词 -->
                 <transition name="el-zoom-in-top">
                   <el-card v-if="keywords && (keywords.question.length || keywords.document.length)" class="meta-card glass-effect mb-4">
@@ -249,16 +248,37 @@
                           <el-tag v-if="ref.canAnswer" type="success" size="small" effect="dark">引用</el-tag>
                         </div>
                         <div class="ref-scores">
-                          <el-tag size="small" type="warning" effect="plain">Score: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : '-' }}</el-tag>
+                          <el-tag v-if="ref.initialScore !== undefined" size="small" type="info" effect="plain">
+                            初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
+                          </el-tag>
+                          <el-tag v-if="ref.rerankedScore !== undefined" size="small" type="warning" effect="plain">
+                            重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
+                          </el-tag>
+                          <el-tag v-if="ref.vectorScore !== undefined" size="small" type="info" effect="plain">
+                            向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                          </el-tag>
+                          <el-tag v-if="ref.bm25Score !== undefined" size="small" type="info" effect="plain">
+                            BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                          </el-tag>
                           <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
                         </div>
-                        <div class="ref-content line-clamp-3">{{ ref.content }}</div>
+                        <div class="ref-content-wrapper">
+                          <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
+                          <el-button 
+                            text 
+                            type="primary" 
+                            size="small" 
+                            class="expand-btn"
+                            @click="toggleRefExpand(idx)"
+                          >
+                            {{ ref.expanded ? '收起' : '展开全文' }}
+                          </el-button>
+                        </div>
                       </div>
                     </div>
                   </el-scrollbar>
                 </el-card>
-              </el-col>
-            </el-row>
+            </div>
           </div>
         </div>
       </el-main>
@@ -590,13 +610,21 @@ export default defineComponent({
       showFeedbackModal.value = true;
     };
 
+    // 切换参考来源展开/收起
+    const toggleRefExpand = (index: number) => {
+      const ref = references.value[index];
+      if (ref) {
+        ref.expanded = !ref.expanded;
+      }
+    };
+
     return {
       question, answer, thinking, references, filteredReferences, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
-      renderMarkdown, copyAnswer
+      renderMarkdown, copyAnswer, toggleRefExpand
     };
   }
 });
@@ -605,11 +633,11 @@ export default defineComponent({
 <style scoped>
 .qa-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/bac.jpg') no-repeat center center;
-  background-size: 101% auto;
+  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background-size: cover;
   background-attachment: fixed;
   padding-bottom: 2rem;
-  background-position: 50% 33%;
+  background-position: center center;
   position: relative;
   display: flex;
   align-items: center;
@@ -653,6 +681,25 @@ export default defineComponent({
 .content-wrapper {
   width: 100%;
   max-width: 1400px;
+}
+
+/* Result Area */
+.result-area {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.answer-section {
+  width: 100%;
+}
+
+.metadata-section {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .brand {
@@ -835,6 +882,9 @@ export default defineComponent({
 /* Result Area */
 .thinking-section {
   margin-bottom: 1.5rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .thinking-header {
@@ -867,6 +917,9 @@ export default defineComponent({
 /* Answer Card */
 .answer-card {
   min-height: 200px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .answer-card .card-header {
@@ -1034,8 +1087,13 @@ export default defineComponent({
 
 .ref-scores {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.ref-content-wrapper {
+  position: relative;
 }
 
 .ref-content {
@@ -1044,8 +1102,24 @@ export default defineComponent({
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.ref-content.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  max-height: none;
+}
+
+.expand-btn {
+  margin-top: 0.5rem;
+  padding: 0;
+  height: auto;
+  font-size: 12px;
 }
 
 /* Markdown Styles (Minimal override for brevity, assuming main styles exist or are handled by utility) */
