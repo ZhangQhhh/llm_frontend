@@ -1,6 +1,7 @@
 export const API_BASE_URL = process.env.VUE_APP_API_BASE_URL;
 export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const SHOW_HIDDEN_NODES = process.env.VUE_APP_SHOW_HIDDEN_NODES === 'true';
+export const MCQ_BASE_URL = process.env.VUE_APP_MCQ_BASE_URL;
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
@@ -94,6 +95,28 @@ export const API_ENDPOINTS = {
   TASKS: {
     STATUS: '/tasks/status',
   },
+};
+
+// ===== MCQ 模块端点（合并自 mcq.ts） =====
+export const MCQ_ENDPOINTS = {
+    UPLOAD: '/upload',
+    EXPLAIN: '/explain',
+    TASK: { STATUS: '/tasks/status' },
+    BANK: {
+        LIST: '/bank/list',
+        UPSERT: '/bank/bulk_upsert',
+        UPDATE: '/bank/bulk_update',
+        REJECT: '/bank/bulk_reject',
+        EXPORT_DOCX: '/bank/export_docx',
+        GENERATE_PAPER: '/bank/generate_paper',
+        SOURCES: '/bank/sources',
+    },
+};
+
+
+export const getMcqUrl = (path: string): string => {
+if (/^https?:\/\//i.test(path)) return path;
+return `${MCQ_BASE_URL}${path}`;
 };
 
 // 本地存储键名
