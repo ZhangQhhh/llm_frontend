@@ -142,10 +142,8 @@
                 <el-option label="已通过" value="approved" />
                 <el-option label="已驳回" value="rejected" />
                 <el-option label="异常" value="abnormal" />
-                <el-option label="生成中" value="processing" />
               </el-select>
               <el-button @click="loadQuestions" :loading="loadingQuestions">刷新</el-button>
-              <el-button @click="exportTeacher">导出教师版</el-button>
               <el-button type="success" @click="approveAll" :loading="approvingAll">一键通过</el-button>
               <el-button type="danger" @click="rejectAll" :loading="rejectingAll">一键驳回</el-button>
             </div>
@@ -169,9 +167,6 @@
                   <el-button size="small" @click="toggleAnalysis(q.qid)">
                     {{ showingAnalysis[q.qid] ? '收起' : '查看解析' }}
                   </el-button>
-
-                  <!-- 参考资料：保持不变（后面再做折叠） -->
-                  <el-button size="small" @click="viewSources(q.qid)">参考资料</el-button>
 
                   <!-- 编辑：始终可见 -->
                   <el-button size="small" @click="editRow(q)">编辑</el-button>
@@ -275,7 +270,89 @@
                 </div>
 
 
-                <div v-if="showingAnalysis[q.qid]" class="q-analysis">{{ q.analysis || '暂无解析' }}</div>
+                <div v-if="showingAnalysis[q.qid]" class="q-analysis">
+                  <div class="q-analysis-text">
+                    {{ q.analysis || '暂无解析' }}
+                  </div>
+
+                  <!-- 参考资料折叠块（结构参考 qa_public.html） -->
+                  <details class="analysis-sources">
+                    <summary>参考资料（重排序最终 TopN）</summary>
+
+                    <div v-if="sourcesLoading[q.qid]" class="src-loading">
+                      参考资料载入中…
+                    </div>
+                    <div v-else-if="sourcesError[q.qid]" class="src-error">
+                      加载失败：{{ sourcesError[q.qid] }}
+                    </div>
+                    <div
+                      v-else-if="sourcesLoaded[q.qid] && (!sourcesMap[q.qid] || !sourcesMap[q.qid].length)"
+                      class="src-empty"
+                    >
+                      无参考资料
+                    </div>
+
+                    <template v-else>
+                      <!-- 分组选项（复杂验证：sources_grouped） -->
+                      <template v-if="isGroupedSources(q.qid)">
+                        <details
+                          v-for="(group, gi) in sourcesMap[q.qid]"
+                          :key="group.label || gi"
+                          class="src-group"
+                          open
+                        >
+                          <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
+                          <div class="src-group-body">
+                            <div
+                              v-for="(s, si) in group.sources || []"
+                              :key="si"
+                              class="src-card"
+                            >
+                              <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                              <div v-if="getSourceMeta(s)" class="src-meta">
+                                {{ getSourceMeta(s) }}
+                              </div>
+                              <div v-if="sourcePassages(s).length" class="src-passages">
+                                <div
+                                  v-for="(p, pi) in sourcePassages(s)"
+                                  :key="pi"
+                                  class="passage"
+                                >
+                                  <pre>{{ p }}</pre>
+                                </div>
+                              </div>
+                              <div v-else class="src-empty">无片段</div>
+                            </div>
+                          </div>
+                        </details>
+                      </template>
+
+                      <!-- 扁平列表（简单检索：sources） -->
+                      <template v-else>
+                        <div
+                          v-for="(s, si) in sourcesMap[q.qid] || []"
+                          :key="si"
+                          class="src-card"
+                        >
+                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                          <div v-if="getSourceMeta(s)" class="src-meta">
+                            {{ getSourceMeta(s) }}
+                          </div>
+                          <div v-if="sourcePassages(s).length" class="src-passages">
+                            <div
+                              v-for="(p, pi) in sourcePassages(s)"
+                              :key="pi"
+                              class="passage"
+                            >
+                              <pre>{{ p }}</pre>
+                            </div>
+                          </div>
+                          <div v-else class="src-empty">无片段</div>
+                        </div>
+                      </template>
+                    </template>
+                  </details>
+                </div>
               </el-card>
             </div>
 
@@ -299,7 +376,7 @@
           <div class="tab-content">
             <el-form label-width="100px">
               <el-form-item label="试卷标题">
-                <el-input v-model="paperTitle" placeholder="试卷标题" style="width: 300px" />
+                <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
                 <el-button type="primary" @click="createPaper" :loading="creatingPaper" style="margin-left: 10px">生成试卷</el-button>
                 <span class="status-msg">{{ paperMessage }}</span>
               </el-form-item>
@@ -485,6 +562,87 @@ export default defineComponent({
     const showingAnalysis = reactive<Record<string, boolean>>({})
     const approvingAll = ref(false)
 
+    // 参考资料缓存与渲染（结构与 qa_public.html 对齐）
+    const sourcesMap = reactive<Record<string, any[]>>({})
+    const sourcesLoading = reactive<Record<string, boolean>>({})
+    const sourcesLoaded = reactive<Record<string, boolean>>({})
+    const sourcesError = reactive<Record<string, string>>({})
+
+    const sourcePassages = (src: any): string[] => {
+      const out: string[] = []
+      const keys = [
+        'passages_all',
+        'passages',
+        'keyPassage',
+        'key_passage',
+        'passage',
+        'text',
+        'content',
+        'chunk',
+        'segment',
+        'excerpt'
+      ]
+      for (const k of keys) {
+        const v = src?.[k]
+        if (Array.isArray(v)) out.push(...v.map((x: any) => String(x)))
+        else if (v != null) out.push(String(v))
+      }
+      return out.filter(Boolean)
+    }
+
+    const getSourceTitle = (s: any, idx: number): string => {
+      const titleRaw = s?.fileName || s?.file_name || s?.title || s?.docId || `来源 ${idx + 1}`
+      return `[${idx + 1}] ${String(titleRaw)}`
+    }
+
+    const getSourceMeta = (s: any): string => {
+      const meta: string[] = []
+      const init = (s?.initialScore ?? s?.initial_score)
+      if (init !== undefined && init !== '') meta.push(`初始分:${init}`)
+      const rer = (s?.rerankedScore ?? s?.reranked_score ?? s?.score)
+      if (rer !== undefined && rer !== '') meta.push(`重排分:${rer}`)
+      const page = (s?.page ?? s?.page_no ?? s?.page_num)
+      if (page !== undefined && page !== '') meta.push(`页:${page}`)
+      return meta.join(' / ')
+    }
+
+    const isGroupedSources = (qid: string): boolean => {
+      const src = sourcesMap[qid]
+      if (!Array.isArray(src) || !src.length) return false
+      const first = src[0] as any
+      return !!(first && typeof first === 'object' && Array.isArray(first.sources))
+    }
+
+    const loadSources = async (qid: string) => {
+      if (!qid) return
+      if (sourcesLoaded[qid] || sourcesLoading[qid]) return
+      sourcesLoading[qid] = true
+      sourcesError[qid] = ''
+      try {
+        let url = `${MCQ_BASE_URL}/bank/sources?qid=${encodeURIComponent(qid)}`
+        let res: Response
+        try {
+          res = await fetch(url, { method: 'GET' })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        } catch (_err) {
+          url = `/mcq_public/bank/sources?qid=${encodeURIComponent(qid)}`
+          res = await fetch(url, { method: 'GET' })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        }
+        const j = await res.json()
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || '获取参考资料失败')
+        }
+        const src = j.sources || []
+        sourcesMap[qid] = Array.isArray(src) ? src : []
+        sourcesLoaded[qid] = true
+      } catch (error: any) {
+        sourcesError[qid] = error?.message || String(error)
+      } finally {
+        sourcesLoading[qid] = false
+      }
+    }
+
     // ==== MCQ 扩展状态（仅题库管理内部使用） ====
     const exportingBank = ref(false)
     const importingBank = ref(false)
@@ -492,9 +650,11 @@ export default defineComponent({
     const asyncExplaining = ref(false)
     const asyncMsg = ref('')
     const llmOptions = ref([
-      { value: 'qwen3-32b', label: 'qwen3-32b' },
-      { value: 'qwen3-14b-lora', label: 'qwen3-14b-lora' },
-      { value: 'deepseek-r1', label: 'deepseek-r1' },
+      { value: 'qwen2025',      label: 'qwen2025 (qwen3)' },
+      { value: 'qwen3-32b',     label: 'qwen3-32b' },
+      { value: 'deepseek',      label: 'deepseek (deepseek-r1)' },
+      //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
+      { value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
     const llmModelId = ref('qwen3-32b')
     const topN = ref(20)
@@ -515,7 +675,7 @@ export default defineComponent({
       } catch { return questions.value || [] }
     })
 
-    const paperTitle = ref('概率统计小测')
+    const paperTitle = ref('')
     const creatingPaper = ref(false)
     const paperMessage = ref('')
     const exportPapers = ref<Paper[]>([])
@@ -808,7 +968,11 @@ export default defineComponent({
     }
 
 
-    const toggleAnalysis = (qid: string) => { showingAnalysis[qid] = !showingAnalysis[qid] }
+    const toggleAnalysis = (qid: string) => {
+      const next = !showingAnalysis[qid]
+      showingAnalysis[qid] = next
+      if (next) loadSources(qid)
+    }
 
     const approveQuestion = async (qid: string) => {
       try {
@@ -866,8 +1030,6 @@ export default defineComponent({
       } catch (e:any) { ElMessage.error(e?.message || e) }
       finally { rejectingAll.value = false }
     }
-
-    const exportTeacher = () => { openInNewTab(`${MCQ_BASE_URL}/bank/export_docx`) }
 
     const exportBankDocx = async () => {
       exportingBank.value = true
@@ -1009,21 +1171,48 @@ export default defineComponent({
     })
 
     const createPaper = async () => {
+      // 仍然要求填写标题，和原行为保持一致
       if (!paperTitle.value) return ElMessage.warning('请输入试卷标题')
+
+      const name = (paperTitle.value || '').trim() || '试卷'
       creatingPaper.value = true
-      paperMessage.value = '生成中...'
+      paperMessage.value = '生成中…'
+
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.PAPERS.CREATE), {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/generate_paper`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: paperTitle.value })
+          body: JSON.stringify({ name })
         })
-        if (response.data.ok) {
-          paperMessage.value = `生成成功：${response.data.paper_id.slice(0, 8)}`
-          ElMessage.success('试卷生成成功')
-        } else throw new Error(response.data.detail || '生成失败')
+
+        const ct = (r.headers && r.headers.get)
+          ? (r.headers.get('content-type') || '')
+          : ''
+
+        // 如果是 JSON，说明是“无可用题目”或错误信息，按 qa_public.html 的规则处理
+        if (ct.includes('application/json')) {
+          const j = await r.json()
+          if (!j.ok) throw new Error(j.msg || `HTTP ${r.status}`)
+          paperMessage.value = j.msg || '无可用题目'
+          return
+        }
+
+        // 否则认为是 DOCX，直接触发下载
+        const blob = await r.blob()
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${name}.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(a.href)
+
+        paperMessage.value = '试卷已生成'
+        ElMessage.success('试卷生成成功')
+        setTimeout(() => { paperMessage.value = '' }, 1500)
       } catch (error: any) {
-        paperMessage.value = '生成失败：' + error.message
+        const msg = error?.message || error
+        paperMessage.value = '生成失败：' + msg
         ElMessage.error(paperMessage.value)
       } finally {
         creatingPaper.value = false
@@ -1033,24 +1222,38 @@ export default defineComponent({
     const loadExportPapers = async () => {
       loadingExportPapers.value = true
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.PAPERS.LIST_ALL))
-        exportPapers.value = response.data || []
+        // 直接走 MCQ 试卷列表：GET {MCQ_BASE_URL}/bank/papers
+        const r = await fetch(`${MCQ_BASE_URL}/bank/papers`, { method: 'GET', cache: 'no-store' })
+        const j = await r.json()
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || `HTTP ${r.status}`)
+        }
+        exportPapers.value = Array.isArray(j.papers) ? j.papers : []
+        // 默认选中第一份试卷
+        if (!selectedExportPaper.value && exportPapers.value.length > 0) {
+          selectedExportPaper.value = exportPapers.value[0].paper_id
+        }
       } catch (error: any) {
-        ElMessage.error('加载试卷列表失败：' + error.message)
+        ElMessage.error('加载试卷列表失败：' + (error?.message || error))
       } finally {
         loadingExportPapers.value = false
       }
     }
-
     const exportZip = () => {
-      if (!selectedExportPaper.value) return ElMessage.warning('请选择试卷')
-      openInNewTab(getApiUrl(`${API_ENDPOINTS.ADMIN.EXPORT_SCORES_ZIP}?paper_id=${selectedExportPaper.value}`))
+      if (!selectedExportPaper.value) {
+        return ElMessage.warning('请选择试卷')
+      }
+      const url = `${MCQ_BASE_URL}/bank/paper_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+      openInNewTab(url)
       ElMessage.success('导出成功')
     }
 
     const exportDocx = () => {
-      if (!selectedExportPaper.value) return ElMessage.warning('请选择试卷')
-      openInNewTab(getApiUrl(`${API_ENDPOINTS.ADMIN.EXPORT_SCORES_DOCX}?paper_id=${selectedExportPaper.value}`))
+      if (!selectedExportPaper.value) {
+        return ElMessage.warning('请选择试卷')
+      }
+      const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+      openInNewTab(url)
       ElMessage.success('导出成功')
     }
 
@@ -1250,12 +1453,14 @@ export default defineComponent({
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion,cancelEdit,saveRow,
-      approveAll, exportTeacher, createPaper, loadExportPapers, exportZip, exportDocx,isEditing,editRow,
+      approveAll, createPaper, loadExportPapers, exportZip, exportDocx,isEditing,editRow,
       loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,onPickBankDocx,
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,
       rejectingAll,page,pageSize,rowRegenLoading,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
-      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,
+      sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources
+
     }
   }
 })
@@ -1340,6 +1545,81 @@ export default defineComponent({
   border: 1px dashed #e5e7eb;
   white-space: pre-wrap;
   color: #374151;
+}
+
+.q-analysis-text {
+  white-space: pre-wrap;
+  margin-bottom: 0.5rem;
+}
+
+.analysis-sources {
+  margin-top: 0.25rem;
+}
+
+.analysis-sources summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.src-loading,
+.src-empty,
+.src-error {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.src-error {
+  color: #b91c1c;
+}
+
+.src-group {
+  margin-top: 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  background: #ffffff;
+}
+
+.src-group-body {
+  margin-top: 0.25rem;
+}
+
+.src-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+  background: #f9fafb;
+}
+
+.src-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.src-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.src-passages {
+  margin-top: 4px;
+}
+
+.passage {
+  margin-top: 4px;
+  border-radius: 4px;
+  border: 1px dashed #d1d5db;
+  background: #f3f4f6;
+  padding: 4px 6px;
+}
+
+.passage pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .user-management-card {
   margin-top: 1.5rem;
