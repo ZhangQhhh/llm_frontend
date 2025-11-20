@@ -133,10 +133,13 @@
                   </div>
                   
                   <div class="answer-body">
-                    <div v-if="loading && !answer" class="loading-placeholder">
-                      <el-skeleton :rows="3" animated />
+                    <div v-if="loading && !answer && !thinking" class="loading-placeholder">
+                      <div class="loading-hint">
+                        <div class="spinner-small"></div>
+                        <span>AI正在思考中...</span>
+                      </div>
                     </div>
-                    <div v-else class="markdown-body" v-html="renderMarkdown(answer)"></div>
+                    <div v-else-if="answer" class="markdown-body" v-html="renderMarkdown(answer)"></div>
                   </div>
 
                   <!-- 底部反馈 -->
@@ -247,20 +250,49 @@
                           </el-tooltip>
                           <el-tag v-if="ref.canAnswer" type="success" size="small" effect="dark">引用</el-tag>
                         </div>
+                        <!-- 检索来源标签 -->
+                        <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="ref-sources">
+                          <el-tag
+                            v-for="(source, idx) in ref.retrievalSources"
+                            :key="idx"
+                            size="small"
+                            :type="source === 'vector' ? 'primary' : 'success'"
+                            effect="dark"
+                          >
+                            {{ source === 'vector' ? ' 向量检索' : ' 关键词检索' }}
+                          </el-tag>
+                        </div>
+                        
                         <div class="ref-scores">
-                          <el-tag v-if="ref.initialScore !== undefined" size="small" type="info" effect="plain">
+                          <el-tag v-if="ref.initialScore !== undefined && ref.initialScore !== 0" size="small" type="info" effect="plain">
                             初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
                           </el-tag>
-                          <el-tag v-if="ref.rerankedScore !== undefined" size="small" type="warning" effect="plain">
+                          <el-tag v-if="ref.rerankedScore !== undefined && ref.rerankedScore !== 0" size="small" type="warning" effect="plain">
                             重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
                           </el-tag>
-                          <el-tag v-if="ref.vectorScore !== undefined" size="small" type="info" effect="plain">
+                          <el-tag v-if="ref.vectorScore !== undefined && ref.vectorScore !== 0" size="small" type="info" effect="plain">
                             向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                            <span v-if="ref.vectorRank">(#{{ ref.vectorRank }})</span>
                           </el-tag>
-                          <el-tag v-if="ref.bm25Score !== undefined" size="small" type="info" effect="plain">
+                          <el-tag v-if="ref.bm25Score !== undefined && ref.bm25Score !== 0" size="small" type="success" effect="plain">
                             BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                            <span v-if="ref.bm25Rank">(#{{ ref.bm25Rank }})</span>
                           </el-tag>
                           <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
+                        </div>
+                        
+                        <!-- 匹配关键词 -->
+                        <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="ref-keywords">
+                          <span class="keywords-label">🏷️ 匹配关键词:</span>
+                          <el-tag
+                            v-for="(keyword, idx) in ref.matchedKeywords"
+                            :key="idx"
+                            size="small"
+                            type="warning"
+                            effect="plain"
+                          >
+                            {{ keyword }}
+                          </el-tag>
                         </div>
                         <div class="ref-content-wrapper">
                           <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
@@ -1085,11 +1117,56 @@ export default defineComponent({
   flex: 1;
 }
 
+.loading-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  color: #6b7280;
+  justify-content: center;
+}
+
+.spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ref-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .ref-scores {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.ref-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.keywords-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .ref-content-wrapper {
