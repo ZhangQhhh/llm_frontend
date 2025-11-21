@@ -2,6 +2,7 @@ export const API_BASE_URL = process.env.VUE_APP_API_BASE_URL;
 export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const SHOW_HIDDEN_NODES = process.env.VUE_APP_SHOW_HIDDEN_NODES === 'true';
 export const MCQ_BASE_URL = process.env.VUE_APP_MCQ_BASE_URL;
+export const WRITER_BASE_URL = process.env.VUE_APP_WRITER_URL || LLM_BASE_URL;
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
