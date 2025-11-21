@@ -667,6 +667,8 @@ interface Question {
   answer: string
   analysis: string
   status: string
+  deleted_at?: string
+  deleted_by?: string
 }
 
 interface Paper {
