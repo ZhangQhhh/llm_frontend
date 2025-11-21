@@ -1,4 +1,10 @@
 import * as XLSX from "xlsx";
+import * as cptable from "codepage";
+
+// 设置 codepage 表，使 SheetJS 能够正确处理中文编码
+if (typeof (XLSX as any).set_cptable === "function") {
+  (XLSX as any).set_cptable(cptable);
+}
 
 /**
  * 把任意"看起来像 Excel"的文件转成 xlsx Blob
@@ -10,30 +16,39 @@ export async function convertExcelToXlsx(file: File): Promise<Blob> {
 
   // 1) 先按二进制尝试读取：支持 xls(biff2/3/4/5/8)、xlsx、xlsb、ods 等
   try {
+    // 尝试使用 codepage 936 (GBK) 读取中文
     workbook = XLSX.read(ab, {
       type: "array",
       cellDates: true,
       dense: false,
-      WTF: false, // 不要抛太多内部异常
-      // 让 SheetJS 自动检测编码，它会根据文件内容选择合适的 codepage
-      // 对于中文 xls 文件，通常会自动使用 codepage 936 (GBK)
+      WTF: false,
+      codepage: 936, // 明确指定 GBK 编码用于中文
     });
   } catch (err1) {
-    // 2) 如果二进制失败，再按文本兜底（很多系统把 CSV/HTML 改名成 .xls）
+    // 如果 codepage 936 失败，尝试不指定 codepage（自动检测）
     try {
-      const text = new TextDecoder("utf-8").decode(ab);
-      workbook = XLSX.read(text, {
-        type: "string", // 让 SheetJS 走 CSV/HTML 等文本解析
+      workbook = XLSX.read(ab, {
+        type: "array",
         cellDates: true,
-        raw: false,
+        dense: false,
+        WTF: false,
       });
     } catch (err2) {
-      // 两条路都不行，说明文件确实不是可识别的表格
-      throw new Error(
-        `无法识别该Excel文件。可能是损坏文件或非标准导出。\n二进制解析错误: ${String(
-          err1
-        )}\n文本兜底错误: ${String(err2)}`
-      );
+      // 2) 如果二进制都失败，再按文本兜底（很多系统把 CSV/HTML 改名成 .xls）
+      try {
+        const text = new TextDecoder("utf-8").decode(ab);
+        workbook = XLSX.read(text, {
+          type: "string", // 让 SheetJS 走 CSV/HTML 等文本解析
+          cellDates: true,
+        });
+      } catch (err3) {
+        // 三条路都不行，说明文件确实不是可识别的表格
+        throw new Error(
+          `无法识别该Excel文件。可能是损坏文件或非标准导出。\n二进制解析错误: ${String(
+            err1
+          )}\n自动检测错误: ${String(err2)}\n文本兜底错误: ${String(err3)}`
+        );
+      }
     }
   }
 

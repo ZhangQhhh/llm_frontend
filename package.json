@@ -14,6 +14,7 @@
     "@types/three": "^0.181.0",
     "axios": "^1.12.2",
     "bootstrap": "^5.3.8",
+    "codepage": "^1.15.0",
     "core-js": "^3.8.3",
     "dompurify": "^3.3.0",
     "element-plus": "^2.11.5",

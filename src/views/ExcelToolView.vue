@@ -1,196 +1,180 @@
 <template>
-  <div class="excel-tool-container">
-    <div class="excel-tool-content">
-      <!-- 标题区域 -->
-      <div class="header-section">
-        <h1 class="page-title">
-          <el-icon class="title-icon"><Document /></el-icon>
-          Excel 格式转换工具
-        </h1>
-        <p class="page-description">
-          支持将各种 Excel 格式（包括早期 BIFF2/3/4/5 的 .xls、.xlsx、.xlsb、.csv、.ods 等）转换为标准的 .xlsx 格式
-        </p>
-      </div>
-
-      <!-- 上传区域 -->
-      <div class="upload-section">
-        <el-card shadow="hover" class="upload-card">
-          <template #header>
-            <div class="card-header">
-              <el-icon><Upload /></el-icon>
-              <span>选择文件</span>
-            </div>
-          </template>
-
-          <div class="upload-area">
-            <el-upload
-              ref="uploadRef"
-              class="upload-demo"
-              drag
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="handleFileChange"
-              accept=".xls,.xlsx,.xlsb,.csv,.tsv,.ods,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            >
-              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">
-                将文件拖到此处，或<em>点击选择</em>
-              </div>
-              <template #tip>
-                <div class="el-upload__tip">
-                  支持 .xls / .xlsx / .xlsb / .csv / .tsv / .ods 等格式
-                </div>
-              </template>
-            </el-upload>
-
-            <!-- 文件信息显示 -->
-            <div v-if="selectedFile" class="file-info">
-              <el-alert
-                :title="`已选择: ${selectedFile.name}`"
-                type="info"
-                :closable="false"
-                show-icon
+  <div class="excel-tool-page">
+    <el-container class="main-container">
+      <el-main>
+        <div class="content-wrapper">
+          <!-- 主上传卡片 -->
+          <el-card class="upload-card glass-effect" shadow="hover">
+            <div class="upload-container">
+              <!-- 拖拽上传区 -->
+              <el-upload
+                ref="uploadRef"
+                class="upload-dragger-area"
+                drag
+                :auto-upload="false"
+                :show-file-list="false"
+                :on-change="handleFileChange"
+                accept=".xls,.xlsx,.xlsb,.csv,.tsv,.ods,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               >
-                <template #default>
-                  <div class="file-details">
-                    <span>大小: {{ formatFileSize(selectedFile.size) }}</span>
-                    <span>类型: {{ selectedFile.type || '未知' }}</span>
+                <div class="upload-content">
+                  <el-icon class="upload-icon" :size="80">
+                    <UploadFilled />
+                  </el-icon>
+                  <div class="upload-text">
+                    <p class="primary-text">拖拽文件到此处，或点击选择</p>
+                    <p class="secondary-text">支持 .xls / .xlsx / .xlsb / .csv / .tsv / .ods 等格式</p>
+                  </div>
+                </div>
+              </el-upload>
+
+              <!-- 文件信息展示 -->
+              <transition name="el-zoom-in-top">
+                <div v-if="selectedFile" class="file-info-section">
+                  <el-card class="file-info-card" shadow="never">
+                    <div class="file-info-header">
+                      <el-icon :size="24" color="#67c23a"><DocumentChecked /></el-icon>
+                      <span class="file-name">{{ selectedFile.name }}</span>
+                    </div>
+                    <div class="file-details">
+                      <div class="detail-item">
+                        <el-icon><Files /></el-icon>
+                        <span>大小: {{ formatFileSize(selectedFile.size) }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <el-icon><Document /></el-icon>
+                        <span>类型: {{ selectedFile.type || '未知' }}</span>
+                      </div>
+                    </div>
+                  </el-card>
+
+                  <!-- 编码提示 -->
+                  <transition name="el-fade-in">
+                    <el-alert
+                      v-if="selectedFile.name.toLowerCase().endsWith('.xls')"
+                      title="中文编码优化"
+                      type="success"
+                      :closable="false"
+                      show-icon
+                      class="encoding-alert"
+                    >
+                      <template #default>
+                        <div class="alert-content">
+                          已自动配置 GBK 编码支持，确保中文正确显示
+                        </div>
+                      </template>
+                    </el-alert>
+                  </transition>
+
+                  <!-- 操作按钮 -->
+                  <div class="action-buttons">
+                    <el-button
+                      type="primary"
+                      size="large"
+                      :loading="loading"
+                      :disabled="loading"
+                      @click="handleConvert"
+                      round
+                      class="convert-btn"
+                    >
+                      <el-icon v-if="!loading" class="btn-icon"><RefreshRight /></el-icon>
+                      {{ loading ? '转换中...' : '开始转换' }}
+                    </el-button>
+                    <el-button
+                      size="large"
+                      :disabled="loading"
+                      @click="handleClear"
+                      round
+                    >
+                      <el-icon><Close /></el-icon>
+                      清除文件
+                    </el-button>
+                  </div>
+                </div>
+              </transition>
+
+              <!-- 转换进度 -->
+              <transition name="el-zoom-in-top">
+                <div v-if="loading" class="progress-section">
+                  <el-progress
+                    :percentage="100"
+                    :indeterminate="true"
+                    :stroke-width="8"
+                    striped
+                    striped-flow
+                  />
+                  <p class="progress-text">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                    正在转换文件，请稍候...
+                  </p>
+                </div>
+              </transition>
+
+              <!-- 状态消息 -->
+              <transition name="el-zoom-in-top">
+                <div v-if="message" class="message-section">
+                  <el-alert
+                    :title="message"
+                    :type="messageType"
+                    :closable="true"
+                    show-icon
+                    @close="message = ''"
+                  />
+                </div>
+              </transition>
+            </div>
+          </el-card>
+
+          <!-- 使用步骤 -->
+          <el-card class="steps-card" shadow="hover">
+            <el-collapse v-model="activeSteps" class="steps-collapse">
+              <el-collapse-item name="1">
+                <template #title>
+                  <div class="card-header">
+                    <el-icon><QuestionFilled /></el-icon>
+                    <span>使用步骤</span>
                   </div>
                 </template>
-              </el-alert>
-              
-              <!-- 编码提示 -->
-              <el-alert
-                v-if="selectedFile.name.toLowerCase().endsWith('.xls')"
-                title="中文编码提示"
-                type="warning"
-                :closable="true"
-                show-icon
-                style="margin-top: 10px;"
-              >
-                <template #default>
-                  <div style="font-size: 13px; line-height: 1.6;">
-                    老旧的 .xls 文件已自动配置为 GBK 编码（中文）。<br>
-                    如果转换后仍出现乱码，可能是文件本身编码异常，建议：<br>
-                    1. 用 Excel 打开原文件，另存为新的 .xlsx 格式<br>
-                    2. 或者在 Excel 中另存为 CSV（UTF-8）后再转换
-                  </div>
-                </template>
-              </el-alert>
-            </div>
-
-            <!-- 转换按钮 -->
-            <div v-if="selectedFile" class="action-buttons">
-              <el-button
-                type="primary"
-                size="large"
-                :loading="loading"
-                :disabled="loading"
-                @click="handleConvert"
-              >
-                <el-icon v-if="!loading"><RefreshRight /></el-icon>
-                {{ loading ? '转换中...' : '开始转换' }}
-              </el-button>
-              <el-button
-                size="large"
-                :disabled="loading"
-                @click="handleClear"
-              >
-                <el-icon><Close /></el-icon>
-                清除
-              </el-button>
-            </div>
-
-            <!-- 状态消息 -->
-            <div v-if="message" class="message-area">
-              <el-alert
-                :title="message"
-                :type="messageType"
-                :closable="true"
-                show-icon
-                @close="message = ''"
-              />
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <!-- 功能说明 -->
-      <div class="info-section">
-        <el-row :gutter="20">
-          <el-col :xs="24" :sm="12" :md="8">
-            <el-card shadow="hover" class="info-card">
-              <template #header>
-                <div class="info-card-header">
-                  <el-icon color="#409eff"><Check /></el-icon>
-                  <span>支持格式</span>
-                </div>
-              </template>
-              <ul class="info-list">
-                <li>早期 BIFF2/3/4/5/8 格式的 .xls</li>
-                <li>现代 .xlsx / .xlsb 格式</li>
-                <li>OpenDocument .ods 格式</li>
-                <li>CSV / TSV 文本格式</li>
-                <li>HTML 表格格式</li>
-              </ul>
-            </el-card>
-          </el-col>
-
-          <el-col :xs="24" :sm="12" :md="8">
-            <el-card shadow="hover" class="info-card">
-              <template #header>
-                <div class="info-card-header">
-                  <el-icon color="#67c23a"><Lightning /></el-icon>
-                  <span>转换特点</span>
-                </div>
-              </template>
-              <ul class="info-list">
-                <li>纯前端转换，数据不上传服务器</li>
-                <li>支持大多数 Excel 相关格式</li>
-                <li>自动处理编码问题</li>
-                <li>智能文本兜底机制</li>
-                <li>输出标准 .xlsx 格式</li>
-              </ul>
-            </el-card>
-          </el-col>
-
-          <el-col :xs="24" :sm="12" :md="8">
-            <el-card shadow="hover" class="info-card">
-              <template #header>
-                <div class="info-card-header">
-                  <el-icon color="#e6a23c"><Warning /></el-icon>
-                  <span>注意事项</span>
-                </div>
-              </template>
-              <ul class="info-list">
-                <li>文件损坏或截断可能导致失败</li>
-                <li>加密/密码保护的文件无法转换</li>
-                <li>超大文件（>100MB）可能卡顿</li>
-                <li>伪装格式文件可能无法识别</li>
-                <li>建议文件大小在 50MB 以内</li>
-              </ul>
-            </el-card>
-          </el-col>
-        </el-row>
-      </div>
-
-      <!-- 使用说明 -->
-      <div class="usage-section">
-        <el-card shadow="never">
-          <template #header>
-            <div class="card-header">
-              <el-icon><QuestionFilled /></el-icon>
-              <span>使用说明</span>
-            </div>
-          </template>
-          <el-steps :active="currentStep" finish-status="success" align-center>
-            <el-step title="选择文件" description="点击或拖拽上传 Excel 文件" />
-            <el-step title="开始转换" description="点击转换按钮进行格式转换" />
-            <el-step title="自动下载" description="转换完成后自动下载 .xlsx 文件" />
-          </el-steps>
-        </el-card>
-      </div>
-    </div>
+                <el-steps :active="currentStep" finish-status="success" align-center>
+                  <el-step>
+                    <template #icon>
+                      <el-icon :size="24"><Upload /></el-icon>
+                    </template>
+                    <template #title>
+                      <span class="step-title">选择文件</span>
+                    </template>
+                    <template #description>
+                      <span class="step-desc">拖拽或点击上传 Excel 文件</span>
+                    </template>
+                  </el-step>
+                  <el-step>
+                    <template #icon>
+                      <el-icon :size="24"><RefreshRight /></el-icon>
+                    </template>
+                    <template #title>
+                      <span class="step-title">开始转换</span>
+                    </template>
+                    <template #description>
+                      <span class="step-desc">点击转换按钮进行格式转换</span>
+                    </template>
+                  </el-step>
+                  <el-step>
+                    <template #icon>
+                      <el-icon :size="24"><Download /></el-icon>
+                    </template>
+                    <template #title>
+                      <span class="step-title">自动下载</span>
+                    </template>
+                    <template #description>
+                      <span class="step-desc">转换完成后自动下载文件</span>
+                    </template>
+                  </el-step>
+                </el-steps>
+              </el-collapse-item>
+            </el-collapse>
+          </el-card>
+        </div>
+      </el-main>
+    </el-container>
   </div>
 </template>
 
@@ -203,10 +187,11 @@ import {
   UploadFilled,
   RefreshRight,
   Close,
-  Check,
-  Lightning,
-  Warning,
   QuestionFilled,
+  Loading,
+  DocumentChecked,
+  Files,
+  Download,
 } from "@element-plus/icons-vue";
 import { convertExcelToXlsx, downloadBlob } from "@/utils/excel-convert";
 import type { UploadFile } from "element-plus";
@@ -216,6 +201,7 @@ const message = ref("");
 const messageType = ref<"success" | "error" | "warning" | "info">("info");
 const selectedFile = ref<File | null>(null);
 const uploadRef = ref();
+const activeSteps = ref(['1']); // 默认展开
 
 const currentStep = computed(() => {
   if (!selectedFile.value) return 0;
@@ -224,17 +210,18 @@ const currentStep = computed(() => {
   return 1;
 });
 
-// 文件选择处理
 const handleFileChange = (uploadFile: UploadFile) => {
   message.value = "";
   selectedFile.value = uploadFile.raw || null;
   
   if (selectedFile.value) {
-    ElMessage.info(`已选择文件: ${selectedFile.value.name}`);
+    ElMessage.success({
+      message: `已选择文件: ${selectedFile.value.name}`,
+      duration: 2000,
+    });
   }
 };
 
-// 格式化文件大小
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -243,15 +230,13 @@ const formatFileSize = (bytes: number): string => {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
 };
 
-// 转换处理
 const handleConvert = async () => {
   if (!selectedFile.value) {
     ElMessage.warning("请先选择文件");
     return;
   }
 
-  // 检查文件大小
-  const maxSize = 100 * 1024 * 1024; // 100MB
+  const maxSize = 100 * 1024 * 1024;
   if (selectedFile.value.size > maxSize) {
     ElMessage.warning("文件过大（超过 100MB），可能导致浏览器卡顿");
   }
@@ -261,242 +246,498 @@ const handleConvert = async () => {
 
   try {
     const xlsxBlob = await convertExcelToXlsx(selectedFile.value);
-
-    // 生成新文件名
     const originalName = selectedFile.value.name;
-    const newName = originalName.replace(
-      /\.(xls|xlsx|xlsb|csv|ods|tsv)$/i,
-      ""
-    ) + ".xlsx";
+    const newName = originalName.replace(/\.(xls|xlsx|xlsb|csv|ods|tsv)$/i, "") + ".xlsx";
 
-    // 下载文件
     downloadBlob(xlsxBlob, newName);
 
     message.value = `转换成功！文件已下载: ${newName}`;
     messageType.value = "success";
-    ElMessage.success("转换成功！");
+    ElMessage.success({
+      message: "转换成功！文件已自动下载",
+      duration: 3000,
+    });
   } catch (err: any) {
     const errorMsg = err?.message || "转换失败，请检查文件格式";
     message.value = errorMsg;
     messageType.value = "error";
-    ElMessage.error(errorMsg);
+    ElMessage.error({
+      message: errorMsg,
+      duration: 5000,
+    });
     console.error("Excel conversion error:", err);
   } finally {
     loading.value = false;
   }
 };
 
-// 清除选择
 const handleClear = () => {
   selectedFile.value = null;
   message.value = "";
   if (uploadRef.value) {
     uploadRef.value.clearFiles();
   }
+  ElMessage.info("已清除文件");
 };
 </script>
 
 <style scoped>
-.excel-tool-container {
-  min-height: calc(100vh - 60px);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+.excel-tool-page {
+  min-height: 100vh;
+  background: url('@/assets/allPic/public/girl.jpg') no-repeat 0% 30%;
+  background-size: cover;
+  background-attachment: fixed;
+  position: relative;
 }
 
-.excel-tool-content {
-  max-width: 1200px;
-  margin: 0 auto;
+.excel-tool-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(240, 248, 255, 0.25) 100%);
+  z-index: 0;
 }
 
-/* 标题区域 */
-.header-section {
-  text-align: center;
-  margin-bottom: 3rem;
-  color: white;
+.main-container {
+  position: relative;
+  z-index: 1;
 }
 
-.page-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
+.main-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+.page-header {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+  padding: 2rem 3rem;
+  height: auto !important;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.logo-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  width: 70px;
+  height: 70px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  padding: 5px;
 }
 
-.title-icon {
-  font-size: 2.5rem;
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
-.page-description {
-  font-size: 1.1rem;
-  opacity: 0.95;
-  line-height: 1.6;
+.brand-text h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* 上传区域 */
-.upload-section {
-  margin-bottom: 2rem;
+.brand-text p {
+  font-size: 0.95rem;
+  color: #7f8c8d;
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+:deep(.el-main) {
+  padding: 2rem 3rem 3rem;
+  display: flex;
+  align-items: flex-end;
+  min-height: 100vh;
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 2rem;
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .upload-card {
-  border-radius: 12px;
+  margin-bottom: 2rem;
+  border-radius: 20px;
+  overflow: hidden;
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
+.upload-container {
+  padding: 2rem;
 }
 
-.upload-area {
-  padding: 1rem;
-}
-
-.upload-demo {
+.upload-dragger-area {
   width: 100%;
 }
 
 :deep(.el-upload-dragger) {
-  padding: 3rem 2rem;
-  border-radius: 8px;
-  transition: all 0.3s;
+  width: 100%;
+  height: 280px;
+  border: 3px dashed #d9d9d9;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 :deep(.el-upload-dragger:hover) {
   border-color: #409eff;
-  background-color: #f0f9ff;
+  background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(64, 158, 255, 0.2);
 }
 
-.el-icon--upload {
-  font-size: 4rem;
+.upload-content {
+  text-align: center;
+}
+
+.upload-icon {
   color: #409eff;
+  margin-bottom: 1.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.upload-text .primary-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 0.75rem 0;
+}
+
+.upload-text .secondary-text {
+  font-size: 0.95rem;
+  color: #7f8c8d;
+  margin: 0;
+}
+
+.file-info-section {
+  margin-top: 2rem;
+  animation: slideInUp 0.4s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.file-info-card {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: none;
+  border-radius: 12px;
   margin-bottom: 1rem;
 }
 
-.el-upload__text {
-  font-size: 1rem;
-  color: #606266;
+.file-info-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
-.el-upload__text em {
-  color: #409eff;
-  font-style: normal;
-}
-
-.el-upload__tip {
-  margin-top: 1rem;
-  font-size: 0.9rem;
-  color: #909399;
-}
-
-/* 文件信息 */
-.file-info {
-  margin-top: 1.5rem;
+.file-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  word-break: break-all;
 }
 
 .file-details {
   display: flex;
   gap: 2rem;
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
+  flex-wrap: wrap;
 }
 
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-
-.action-buttons .el-button {
-  min-width: 140px;
-}
-
-/* 消息区域 */
-.message-area {
-  margin-top: 1.5rem;
-}
-
-/* 信息卡片 */
-.info-section {
-  margin-bottom: 2rem;
-}
-
-.info-card {
-  height: 100%;
-  border-radius: 8px;
-  transition: transform 0.3s;
-}
-
-.info-card:hover {
-  transform: translateY(-4px);
-}
-
-.info-card-header {
+.detail-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 600;
+  color: #5f6368;
+  font-size: 0.95rem;
+  position: relative;
+  padding-left: 1.5rem;
+  line-height: 1.6;
 }
 
-.info-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.encoding-alert {
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
 }
 
-.info-list li {
-  padding: 0.5rem 0;
-  color: #606266;
+.alert-content {
   font-size: 0.95rem;
   line-height: 1.6;
-  position: relative;
-  padding-left: 1.2rem;
 }
 
-.info-list li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.convert-btn {
+  min-width: 160px;
+  height: 48px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s;
+}
+
+.convert-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.btn-icon {
+  margin-right: 0.5rem;
+}
+
+.progress-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(64, 158, 255, 0.05);
+  border-radius: 12px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.progress-text {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 1rem;
   color: #409eff;
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
-/* 使用说明 */
-.usage-section {
+.message-section {
+  margin-top: 1.5rem;
+}
+
+.features-section {
   margin-bottom: 2rem;
 }
 
-:deep(.el-step__title) {
-  font-size: 1rem;
+.feature-card {
+  height: 100%;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
-:deep(.el-step__description) {
+.feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.feature-content {
+  text-align: center;
+  padding: 1rem;
+}
+
+.feature-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.feature-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1.5rem 0;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.feature-list li {
+  padding: 0.6rem 0.8rem;
+  color: #374151;
+  font-size: 0.95rem;
+  position: relative;
+  padding-left: 2rem;
+  line-height: 1.8;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.85);
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+}
+
+.feature-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #67c23a;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.steps-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95) !important;
+}
+
+.steps-collapse {
+  border: none;
+}
+
+:deep(.el-collapse-item__header) {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+:deep(.el-collapse-item__wrap) {
+  background: transparent;
+  border: none;
+}
+
+:deep(.el-collapse-item__content) {
+  padding: 1rem 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  margin: -1rem -1rem 1rem -1rem;
+}
+
+:deep(.el-steps) {
+  padding: 2rem 1rem;
+}
+
+.step-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.step-desc {
   font-size: 0.9rem;
+  color: #374151;
+  font-weight: 500;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
-  .excel-tool-container {
+  .page-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .brand {
+    gap: 1rem;
+  }
+
+  .logo-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .brand-text h1 {
+    font-size: 1.5rem;
+  }
+
+  .brand-text p {
+    font-size: 0.85rem;
+  }
+
+  :deep(.el-main) {
     padding: 1rem;
   }
 
-  .page-title {
-    font-size: 1.8rem;
+  .upload-container {
+    padding: 1rem;
   }
 
-  .page-description {
-    font-size: 1rem;
+  :deep(.el-upload-dragger) {
+    height: 220px;
   }
 
-  .file-details {
-    flex-direction: column;
-    gap: 0.5rem;
+  .upload-icon {
+    font-size: 60px !important;
+  }
+
+  .upload-text .primary-text {
+    font-size: 1.1rem;
   }
 
   .action-buttons {
@@ -507,12 +748,17 @@ const handleClear = () => {
     width: 100%;
   }
 
-  .info-section {
+  .file-details {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .features-section .el-col {
     margin-bottom: 1rem;
   }
 
-  .info-section .el-col {
-    margin-bottom: 1rem;
+  :deep(.el-steps) {
+    padding: 1rem 0.5rem;
   }
 }
 </style>
