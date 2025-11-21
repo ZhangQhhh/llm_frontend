@@ -79,6 +79,15 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/excel-tool',
+    name: 'excel-tool',
+    component: () => import('../views/ExcelToolView.vue'),
+    meta: { 
+      requiresAuth: true,
+      title: 'Excel 工具'
+    }
+  },
+  {
     path: '/exam',
     name: 'exam',
     component: () => import('../views/ExamView.vue'),

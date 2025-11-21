@@ -99,7 +99,7 @@
             <div class="answer-section">
               <!-- 思考过程 -->
                 <transition name="el-fade-in">
-                  <div v-if="thinking && thinkingMode" class="thinking-section mb-4">
+                  <div v-if="(loading || thinking) && thinkingMode" class="thinking-section mb-4">
                     <el-collapse v-model="activeThinking">
                       <el-collapse-item name="1">
                         <template #title>
@@ -110,7 +110,11 @@
                           </div>
                         </template>
                         <div class="thinking-content custom-scrollbar">
-                          <div class="thinking-text">{{ thinking }}</div>
+                          <div v-if="!thinking && loading" class="thinking-placeholder">
+                            <div class="spinner-small"></div>
+                            <span>正在深度思考中...</span>
+                          </div>
+                          <div v-else class="thinking-text">{{ thinking }}</div>
                         </div>
                       </el-collapse-item>
                     </el-collapse>
@@ -919,18 +923,66 @@ export default defineComponent({
   margin-right: auto;
 }
 
+.thinking-section :deep(.el-collapse) {
+  border: none;
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+  transition: all 0.3s ease;
+}
+
+.thinking-section :deep(.el-collapse:hover) {
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
+}
+
+.thinking-section :deep(.el-collapse-item__header) {
+  background: transparent;
+  border: none;
+  padding: 1rem 1.5rem;
+  font-size: 15px;
+  height: auto;
+  line-height: 1.5;
+}
+
+.thinking-section :deep(.el-collapse-item__wrap) {
+  background: transparent;
+  border: none;
+}
+
+.thinking-section :deep(.el-collapse-item__content) {
+  padding: 0 1.5rem 1.5rem;
+}
+
 .thinking-header {
   display: flex;
   align-items: center;
   font-weight: 600;
   color: #6366f1;
+  gap: 0.5rem;
+}
+
+.thinking-header .el-icon {
+  font-size: 18px;
 }
 
 .thinking-content {
-  background: #f8fafc;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.thinking-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   padding: 1rem;
-  border: 1px dashed #cbd5e1;
+  color: #6b7280;
+  justify-content: center;
+  font-size: 14px;
 }
 
 .thinking-text {
@@ -938,7 +990,8 @@ export default defineComponent({
   font-size: 14px;
   color: #475569;
   white-space: pre-wrap;
-  line-height: 1.6;
+  line-height: 1.8;
+  min-height: 20px;
 }
 
 .custom-scrollbar {
