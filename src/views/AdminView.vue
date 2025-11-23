@@ -93,59 +93,113 @@
 
         <!-- ==================== 题库管理（MCQ 对接） ==================== -->
         <el-tab-pane label="题库管理" name="questions">
-          <div class="tab-content">
-            <!-- 操作区一：上传/导出导入 -->
-            <div class="action-bar">
-              <el-upload
-                ref="uploadRef"
-                :auto-upload="false"
-                :limit="1"
-                accept=".docx,.txt"
-                :on-change="handleFileChange"
-                style="display: inline-block"
-              >
-                <el-button>选择文件</el-button>
-              </el-upload>
-              <el-button type="primary" @click="uploadQuestions" :loading="uploading">上传并解析 + 保存</el-button>
-              <el-button @click="downloadTemplate">下载模板</el-button>
+          <div class="tab-content mcq-tab-content">
 
-              <el-button @click="exportBankDocx" :loading="exportingBank">导出题库DOCX</el-button>
-              <input ref="bankImportRef" type="file" accept=".docx" style="display:none" @change="onPickBankDocx" />
-              <el-button @click="triggerPickBankDocx" :loading="importingBank">导入题库DOCX（覆盖）</el-button>
+            <!-- 顶部工具栏 -->
+            <div class="mcq-toolbar">
+              <div class="toolbar-section">
+                <div class="section-title">
+                  <el-icon class="title-icon"><Document /></el-icon>
+                  <span>文件操作</span>
+                </div>
+                <div class="button-group">
+                  <el-upload
+                    ref="uploadRef"
+                    :auto-upload="false"
+                    :limit="1"
+                    accept=".docx,.txt"
+                    :on-change="handleFileChange"
+                    style="display: inline-block"
+                  >
+                    <el-button :icon="Upload" size="default">选择文件</el-button>
+                  </el-upload>
+                  <el-button type="primary" @click="uploadQuestions" :loading="uploading" :icon="Upload" size="default">
+                    上传解析
+                  </el-button>
+                  <el-button @click="downloadTemplate" :icon="Download" size="default">下载导入模板</el-button>
+                  <el-divider direction="vertical" />
+                  <el-button @click="exportBankDocx" :loading="exportingBank" :icon="Download" size="default">
+                    导出题库
+                  </el-button>
+                  <input ref="bankImportRef" type="file" accept=".docx" style="display:none" @change="onPickBankDocx" />
+                  <el-button @click="triggerPickBankDocx" :loading="importingBank" :icon="Upload" size="default">
+                    导入题库
+                  </el-button>
+                </div>
+                <div v-if="uploadMessage || counterMsg" class="toolbar-message">
+                  <el-icon class="message-icon"><InfoFilled /></el-icon>
+                  <span v-if="uploadMessage">{{ uploadMessage }}</span>
+                  <span v-if="counterMsg">{{ counterMsg }}</span>
+                </div>
+              </div>
 
-              <span class="status-msg" v-if="uploadMessage">{{ uploadMessage }}</span>
-              <span class="status-msg" v-if="counterMsg">{{ counterMsg }}</span>
-            </div>
+              <div class="toolbar-section">
+                <div class="section-title">
+                  <el-icon class="title-icon"><MagicStick /></el-icon>
+                  <span>AI 解析</span>
+                </div>
+                <div class="button-group">
+                  <el-button type="success" @click="generateExplanations" :loading="generating" :icon="MagicStick" size="default">
+                    一键解析
+                  </el-button>
+                  <el-button @click="explainBatchAsync" :loading="asyncExplaining" :icon="Loading" size="default">
+                    异步批量
+                  </el-button>
+                  <el-divider direction="vertical" />
+                  <el-select v-model="llmModelId" placeholder="AI模型" size="default" style="width:180px">
+                    <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+                  </el-select>
+                  <el-input-number v-model="topN" :min="1" :step="1" size="default" style="width:90px" controls-position="right" />
+                  <el-checkbox v-model="thinking" size="default">思考模式</el-checkbox>
+                  <el-checkbox v-model="insertBlock" size="default">精准检索</el-checkbox>
+                </div>
+                <div v-if="generateMessage || asyncMsg" class="toolbar-message">
+                  <el-icon class="message-icon"><InfoFilled /></el-icon>
+                  <span v-if="generateMessage">{{ generateMessage }}</span>
+                  <span v-if="asyncMsg">{{ asyncMsg }}</span>
+                </div>
+              </div>
 
-            <!-- 操作区二：生成解析 / 模型参数 / 批量 -->
-            <div class="action-bar" style="margin-top: 8px">
-              <el-button type="success" @click="generateExplanations" :loading="generating">一键解析（草稿）</el-button>
-              <span class="status-msg" v-if="generateMessage">{{ generateMessage }}</span>
-
-              <el-button @click="explainBatchAsync" :loading="asyncExplaining">异步批量生成解析</el-button>
-              <span class="status-msg" v-if="asyncMsg">{{ asyncMsg }}</span>
-
-              <el-select v-model="llmModelId" placeholder="模型ID" style="width:220px;margin-left:auto">
-                <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
-              </el-select>
-              <el-input-number v-model="topN" :min="1" :step="1" style="width:120px" />
-              <el-checkbox v-model="thinking">思考模式</el-checkbox>
-              <el-checkbox v-model="insertBlock">InsertBlock</el-checkbox>
-            </div>
-
-            <!-- 操作区三：列表控制 -->
-            <div class="filter-bar" style="margin:10px 0">
-              <el-select v-model="statusFilter" placeholder="筛选" style="width: 120px" @change="loadQuestions">
-                <el-option label="全部" value="all" />
-                <el-option label="无解析" value="none" />
-                <el-option label="草稿" value="draft" />
-                <el-option label="已通过" value="approved" />
-                <el-option label="已驳回" value="rejected" />
-                <el-option label="异常" value="abnormal" />
-              </el-select>
-              <el-button @click="loadQuestions" :loading="loadingQuestions">刷新</el-button>
-              <el-button type="success" @click="approveAll" :loading="approvingAll">一键通过</el-button>
-              <el-button type="danger" @click="rejectAll" :loading="rejectingAll">一键驳回</el-button>
+              <div class="toolbar-section filter-section">
+                <div class="section-title">
+                  <el-icon class="title-icon"><Filter /></el-icon>
+                  <span>筛选与操作</span>
+                </div>
+                <div class="filter-controls">
+                  <div class="filter-left">
+                    <el-select v-model="statusFilter" placeholder="状态" size="default" style="width: 130px" @change="loadQuestions">
+                      <el-option label="全部" value="all" />
+                      <el-option label="无解析" value="none" />
+                      <el-option label="草稿" value="draft" />
+                      <el-option label="已通过" value="approved" />
+                      <el-option label="已驳回" value="rejected" />
+                      <el-option label="异常" value="abnormal" />
+                    </el-select>
+                    <el-button @click="loadQuestions" :loading="loadingQuestions" :icon="Refresh" size="default">刷新</el-button>
+                  </div>
+                  <div class="filter-right">
+                    <el-checkbox v-model="selectAll" @change="toggleSelectAll" style="margin-right: 8px;">
+                      全选
+                    </el-checkbox>
+                    <el-button
+                      type="danger"
+                      plain
+                      @click="batchDelete"
+                      :disabled="selectedQuestions.length === 0"
+                      size="default"
+                    >
+                      批量删除 ({{ selectedQuestions.length }})
+                    </el-button>
+                    <el-divider direction="vertical" />
+                    <el-button type="success" @click="approveAll" :loading="approvingAll" :icon="Check" size="default">
+                      批量通过
+                    </el-button>
+                    <el-button type="danger" @click="rejectAll" :loading="rejectingAll" :icon="Close" size="default">
+                      批量驳回
+                    </el-button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- 列表 -->
@@ -156,7 +210,10 @@
             <div v-else class="questions-list">
               <el-card v-for="(q, idx) in pagedQuestions" :key="q.qid" class="question-card" shadow="hover">
                 <div class="q-header">
-                  <span><strong>{{ (idx + 1) + (page-1)*pageSize }}.</strong> {{ q.stem }}</span>
+                  <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                    <el-checkbox v-model="selectedQuestions" :value="q.qid" />
+                    <span><strong>{{ (idx + 1) + (page-1)*pageSize }}.</strong> {{ q.stem }}</span>
+                  </div>
                   <el-tag :type="getStatusTagType(q.status)" size="small">{{ getStatusText(q.status) }}</el-tag>
                 </div>
                 <div class="q-options">
@@ -216,8 +273,18 @@
                   >
                     驳回
                   </el-button>
-                </div>
 
+                  <!-- 删除按钮 -->
+                  <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    @click="deleteQuestion(q.qid)"
+                    :loading="deletingQuestion[q.qid]"
+                  >
+                    删除
+                  </el-button>
+                </div>
 
                 <!-- 行内编辑区 -->
                 <div v-if="isEditing(q.qid)" class="edit-grid">
@@ -272,7 +339,7 @@
 
                 <div v-if="showingAnalysis[q.qid]" class="q-analysis">
                   <div class="q-analysis-text">
-                    {{ q.analysis || '暂无解析' }}
+                    {{ processAnalysisText(q.analysis) }}
                   </div>
 
                   <!-- 参考资料折叠块（结构参考 qa_public.html） -->
@@ -370,6 +437,94 @@
           </div>
         </el-tab-pane>
 
+        <!-- 回收站 -->
+        <el-tab-pane label="回收站" name="recycle">
+          <div class="tab-content">
+            <!-- 工具栏 -->
+            <div class="action-bar">
+              <el-button @click="loadDeletedQuestions" :loading="loadingDeleted" :icon="Refresh">
+                刷新
+              </el-button>
+              <el-button
+                type="success"
+                @click="batchRestore"
+                :disabled="selectedDeleted.length === 0"
+              >
+                批量恢复 ({{ selectedDeleted.length }})
+              </el-button>
+              <el-button
+                type="danger"
+                plain
+                @click="batchPermanentDelete"
+                :disabled="selectedDeleted.length === 0"
+              >
+                批量永久删除 ({{ selectedDeleted.length }})
+              </el-button>
+              <el-divider direction="vertical" />
+              <el-button
+                type="danger"
+                @click="clearRecycleBin"
+              >
+                清空回收站（30天前）
+              </el-button>
+              <span class="status-msg">{{ recycleMessage }}</span>
+            </div>
+
+            <!-- 回收站列表 -->
+            <div v-if="deletedQuestions.length === 0" style="text-align: center; padding: 40px; color: #999;">
+              回收站为空
+            </div>
+            <div v-else class="questions-list">
+              <el-card
+                v-for="q in deletedQuestions"
+                :key="q.qid"
+                class="question-card"
+              >
+                <div class="q-header">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <el-checkbox
+                      v-model="selectedDeleted"
+                      :value="q.qid"
+                    />
+                  </div>
+                </div>
+
+                <div style="margin: 10px 0;">
+                  <div><strong>题目：</strong>{{ q.stem }}</div>
+                  <div class="q-options">
+                    <div v-for="opt in q.options" :key="opt.label">
+                      {{ opt.label }}. {{ opt.text }}
+                    </div>
+                  </div>
+                  <div style="margin-top: 8px; color: #666; font-size: 13px;">
+                    <div><strong>答案：</strong>{{ q.answer }}</div>
+                    <div><strong>删除时间：</strong>{{ q.deleted_at }}</div>
+                    <div><strong>删除人：</strong>{{ q.deleted_by }}</div>
+                  </div>
+                </div>
+
+                <div class="q-actions">
+                  <el-button
+                    size="small"
+                    type="success"
+                    @click="restoreQuestion(q.qid)"
+                    :loading="restoringQuestion[q.qid]"
+                  >
+                    恢复
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    @click="permanentDelete(q.qid)"
+                    :loading="permanentDeleting[q.qid]"
+                  >
+                    永久删除
+                  </el-button>
+                </div>
+              </el-card>
+            </div>
+          </div>
+        </el-tab-pane>
 
         <!-- 试卷管理 -->
         <el-tab-pane label="试卷管理" name="papers">
@@ -500,11 +655,10 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
-import { Refresh, Search } from '@element-plus/icons-vue'
 
 interface Question {
   qid: string
@@ -513,6 +667,8 @@ interface Question {
   answer: string
   analysis: string
   status: string
+  deleted_at?: string
+  deleted_by?: string
 }
 
 interface Paper {
@@ -522,7 +678,8 @@ interface Paper {
 
 export default defineComponent({
   name: 'AdminView',
-  components: { Loading, Search },
+  // eslint-disable-next-line vue/no-unused-components
+  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
@@ -656,17 +813,30 @@ export default defineComponent({
       //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
       { value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
-    const llmModelId = ref('qwen3-32b')
-    const topN = ref(20)
-    const thinking = ref(false)
+    const llmModelId = ref('deepseek')
+    const topN = ref(10)
+    const thinking = ref(true)
     const insertBlock = ref(false)
     const rejectingAll = ref(false)
     const page = ref(1)
     const pageSize = ref(50)
     const rowRegenLoading = reactive<Record<string, boolean>>({})
+    const deletingQuestion = reactive<Record<string, boolean>>({})
     const editingId = ref<string | null>(null)
     const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{} })
     const counterMsg = ref('')
+
+    // 批量选择相关
+    const selectedQuestions = ref<string[]>([])
+    const selectAll = ref(false)
+
+    // 回收站相关
+    const deletedQuestions = ref<Question[]>([])
+    const selectedDeleted = ref<string[]>([])
+    const loadingDeleted = ref(false)
+    const recycleMessage = ref('')
+    const restoringQuestion = reactive<Record<string, boolean>>({})
+    const permanentDeleting = reactive<Record<string, boolean>>({})
 
     const filteredQuestions = computed(() => {
       try {
@@ -708,7 +878,7 @@ export default defineComponent({
     }
 
     const getStatusText = (status: string) => {
-      const map: Record<string, string> = { approved: '已通过', draft: '草稿', abnormal: '异常', rejected: '已驳回' }
+      const map: Record<string, string> = { approved: '已通过', draft: '草稿', abnormal: '异常', rejected: '已驳回', none: '无解析' }
       return map[status] || status
     }
 
@@ -815,8 +985,7 @@ export default defineComponent({
 
         // 3）映射成前端 Question 时，记得带上 answer
         questions.value = bankItems.map((it: any): Question => {
-          const statusRaw = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
-          const status = statusRaw === 'none' ? 'draft' : statusRaw
+          const status = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
@@ -903,39 +1072,108 @@ export default defineComponent({
     const generateExplanations = async () => {
       generating.value = true
       generateMessage.value = '正在生成解析...'
+
       try {
-        const targets = (questions.value || []).filter(q => (q.status || 'none') !== 'approved')
+        const targets = (questions.value || []).filter(
+          q => (q.status || 'none') !== 'approved'
+        )
         if (targets.length === 0) {
           generateMessage.value = '无可解析题目'
           generating.value = false
           return
         }
-        const payload = {
-          items: targets.map(q => ({
-            qid: q.qid,
-            stem: q.stem,
-            options: Object.fromEntries((q.options || []).map((o:any)=>[o.label, o.text]))
-          })),
-          thinking: false
-        }
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/explain`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        })
-        if (!resp?.data?.ok) throw new Error(resp?.data?.msg || '生成失败')
-        const updates = (resp.data.results || []).map((r:any)=>({ id: String(r.qid), explain: r.explain || '' }))
-        if (updates.length) {
-          const up = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updates })
+
+        // 分批大小，可以按需要调大/调小
+        const BATCH_SIZE = 50
+        const allUpdates: any[] = []
+
+        for (let start = 0; start < targets.length; start += BATCH_SIZE) {
+          const batch = targets.slice(start, start + BATCH_SIZE)
+
+          generateMessage.value = `正在生成解析（${start + 1}~${Math.min(
+            start + BATCH_SIZE,
+            targets.length
+          )} / ${targets.length}）...`
+
+          const payload = {
+            items: batch.map(q => ({
+              qid: q.qid,
+              stem: q.stem,
+              options: Object.fromEntries(
+                (q.options || []).map((o: any) => [o.label, o.text])
+              ),
+            })),
+            thinking: false,
+            // 不写也可以，用默认模型；写上更显式
+            // model_id: llmModelId.value,
+            // rerank_top_n: topN.value,
+            // use_insert_block: insertBlock.value,
+          }
+
+          const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
           })
-          if (!up?.data?.ok) throw new Error(up?.data?.msg || '写回失败')
+
+          // 先拿原始文本，再尝试 JSON.parse，这样 HTML 错误页不会触发 "Unexpected token <" 这种糊涂报错
+          const raw = await resp.text()
+          let data: any
+          try {
+            data = JSON.parse(raw)
+          } catch (e: any) {
+            throw new Error(
+              `后端返回的不是 JSON（HTTP ${resp.status}）：${raw.slice(0, 200)}`
+            )
+          }
+
+          if (!data?.ok) {
+            throw new Error(data?.msg || '生成失败')
+          }
+
+          const updates = (data.results || []).map((r: any) => ({
+            id: String(r.qid),
+            explain: r.explain || '',
+          }))
+
+          allUpdates.push(...updates)
         }
-        generateMessage.value = `完成：${updates.length} 题`
+
+        if (!allUpdates.length) {
+          generateMessage.value = '没有生成任何解析'
+          return
+        }
+
+        // 统一写回
+        const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: allUpdates }),
+        })
+
+        const upRaw = await upResp.text()
+        let up: any
+        try {
+          up = JSON.parse(upRaw)
+        } catch (e: any) {
+          throw new Error(
+            `写回解析失败（HTTP ${upResp.status}）：${upRaw.slice(0, 200)}`
+          )
+        }
+
+        if (!up?.ok) {
+          throw new Error(up?.msg || '写回失败')
+        }
+
+        generateMessage.value = `完成：${allUpdates.length} 题`
         ElMessage.success('解析生成完成')
-        loadQuestions()
+        await loadQuestions()
       } catch (error: any) {
         generateMessage.value = '失败：' + (error?.message || error)
         ElMessage.error(generateMessage.value)
-      } finally { generating.value = false }
+      } finally {
+        generating.value = false
+      }
     }
 
     const loadQuestions = async () => {
@@ -949,8 +1187,7 @@ export default defineComponent({
 
         const items = Array.isArray(j.items) ? j.items : []
         questions.value = items.map((it: any): Question => {
-          const statusRaw = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
-          const status = statusRaw === 'none' ? 'draft' : statusRaw
+          const status = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
@@ -978,25 +1215,66 @@ export default defineComponent({
       try {
         const question = (questions.value || []).find(q => q.qid === qid)
         if (!question) return
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: [{ id: qid, status: 'approved', explain: question.analysis || '' }] })
         })
-        if (resp?.data?.ok) { ElMessage.success('已通过'); loadQuestions() }
-        else throw new Error(resp?.data?.msg || '操作失败')
+        const data = await resp.json()
+        if (data?.ok) { ElMessage.success('已通过'); loadQuestions() }
+        else throw new Error(data?.msg || '操作失败')
       } catch (error: any) { ElMessage.error('操作失败：' + (error?.message || error)) }
     }
 
     const rejectQuestion = async (qid: string) => {
       try {
         const { value: reason } = await ElMessageBox.prompt('请输入驳回原因', '驳回', { confirmButtonText: '确定', cancelButtonText: '取消' })
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_reject`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: [qid], reason: (reason || '不符合要求') })
         })
-        if (resp?.data?.ok) { ElMessage.success('已驳回'); loadQuestions() }
-        else throw new Error(resp?.data?.msg || '操作失败')
+        const data = await resp.json()
+        if (data?.ok) { ElMessage.success('已驳回'); loadQuestions() }
+        else throw new Error(data?.msg || '操作失败')
       } catch (error: any) { if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) }
+    }
+
+    const deleteQuestion = async (qid: string) => {
+      try {
+        await ElMessageBox.confirm('确认删除该题目？删除后无法恢复！', '警告', {
+          confirmButtonText: '确定删除',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        deletingQuestion[qid] = true
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: [qid],
+            user: store.state.user.username,
+            role: userRole.value
+          })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success('删除成功')
+          loadQuestions()
+        } else {
+          throw new Error(data?.msg || '删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败：' + (error?.message || error))
+        }
+      } finally {
+        deletingQuestion[qid] = false
+      }
     }
 
     const approveAll = async () => {
@@ -1005,13 +1283,14 @@ export default defineComponent({
         approvingAll.value = true
         const candidates = (filteredQuestions.value || []).filter((it:any) => (it.status || 'none') !== 'approved')
         if (candidates.length === 0) { ElMessage.info('没有可通过的题目'); return }
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, {
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: candidates.map((it:any)=>({ id: it.qid, status: 'approved', explain: it.analysis || '' })) })
         })
-        if (resp?.data?.ok) { ElMessage.success(`已通过 ${resp.data.count || candidates.length} 题`); loadQuestions() }
-        else throw new Error(resp?.data?.msg || '操作失败')
+        const data = await resp.json()
+        if (data?.ok) { ElMessage.success(`已通过 ${data.count || candidates.length} 题`); loadQuestions() }
+        else throw new Error(data?.msg || '操作失败')
       } catch (error: any) {
         if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error))
       } finally { approvingAll.value = false }
@@ -1023,12 +1302,289 @@ export default defineComponent({
       rejectingAll.value = true
       try {
         const payload = { items: candidates.map(it => ({ id: it.qid, status: 'rejected', explain: it.analysis || '' })) }
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-        if (!resp?.data?.ok) throw new Error(resp?.data?.msg || '批量驳回失败')
-        ElMessage.success(`批量驳回 ${resp.data.count||candidates.length} 题`)
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        const data = await resp.json()
+        if (!data?.ok) throw new Error(data?.msg || '批量驳回失败')
+        ElMessage.success(`批量驳回 ${data.count||candidates.length} 题`)
         await loadQuestions()
       } catch (e:any) { ElMessage.error(e?.message || e) }
       finally { rejectingAll.value = false }
+    }
+
+    // ========== 批量选择相关函数 ==========
+    const toggleSelectAll = () => {
+      if (selectAll.value) {
+        // 全选当前页的所有题目
+        selectedQuestions.value = pagedQuestions.value.map(q => q.qid)
+      } else {
+        // 取消全选
+        selectedQuestions.value = []
+      }
+    }
+
+    const batchDelete = async () => {
+      if (selectedQuestions.value.length === 0) return
+
+      try {
+        await ElMessageBox.confirm(
+          `确认删除选中的 ${selectedQuestions.value.length} 个题目？删除后将移到回收站。`,
+          '批量删除',
+          {
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: selectedQuestions.value,
+            user: store.state.user.username,
+            role: userRole.value
+          })
+        })
+
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success(`已删除 ${data.count} 个题目`)
+          selectedQuestions.value = []
+          selectAll.value = false
+          loadQuestions()
+        } else {
+          throw new Error(data?.msg || '批量删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量删除失败：' + (error?.message || error))
+        }
+      }
+    }
+
+    // ========== 回收站相关函数 ==========
+    const loadDeletedQuestions = async () => {
+      loadingDeleted.value = true
+      recycleMessage.value = '加载中...'
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/deleted`, {
+          headers: {
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          }
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          deletedQuestions.value = (data.items || []).map((it: any): Question => ({
+            qid: String(it.id ?? it.qid ?? ''),
+            stem: it.stem || '',
+            options: normalizeOptions(it.options),
+            answer: (it.answer || '').toString().toUpperCase(),
+            analysis: it.explain || '',
+            status: it.status || 'deleted',
+            deleted_at: it.deleted_at || '',
+            deleted_by: it.deleted_by || ''
+          }))
+          recycleMessage.value = `共 ${deletedQuestions.value.length} 个已删除题目`
+        } else {
+          throw new Error(data?.msg || '加载失败')
+        }
+      } catch (error: any) {
+        recycleMessage.value = '加载失败'
+        ElMessage.error('加载回收站失败：' + (error?.message || error))
+      } finally {
+        loadingDeleted.value = false
+      }
+    }
+
+    const restoreQuestion = async (qid: string) => {
+      try {
+        restoringQuestion[qid] = true
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/restore`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: [qid],
+            user: store.state.user.username
+          })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success('恢复成功')
+          loadDeletedQuestions()
+          loadQuestions()
+        } else {
+          throw new Error(data?.msg || '恢复失败')
+        }
+      } catch (error: any) {
+        ElMessage.error('恢复失败：' + (error?.message || error))
+      } finally {
+        restoringQuestion[qid] = false
+      }
+    }
+
+    const batchRestore = async () => {
+      if (selectedDeleted.value.length === 0) return
+      try {
+        await ElMessageBox.confirm(
+          `确认恢复选中的 ${selectedDeleted.value.length} 个题目？`,
+          '批量恢复',
+          { type: 'info' }
+        )
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/restore`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: selectedDeleted.value,
+            user: store.state.user.username
+          })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success(`已恢复 ${data.count} 个题目`)
+          selectedDeleted.value = []
+          loadDeletedQuestions()
+          loadQuestions()
+        } else {
+          throw new Error(data?.msg || '恢复失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量恢复失败：' + (error?.message || error))
+        }
+      }
+    }
+
+    const permanentDelete = async (qid: string) => {
+      try {
+        await ElMessageBox.confirm(
+          '确认永久删除该题目？此操作无法恢复！',
+          '警告',
+          { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error' }
+        )
+        permanentDeleting[qid] = true
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: [qid],
+            user: store.state.user.username,
+            permanent: true  // 关键：设置为永久删除
+          })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success('已永久删除')
+          loadDeletedQuestions()
+        } else {
+          throw new Error(data?.msg || '删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('永久删除失败：' + (error?.message || error))
+        }
+      } finally {
+        permanentDeleting[qid] = false
+      }
+    }
+
+    // ✨ 新增：批量永久删除
+    const batchPermanentDelete = async () => {
+      if (selectedDeleted.value.length === 0) return
+
+      try {
+        await ElMessageBox.confirm(
+          `确认永久删除选中的 ${selectedDeleted.value.length} 个题目？此操作无法恢复！`,
+          '批量永久删除',
+          {
+            confirmButtonText: '确定永久删除',
+            cancelButtonText: '取消',
+            type: 'error',
+            dangerouslyUseHTMLString: true,
+            message: `<p>您即将永久删除 <strong style="color: #f56c6c;">${selectedDeleted.value.length}</strong> 个题目</p><p style="color: #e6a23c;">⚠️ 此操作无法撤销，题目将被彻底删除！</p>`
+          }
+        )
+
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            ids: selectedDeleted.value,
+            user: store.state.user.username,
+            permanent: true  // 关键：设置为永久删除
+          })
+        })
+
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success(`已永久删除 ${data.count} 个题目`)
+          selectedDeleted.value = []
+          loadDeletedQuestions()
+        } else {
+          throw new Error(data?.msg || '批量永久删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量永久删除失败：' + (error?.message || error))
+        }
+      }
+    }
+
+    const clearRecycleBin = async () => {
+      try {
+        await ElMessageBox.confirm(
+          '确认清空回收站？将永久删除30天前的所有题目！',
+          '警告',
+          { confirmButtonText: '确定清空', cancelButtonText: '取消', type: 'error' }
+        )
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/clear_deleted`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': store.state.user.username,
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({
+            user: store.state.user.username,
+            days: 30
+          })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          ElMessage.success(`已清理 ${data.count} 个题目`)
+          loadDeletedQuestions()
+        } else {
+          throw new Error(data?.msg || '清空失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('清空回收站失败：' + (error?.message || error))
+        }
+      }
     }
 
     const exportBankDocx = async () => {
@@ -1104,32 +1660,32 @@ export default defineComponent({
           ],
         }
 
-        const up = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, {
+        const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
+        const up = await upResp.json()
 
-        if (!up?.data?.ok) {
-          throw new Error(up?.data?.msg || '保存失败')
+        if (!up?.ok) {
+          throw new Error(up?.msg || '保存失败')
         }
 
         // 2) 用后端返回的最新记录覆盖当前行，保证和 bank.json 完全一致
-        const updated = (up.data.items && up.data.items[0]) || null
+        const updated = (up.items && up.items[0]) || null
         if (updated) {
           row.stem = updated.stem || ''
           row.options = normalizeOptions(updated.options || {})
           row.answer = (updated.answer || '').toString().toUpperCase()
           row.analysis = updated.explain || ''
-          const statusRaw = updated.status || ((row.analysis || '').trim() ? 'draft' : 'none')
-          row.status = statusRaw === 'none' ? 'draft' : statusRaw
+          row.status = updated.status || ((row.analysis || '').trim() ? 'draft' : 'none')
         } else {
           // 理论上不会走到这里，兜底用前端缓冲区
           row.stem = editBuf.stem
           row.options = normalizeOptions(editBuf.options)
           row.answer = (editBuf.answer || '').toString().toUpperCase()
           row.analysis = editBuf.explain
-          row.status = row.analysis && row.analysis.trim() ? 'draft' : 'none'
+          row.status = (row.analysis && row.analysis.trim()) ? 'draft' : 'none'
         }
 
         ElMessage.success('保存成功')
@@ -1144,17 +1700,30 @@ export default defineComponent({
       try{
         const req:any = {
           items: [{ qid: row.qid, stem: row.stem, options: Object.fromEntries((row.options||[]).map((o:any)=>[o.label,o.text])) }],
-          thinking: thinking.value, model_id: llmModelId.value, rerank_top_n: topN.value, use_insert_block: insertBlock.value
+          thinking: thinking.value,
+          model_id: llmModelId.value,
+          rerank_top_n: topN.value,
+          use_insert_block: insertBlock.value
         }
-        const resp = await fetchWithAuth(`${MCQ_BASE_URL}/explain`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req)})
-        if (!resp?.data?.ok || !Array.isArray(resp.data.results) || !resp.data.results.length) throw new Error(resp?.data?.msg || '解析失败')
-        const r0 = resp.data.results[0]
+        const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(req)
+        })
+        const data = await resp.json()
+        if (!data?.ok || !Array.isArray(data.results) || !data.results.length) {
+          throw new Error(data?.msg || '解析失败')
+        }
+        const r0 = data.results[0]
         const explain = (r0.explain||'').trim()
         const newStatus = r0.answer_mismatch ? 'abnormal' : 'draft'
-        const up = await fetchWithAuth(`${MCQ_BASE_URL}/bank/bulk_update`, {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: [{ id: row.qid, explain, status: newStatus }] })
+        const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ items: [{ id: row.qid, explain, status: newStatus }] })
         })
-        if (!up?.data?.ok) throw new Error(up?.data?.msg || '写回失败')
+        const up = await upResp.json()
+        if (!up?.ok) throw new Error(up?.msg || '写回失败')
         row.analysis = explain; row.status = newStatus
         ElMessage.success('已重生成并保存')
       }catch(e:any){ ElMessage.error(e?.message||e) }
@@ -1170,6 +1739,10 @@ export default defineComponent({
       return (filteredQuestions.value || []).slice(start, start + pageSize.value)
     })
 
+    const processAnalysisText = (text: string | null | undefined): string => {
+      if (!text) return '暂无解析'
+      return text.replace(/<NEWLINE>/g, '\n')
+    }
     const createPaper = async () => {
       // 仍然要求填写标题，和原行为保持一致
       if (!paperTitle.value) return ElMessage.warning('请输入试卷标题')
@@ -1239,22 +1812,42 @@ export default defineComponent({
         loadingExportPapers.value = false
       }
     }
-    const exportZip = () => {
+    const exportZip = async () => {
       if (!selectedExportPaper.value) {
         return ElMessage.warning('请选择试卷')
       }
-      const url = `${MCQ_BASE_URL}/bank/paper_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-      openInNewTab(url)
-      ElMessage.success('导出成功')
+      exportingZip.value = true
+      exportMessage.value = '正在生成ZIP压缩包...'
+      try {
+        const url = `${MCQ_BASE_URL}/grades/export_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        openInNewTab(url)
+        exportMessage.value = '导出成功！'
+        setTimeout(() => { exportMessage.value = '' }, 3000)
+      } catch (error: any) {
+        exportMessage.value = '导出失败：' + (error?.message || error)
+        ElMessage.error('导出失败：' + (error?.message || error))
+      } finally {
+        exportingZip.value = false
+      }
     }
 
-    const exportDocx = () => {
+    const exportDocx = async () => {
       if (!selectedExportPaper.value) {
         return ElMessage.warning('请选择试卷')
       }
-      const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-      openInNewTab(url)
-      ElMessage.success('导出成功')
+      exportingDocx.value = true
+      exportMessage.value = '正在生成成绩汇总表...'
+      try {
+        const url = `${MCQ_BASE_URL}/grades/export_summary_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        openInNewTab(url)
+        exportMessage.value = '导出成功！'
+        setTimeout(() => { exportMessage.value = '' }, 3000)
+      } catch (error: any) {
+        exportMessage.value = '导出失败：' + (error?.message || error)
+        ElMessage.error('导出失败：' + (error?.message || error))
+      } finally {
+        exportingDocx.value = false
+      }
     }
 
     const normalizeRole = (role?: string) => (role || '').toLowerCase()
@@ -1452,15 +2045,22 @@ export default defineComponent({
       userSearch, users, loadingUsers, actionLoadingId,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
-      generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion,cancelEdit,saveRow,
+      generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
       approveAll, createPaper, loadExportPapers, exportZip, exportDocx,isEditing,editRow,
       loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,onPickBankDocx,
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,
-      rejectingAll,page,pageSize,rowRegenLoading,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
+      rejectingAll,page,pageSize,rowRegenLoading,deletingQuestion,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
       UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,
-      sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources
-
+      sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
+      processAnalysisText,
+      // 批量选择相关
+      selectedQuestions, selectAll, toggleSelectAll, batchDelete,
+      // 回收站相关
+      deletedQuestions, selectedDeleted, loadingDeleted, recycleMessage,
+      restoringQuestion, permanentDeleting,
+      loadDeletedQuestions, restoreQuestion, batchRestore,
+      permanentDelete, batchPermanentDelete, clearRecycleBin
     }
   }
 })
@@ -1663,6 +2263,129 @@ export default defineComponent({
 /* 右侧输入框占掉剩余所有宽度 */
 .opt-input {
   flex: 1 1 auto;
+}
+
+.mcq-tab-content {
+  padding: 0 !important;
+}
+
+.mcq-toolbar {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.toolbar-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.toolbar-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.title-icon {
+  font-size: 16px;
+  color: #667eea;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button-group .el-divider--vertical {
+  height: 24px;
+  margin: 0 4px;
+}
+
+.toolbar-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border-radius: 6px;
+  border-left: 3px solid #0ea5e9;
+  font-size: 13px;
+  color: #0c4a6e;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-icon {
+  font-size: 16px;
+  color: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.toolbar-message span {
+  line-height: 1.5;
+}
+
+.filter-section {
+  background: #fafbfc;
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filter-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-msg-box {
+  padding: 8px 12px;
+  background: #eff6ff;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+.status-msg-box span {
+  display: block;
+}
+
+.status-msg-box span + span {
+  margin-top: 4px;
 }
 
 </style>

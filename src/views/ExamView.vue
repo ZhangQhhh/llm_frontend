@@ -1,199 +1,217 @@
 <template>
   <div class="exam-page">
-    <div class="container">
-      <!-- 头部 -->
-      <header class="page-header">
-        <div class="brand">
-          <div class="logo">📝</div>
-          <div>
-            <h1>边检智能家教</h1>
-            <p class="subtitle">在线考试系统 · 智能评分 · 详细解析</p>
-          </div>
-        </div>
-        <div class="user-info">
-          <span class="user-name">{{ username }}</span>
-          <el-button size="small" @click="handleChangePassword">修改密码</el-button>
-        </div>
-      </header>
-
-      <!-- 试卷选择卡片 -->
-      <el-card class="control-card" shadow="hover">
-        <div class="control-row">
-          <el-select v-model="selectedPaperId" placeholder="选择试卷" style="width: 300px">
+    <!-- 顶部工具栏 -->
+    <div class="topbar">
+      <div class="topwrap">
+        <h1>📝 学生端考试</h1>
+        
+        <div class="control-group">
+          <label class="muted">试卷：</label>
+          <el-select v-model="selectedPaperId" placeholder="选择试卷" style="width: 240px" size="default">
             <el-option
               v-for="paper in papers"
               :key="paper.paper_id"
-              :label="`${paper.title} (${paper.paper_id.slice(0, 8)})`"
+              :label="`${paper.title}（${paper.item_count || 0}题）`"
               :value="paper.paper_id"
             />
           </el-select>
-          <el-button @click="loadPapers" :loading="loadingPapers">刷新试卷列表</el-button>
+          <el-button @click="loadPapers" :loading="loadingPapers" size="default">刷新</el-button>
+        </div>
+        
+        <div class="control-group">
+          <label class="muted">时长：</label>
           <el-input-number
             v-model="durationMin"
             :min="1"
             :max="180"
             :disabled="examStarted"
-            style="width: 150px"
+            style="width: 100px"
+            size="default"
           />
-          <span class="label-text">分钟</span>
-          <el-button type="primary" @click="startExam" :disabled="!selectedPaperId || examStarted" :loading="starting">
-            开始作答
-          </el-button>
-          <el-tag v-if="examStarted" type="success" effect="dark">
-            {{ timerDisplay }}
-          </el-tag>
+          <span class="muted">分钟</span>
         </div>
-      </el-card>
+        
+        <el-button type="primary" @click="startExam" :disabled="!selectedPaperId || examStarted" :loading="starting" size="default">
+          开始作答
+        </el-button>
+        
+        <div class="time">
+          <span class="muted">倒计时：</span>
+          <span class="pill">{{ timerDisplay }}</span>
+        </div>
+        
+        <div class="user-actions">
+          <span class="user-name">{{ username }}</span>
+          <el-button size="small" text @click="handleChangePassword">修改密码</el-button>
+        </div>
+      </div>
+    </div>
 
-      <!-- 题目列表 -->
-      <el-card class="question-card" shadow="hover">
-        <template #header>
-          <div class="card-header">
-            <span class="title">试题</span>
-            <span class="subtitle" v-if="questions.length > 0">共 {{ questions.length }} 题</span>
+    <!-- 主布局 -->
+    <div class="wrap">
+      <!-- 左侧导航 -->
+      <div class="side card" v-if="examStarted && questions.length > 0">
+        <h3>题目导航</h3>
+        <div class="navgrid">
+          <button
+            v-for="(q, idx) in questions"
+            :key="q.qid"
+            :class="['navbtn', { answered: isAnswered(q.qid), current: isCurrentPage(idx) }]"
+            @click="jumpToQuestion(idx)"
+          >
+            {{ idx + 1 }}
+          </button>
+        </div>
+        <div class="pager" style="margin-top: 10px">
+          <el-button size="small" @click="prevPage" :disabled="currentPage === 1">上一页</el-button>
+          <span class="muted">第 {{ currentPage }} / {{ totalPages }} 页</span>
+          <el-button size="small" @click="nextPage" :disabled="currentPage === totalPages">下一页</el-button>
+        </div>
+      </div>
+
+      <!-- 主内容区 -->
+      <div class="main">
+
+        <!-- 头部信息 -->
+        <div class="card head">
+          <h2>{{ paperTitle }}</h2>
+          <div class="sub">
+            <span class="muted">每页显示</span>
+            <el-select v-model="pageSize" size="small" style="width: 80px; margin: 0 8px" @change="handlePageSizeChange">
+              <el-option :value="3" label="3" />
+              <el-option :value="5" label="5" />
+              <el-option :value="10" label="10" />
+            </el-select>
+            <span class="muted">题</span>
           </div>
-        </template>
+        </div>
 
-        <div v-if="!examStarted" class="empty-state">
+        <!-- 题目列表 -->
+        <div v-if="!examStarted" class="empty-hint card">
           <el-empty description="请点击开始作答按钮后显示题目" />
         </div>
 
-        <div v-else-if="questions.length === 0" class="empty-state">
+        <div v-else-if="questions.length === 0" class="empty-hint card">
           <el-empty description="未获取到题目" />
         </div>
 
-        <div v-else class="question-list">
-          <div v-for="(q, idx) in currentPageQuestions" :key="q.qid" class="question-item">
-            <div class="question-header">
-              <span class="question-number">{{ getQuestionNumber(idx) }}.</span>
-              <span class="question-stem">{{ q.stem }}</span>
-              <el-tag size="small" :type="q.qtype === 'multi' ? 'warning' : 'info'">
-                {{ q.qtype === 'multi' ? '多选题' : '单选题' }}
-              </el-tag>
+        <div v-else class="qlist">
+          <div v-for="(q, idx) in currentPageQuestions" :key="q.qid" class="q">
+            <div class="qheader">
+              <b>{{ getQuestionNumber(idx) }}. {{ q.stem }}</b>
+              <span :class="['tag', q.qtype === 'multi' ? 'multi' : 'single']">
+                {{ q.qtype === 'multi' ? '多选' : '单选' }}
+              </span>
             </div>
-            <div class="question-options">
-              <el-checkbox-group
-                v-if="q.qtype === 'multi'"
-                v-model="answersState[q.qid]"
-              >
-                <el-checkbox
+            <div class="opts">
+              <!-- 多选题 -->
+              <template v-if="q.qtype === 'multi'">
+                <button
                   v-for="opt in q.options"
                   :key="opt.label"
-                  :label="opt.label"
-                  class="option-item"
+                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                  @click="toggleMultiOption(q.qid, opt.label)"
+                  :disabled="submitted"
                 >
                   {{ opt.label }}. {{ opt.text }}
-                </el-checkbox>
-              </el-checkbox-group>
-              <el-radio-group v-else v-model="answersState[q.qid]">
-                <el-radio
+                </button>
+              </template>
+              <!-- 单选题 -->
+              <template v-else>
+                <button
                   v-for="opt in q.options"
                   :key="opt.label"
-                  :label="opt.label"
-                  class="option-item"
+                  :class="['opt', { active: answersState[q.qid] === opt.label }]"
+                  @click="selectSingleOption(q.qid, opt.label)"
+                  :disabled="submitted"
                 >
                   {{ opt.label }}. {{ opt.text }}
-                </el-radio>
-              </el-radio-group>
+                </button>
+              </template>
             </div>
           </div>
         </div>
 
-        <el-pagination
-          v-if="questions.length > 0"
-          class="pagination"
-          :current-page="currentPage"
-          :page-size="pageSize"
-          :total="questions.length"
-          layout="prev, pager, next"
-          @current-change="handlePageChange"
-        />
-      </el-card>
-
-      <!-- 提交卡片 -->
-      <el-card class="submit-card" shadow="hover">
-        <el-button
-          type="primary"
-          size="large"
-          @click="submitExam"
-          :disabled="!examStarted || submitted"
-          :loading="submitting"
-        >
-          交卷并评分
-        </el-button>
-        <span class="submit-msg">{{ submitMessage }}</span>
-      </el-card>
-
-      <!-- 成绩展示 -->
-      <el-card v-if="gradeReport" class="grade-card" shadow="hover">
-        <template #header>
-          <div class="card-header">
-            <span class="title">考试成绩</span>
-          </div>
-        </template>
-        <div class="score-display">
-          <div class="score-main">
-            <span class="score-value">{{ (gradeReport.total_score || 0).toFixed(2) }}</span>
-            <span class="score-total">/ {{ questions.length }}</span>
-          </div>
-          <el-progress
-            :percentage="scorePercentage"
-            :color="getProgressColor"
-            :stroke-width="20"
-          />
+        <!-- 提交按钮 -->
+        <div class="card footact" v-if="examStarted">
+          <el-button type="primary" size="large" @click="submitExam" :disabled="submitted" :loading="submitting">
+            交卷并评分
+          </el-button>
+          <span class="muted">{{ submitMessage }}</span>
         </div>
-        <div class="score-grid">
-          <div
-            v-for="(item, idx) in (gradeReport.items || [])"
-            :key="idx"
-            :class="['score-cell', getScoreClass(item)]"
-            :title="getScoreTitle(item, idx)"
-          >
-            {{ idx + 1 }}
-          </div>
-        </div>
-      </el-card>
 
-      <!-- 答案与解析 -->
-      <el-card v-if="reviewData" class="review-card" shadow="hover">
-        <template #header>
-          <div class="card-header">
-            <span class="title">答案与解析</span>
-            <el-button type="primary" @click="exportReport" :loading="exporting">
-              导出成绩报告
-            </el-button>
-          </div>
-        </template>
-        <div class="review-list">
-          <div v-for="(item, idx) in reviewData.items" :key="idx" class="review-item">
-            <div class="review-header">
-              <span class="review-number">{{ idx + 1 }}.</span>
-              <span class="review-stem">{{ item.stem }}</span>
-              <el-tag :type="item.is_correct ? 'success' : 'danger'" size="small">
-                {{ item.is_correct ? '正确' : '错误' }}
-              </el-tag>
-              <el-tag size="small">{{ item.qtype === 'multi' ? '多选题' : '单选题' }}</el-tag>
+        <!-- 成绩展示 -->
+        <div v-if="gradeReport" class="card result-panel">
+          <h3>考试结果</h3>
+          <div class="grid">
+            <div class="chart">
+              <canvas ref="scoreChartRef" width="220" height="220"></canvas>
             </div>
-            <div class="review-options">
-              <div
-                v-for="opt in item.options"
-                :key="opt.label"
-                :class="['review-option', { correct: item.correct_labels.includes(opt.label) }]"
-              >
-                <span class="option-label">{{ opt.label }}.</span>
-                <span class="option-text">{{ opt.text }}</span>
-                <el-icon v-if="item.correct_labels.includes(opt.label)" color="#67c23a">
-                  <Check />
-                </el-icon>
+            <div class="chart">
+              <div class="legend">
+                <span class="lg ok">✅ 正确</span>
+                <span class="lg partial">🟡 部分得分</span>
+                <span class="lg bad">❌ 错误</span>
+              </div>
+              <div class="stat-text">
+                总题数：{{ questions.length }}<br>
+                答对：{{ correctCount }}<br>
+                正确率：{{ correctRate }}%<br>
+                总分：{{ (gradeReport.total_score || 0).toFixed(2) }}
+              </div>
+              <div class="qgrid">
+                <div
+                  v-for="(item, idx) in gradeReport.items"
+                  :key="idx"
+                  :class="['qcell', getScoreClass(item)]"
+                >
+                  {{ idx + 1 }}
+                </div>
               </div>
             </div>
-            <div class="review-analysis">
-              <div class="analysis-label">解析：</div>
-              <div class="analysis-content">{{ item.analysis || '暂无解析' }}</div>
+          </div>
+          <div style="margin-top: 10px">
+            <el-button @click="exportReport" :loading="exporting">导出成绩报告（DOCX）</el-button>
+            <span class="muted">{{ exportMessage }}</span>
+          </div>
+        </div>
+
+        <!-- 答案与解析 -->
+        <div v-if="reviewData" class="card review-panel">
+          <h3>答案与解析</h3>
+          <div class="review-list">
+            <div v-for="(item, idx) in reviewData.items" :key="idx" class="q">
+              <div class="qheader">
+                <b>{{ idx + 1 }}. {{ item.stem }}</b>
+                <span :class="['tag', item.qtype === 'multi' ? 'multi' : 'single']">
+                  {{ item.qtype === 'multi' ? '多选' : '单选' }}
+                </span>
+              </div>
+              <div class="muted" style="margin: 8px 0">
+                标准答案：{{ item.correct_labels.join('') }}
+                ｜ 我的作答：{{ item.my_labels?.join('') || '(未作答)' }}
+                ｜ 判定：{{ item.is_correct ? '正确' : (item.my_labels?.length > 0 ? '部分得分' : '错误') }}
+              </div>
+              <div class="opts">
+                <button
+                  v-for="opt in item.options"
+                  :key="opt.label"
+                  :class="['opt', { 
+                    active: item.my_labels?.includes(opt.label),
+                    correct: item.correct_labels.includes(opt.label)
+                  }]"
+                  disabled
+                >
+                  {{ opt.label }}. {{ opt.text }}
+                </button>
+              </div>
+              <div class="analysis">
+                {{ item.analysis || '（无解析）' }}
+              </div>
             </div>
           </div>
         </div>
-      </el-card>
+      </div>
     </div>
 
     <!-- 修改密码对话框 -->
@@ -217,12 +235,29 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue'
+import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check } from '@element-plus/icons-vue'
-import { API_ENDPOINTS } from '@/config/api/api'
-import { fetchWithAuth, getApiUrl } from '@/utils/request'
+import { MCQ_BASE_URL } from '@/config/api/api'
+
+// API endpoints matching mcq_public_routes.py
+const API_ENDPOINTS = {
+  PAPERS: {
+    LIST_OPEN: `${MCQ_BASE_URL}/papers/list_open`,
+    VIEW: `${MCQ_BASE_URL}/papers/view`
+  },
+  EXAM: {
+    START: `${MCQ_BASE_URL}/exam/start`,
+    SUBMIT: `${MCQ_BASE_URL}/exam/submit`,
+    REVIEW: `${MCQ_BASE_URL}/exam/review`
+  },
+  STUDENT: {
+    EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`
+  },
+  AUTH: {
+    CHANGE_PASSWORD: '/api/auth/change_password'
+  }
+}
 
 interface Question {
   qid: string
@@ -234,6 +269,7 @@ interface Question {
 interface Paper {
   paper_id: string
   title: string
+  item_count?: number
 }
 
 interface GradeItem {
@@ -249,6 +285,7 @@ interface GradeReport {
 
 interface ReviewItem extends Question {
   correct_labels: string[]
+  my_labels?: string[]
   analysis: string
   is_correct: boolean
 }
@@ -259,9 +296,6 @@ interface ReviewData {
 
 export default defineComponent({
   name: 'ExamView',
-  components: {
-    Check
-  },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username || '学生')
@@ -270,11 +304,12 @@ export default defineComponent({
     const papers = ref<Paper[]>([])
     const selectedPaperId = ref('')
     const loadingPapers = ref(false)
+    const paperTitle = ref('尚未开始')
 
     // 考试相关
     const questions = ref<Question[]>([])
     const examStarted = ref(false)
-    const durationMin = ref(10)
+    const durationMin = ref(30)
     const starting = ref(false)
     const attemptId = ref('')
     const leftSeconds = ref(0)
@@ -283,7 +318,7 @@ export default defineComponent({
     // 答题相关
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
-    const pageSize = 3
+    const pageSize = ref(3)
 
     // 提交相关
     const submitted = ref(false)
@@ -294,6 +329,8 @@ export default defineComponent({
     const gradeReport = ref<GradeReport | null>(null)
     const reviewData = ref<ReviewData | null>(null)
     const exporting = ref(false)
+    const exportMessage = ref('')
+    const scoreChartRef = ref<HTMLCanvasElement | null>(null)
 
     // 修改密码
     const passwordDialogVisible = ref(false)
@@ -304,51 +341,176 @@ export default defineComponent({
     const changingPassword = ref(false)
 
     const timerDisplay = computed(() => {
-      if (!examStarted.value) return '未开始'
+      if (!examStarted.value) return '--:--'
       const min = Math.floor(leftSeconds.value / 60)
       const sec = leftSeconds.value % 60
-      return `剩余时间：${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+      return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    })
+
+    const totalPages = computed(() => {
+      return Math.max(1, Math.ceil(questions.value.length / pageSize.value))
     })
 
     const currentPageQuestions = computed(() => {
-      const start = (currentPage.value - 1) * pageSize
-      return questions.value.slice(start, start + pageSize)
+      const start = (currentPage.value - 1) * pageSize.value
+      return questions.value.slice(start, start + pageSize.value)
     })
 
-    const scorePercentage = computed(() => {
-      if (!gradeReport.value || gradeReport.value.total_score === undefined) return 0
-      const total = questions.value.length || 1
-      return Math.round((gradeReport.value.total_score / total) * 100)
+    const correctCount = computed(() => {
+      if (!gradeReport.value) return 0
+      return gradeReport.value.items.filter(item => item.is_correct).length
     })
 
-    const getProgressColor = (percentage: number) => {
-      if (percentage >= 90) return '#67c23a'
-      if (percentage >= 60) return '#e6a23c'
-      return '#f56c6c'
-    }
+    const correctRate = computed(() => {
+      const total = questions.value.length
+      if (total === 0) return 0
+      return Math.round((correctCount.value / total) * 100)
+    })
 
     const getQuestionNumber = (idx: number) => {
-      return (currentPage.value - 1) * pageSize + idx + 1
+      return (currentPage.value - 1) * pageSize.value + idx + 1
+    }
+
+    const isAnswered = (qid: string) => {
+      const answer = answersState.value[qid]
+      if (Array.isArray(answer)) return answer.length > 0
+      return !!answer
+    }
+
+    const isCurrentPage = (idx: number) => {
+      const page = Math.floor(idx / pageSize.value) + 1
+      return page === currentPage.value
+    }
+
+    const jumpToQuestion = (idx: number) => {
+      const page = Math.floor(idx / pageSize.value) + 1
+      currentPage.value = page
+    }
+
+    const prevPage = () => {
+      if (currentPage.value > 1) currentPage.value--
+    }
+
+    const nextPage = () => {
+      if (currentPage.value < totalPages.value) currentPage.value++
+    }
+
+    const handlePageSizeChange = () => {
+      currentPage.value = 1
     }
 
     const getScoreClass = (item: GradeItem) => {
-      if (item.is_correct) return 'correct'
+      if (item.is_correct) return 'ok'
       if (item.score > 0) return 'partial'
-      return 'wrong'
+      return 'bad'
     }
 
-    const getScoreTitle = (item: GradeItem, idx: number) => {
-      const num = idx + 1
-      if (item.is_correct) return `第${num}题：正确，得分 ${item.score}`
-      if (item.score > 0) return `第${num}题：部分得分 ${item.score}`
-      return `第${num}题：错误，得分 ${item.score}`
+    const toggleMultiOption = (qid: string, label: string) => {
+      if (submitted.value) return
+      const current = answersState.value[qid] || []
+      const idx = current.indexOf(label)
+      if (idx > -1) {
+        answersState.value[qid] = current.filter((l: string) => l !== label)
+      } else {
+        answersState.value[qid] = [...current, label]
+      }
+    }
+
+    const selectSingleOption = (qid: string, label: string) => {
+      if (submitted.value) return
+      answersState.value[qid] = label
+    }
+
+    // 绘制圆环进度图
+    const drawRing = (canvas: HTMLCanvasElement, correct: number, total: number) => {
+      const size = 220
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      const ratio = Math.max(1, Math.floor(window.devicePixelRatio || 1))
+      canvas.style.width = size + 'px'
+      canvas.style.height = size + 'px'
+      canvas.width = size * ratio
+      canvas.height = size * ratio
+      ctx.scale(ratio, ratio)
+
+      const cx = size / 2
+      const cy = size / 2
+      const radius = 88
+      const thick = 16
+      const start = -Math.PI / 2
+      const pct = total ? Math.max(0, Math.min(1, correct / total)) : 0
+
+      // 背景
+      ctx.clearRect(0, 0, size, size)
+      ctx.lineCap = 'round'
+
+      // 轨道
+      ctx.beginPath()
+      ctx.strokeStyle = '#e5e7eb'
+      ctx.lineWidth = thick
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+      ctx.stroke()
+
+      // 进度
+      ctx.beginPath()
+      ctx.strokeStyle = '#2b7cff'
+      ctx.lineWidth = thick
+      ctx.arc(cx, cy, radius, start, start + Math.PI * 2 * pct, false)
+      ctx.stroke()
+
+      // 中心文本
+      const percentTxt = total ? Math.round(pct * 100) + '%' : '--%'
+      ctx.fillStyle = '#111827'
+      ctx.font = 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, Arial'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(percentTxt, cx, cy - 8)
+
+      ctx.fillStyle = '#6b7280'
+      ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial'
+      ctx.fillText(`正确 ${correct} / ${total}`, cx, cy + 14)
+    }
+
+    // MCQ 接口专用 fetch（带超时控制）
+    const mcqFetch = async (url: string, options: any = {}, timeout = 120000) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeout)
+      
+      try {
+        const resp = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
+        
+        const contentType = resp.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          const text = await resp.text()
+          throw new Error(`HTTP ${resp.status} 非 JSON 响应：${text.substring(0, 800)}`)
+        }
+        
+        const data = await resp.json()
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}：${JSON.stringify(data)}`)
+        }
+        return data
+      } catch (error: any) {
+        clearTimeout(timeoutId)
+        throw error
+      }
     }
 
     const loadPapers = async () => {
       loadingPapers.value = true
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.PAPERS.LIST_OPEN))
-        papers.value = response.data || []
+        const data = await mcqFetch(API_ENDPOINTS.PAPERS.LIST_OPEN)
+        // Backend returns array directly: [{paper_id, title, item_count}]
+        if (Array.isArray(data)) {
+          papers.value = data
+        } else {
+          papers.value = []
+        }
         if (papers.value.length === 0) {
           ElMessage.warning('暂无可用试卷')
         }
@@ -367,27 +529,34 @@ export default defineComponent({
       starting.value = true
       try {
         // 开始考试
-        const startResp = await fetchWithAuth(getApiUrl(API_ENDPOINTS.EXAM.START), {
+        const startData = await mcqFetch(API_ENDPOINTS.EXAM.START, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          data: {
+          body: JSON.stringify({
             paper_id: selectedPaperId.value,
-            duration_sec: durationMin.value * 60
-          }
+            duration_sec: durationMin.value * 60,
+            student_id: store.state.user.username || 'anonymous'
+          })
         })
 
-        if (!startResp.data.ok) {
-          throw new Error(startResp.data.detail || '创建会话失败')
+        if (!startData.ok) {
+          throw new Error(startData.detail || '创建会话失败')
         }
 
-        attemptId.value = startResp.data.attempt_id
-        leftSeconds.value = startResp.data.left_sec
+        attemptId.value = startData.attempt_id
+        leftSeconds.value = startData.left_sec || durationMin.value * 60
 
         // 获取题目
-        const questionsResp = await fetchWithAuth(
-          getApiUrl(`${API_ENDPOINTS.PAPERS.VIEW}?paper_id=${encodeURIComponent(selectedPaperId.value)}`)
+        const questionsData = await mcqFetch(
+          `${API_ENDPOINTS.PAPERS.VIEW}?paper_id=${encodeURIComponent(selectedPaperId.value)}`
         )
-        questions.value = questionsResp.data.items || []
+        
+        if (!questionsData.ok) {
+          throw new Error(questionsData.detail || '获取题目失败')
+        }
+        
+        questions.value = questionsData.items || []
+        paperTitle.value = questionsData.title || '试卷'
 
         // 初始化答案状态
         const newAnswersState: Record<string, any> = {}
@@ -398,6 +567,9 @@ export default defineComponent({
 
         examStarted.value = true
         currentPage.value = 1
+        submitted.value = false
+        gradeReport.value = null
+        reviewData.value = null
 
         // 启动倒计时
         startTimer()
@@ -455,7 +627,7 @@ export default defineComponent({
       }
 
       const answers = collectAnswers()
-      const unanswered = questions.value.length - answers.length
+      const unanswered = answers.filter(a => a.chosen_labels.length === 0).length
 
       if (!auto && unanswered > 0) {
         try {
@@ -474,30 +646,40 @@ export default defineComponent({
       }
 
       submitting.value = true
-      submitMessage.value = '提交中...'
+      submitMessage.value = '评分中…'
 
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.EXAM.SUBMIT), {
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.SUBMIT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          data: {
+          body: JSON.stringify({
             attempt_id: attemptId.value,
             answers
-          }
+          })
         })
 
-        gradeReport.value = response.data
+        if (!data.ok) {
+          throw new Error(data.detail || '提交失败')
+        }
+
+        gradeReport.value = data
         submitted.value = true
         submitMessage.value = '评分完成'
         stopTimer()
+
+        // 绘制圆环图
+        await nextTick()
+        if (scoreChartRef.value) {
+          drawRing(scoreChartRef.value, correctCount.value, questions.value.length)
+        }
 
         // 加载答案解析
         await loadReview()
 
         ElMessage.success('提交成功')
       } catch (error: any) {
-        submitMessage.value = '提交失败：' + (error.message || '未知错误')
-        ElMessage.error(submitMessage.value)
+        submitMessage.value = '提交失败'
+        ElMessage.error('提交失败：' + (error.message || '未知错误'))
       } finally {
         submitting.value = false
       }
@@ -506,11 +688,11 @@ export default defineComponent({
     const loadReview = async () => {
       if (!attemptId.value) return
       try {
-        const response = await fetchWithAuth(
-          getApiUrl(`${API_ENDPOINTS.EXAM.REVIEW}?attempt_id=${encodeURIComponent(attemptId.value)}`)
+        const data = await mcqFetch(
+          `${API_ENDPOINTS.EXAM.REVIEW}?attempt_id=${encodeURIComponent(attemptId.value)}`
         )
-        if (response.data.ok) {
-          reviewData.value = response.data
+        if (data.ok) {
+          reviewData.value = data
         }
       } catch (error: any) {
         console.error('加载解析失败：', error)
@@ -523,39 +705,51 @@ export default defineComponent({
         return
       }
       exporting.value = true
+      exportMessage.value = '导出中…'
       try {
+        // 第一步：调用导出接口生成报告
         const formData = new FormData()
         formData.append('attempt_id', attemptId.value)
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.STUDENT.EXPORT_MY_REPORT_DOCX), {
+        
+        const data = await mcqFetch(API_ENDPOINTS.STUDENT.EXPORT_MY_REPORT_DOCX, {
           method: 'POST',
           body: formData
         })
 
-        if (!response.data.ok) {
-          throw new Error(response.data.detail || '导出失败')
+        if (!data.ok) {
+          throw new Error(data.detail || '导出失败')
         }
 
-        const filename = response.data.path?.split('/').pop() || '我的成绩报告.docx'
-        const downloadUrl = getApiUrl(response.data.download_url)
+        // 第二步：使用返回的 download_url 下载文件
+        if (data.download_url) {
+          // 如果是相对路径，需要拼接完整 URL
+          let downloadUrl = data.download_url
+          if (downloadUrl.startsWith('/')) {
+            downloadUrl = `${MCQ_BASE_URL}${downloadUrl}`
+          }
+          
+          // 直接打开下载链接
+          const link = document.createElement('a')
+          link.href = downloadUrl
+          link.download = data.filename || '成绩报告.docx'
+          link.target = '_blank'
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
 
-        // 下载文件
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = filename
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-
-        ElMessage.success('导出成功')
+          exportMessage.value = '已导出'
+          setTimeout(() => { exportMessage.value = '' }, 2000)
+          ElMessage.success('导出成功')
+        } else {
+          throw new Error('未获取到下载链接')
+        }
       } catch (error: any) {
+        exportMessage.value = '导出失败'
         ElMessage.error('导出失败：' + (error.message || '未知错误'))
+        console.error('导出报告错误：', error)
       } finally {
         exporting.value = false
       }
-    }
-
-    const handlePageChange = (page: number) => {
-      currentPage.value = page
     }
 
     const handleChangePassword = () => {
@@ -570,16 +764,18 @@ export default defineComponent({
       }
       changingPassword.value = true
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.AUTH.CHANGE_PASSWORD), {
+        // 注意：修改密码走 /api 路径，不是 MCQ 接口
+        const resp = await fetch(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          data: {
+          body: JSON.stringify({
             old_password: passwordForm.value.oldPassword,
             new_password: passwordForm.value.newPassword
-          }
+          })
         })
+        const data = await resp.json()
 
-        if (response.data.ok) {
+        if (data.ok) {
           ElMessage.success('修改成功，请重新登录')
           passwordDialogVisible.value = false
           store.dispatch('logout')
@@ -587,7 +783,7 @@ export default defineComponent({
             window.location.href = '/login'
           }, 1000)
         } else {
-          throw new Error(response.data.detail || '修改失败')
+          throw new Error(data.detail || '修改失败')
         }
       } catch (error: any) {
         ElMessage.error('修改失败：' + (error.message || '未知错误'))
@@ -609,6 +805,7 @@ export default defineComponent({
       papers,
       selectedPaperId,
       loadingPapers,
+      paperTitle,
       questions,
       examStarted,
       durationMin,
@@ -617,14 +814,18 @@ export default defineComponent({
       answersState,
       currentPage,
       pageSize,
+      totalPages,
       currentPageQuestions,
       submitted,
       submitting,
       submitMessage,
       gradeReport,
-      scorePercentage,
+      correctCount,
+      correctRate,
       reviewData,
       exporting,
+      exportMessage,
+      scoreChartRef,
       passwordDialogVisible,
       passwordForm,
       changingPassword,
@@ -632,11 +833,16 @@ export default defineComponent({
       startExam,
       submitExam,
       exportReport,
-      handlePageChange,
       getQuestionNumber,
-      getProgressColor,
+      isAnswered,
+      isCurrentPage,
+      jumpToQuestion,
+      prevPage,
+      nextPage,
+      handlePageSizeChange,
       getScoreClass,
-      getScoreTitle,
+      toggleMultiOption,
+      selectSingleOption,
       handleChangePassword,
       changePassword
     }
@@ -645,319 +851,610 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* 全局变量 */
+:root {
+  --bg: #f7f8fb;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --ink: #111827;
+  --pri: #2b7cff;
+  --ok: #10b981;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+}
+
 .exam-page {
-  min-height: calc(100vh - 60px);
-  background: url('@/assets/allPic/public/deepbac.jpg') no-repeat center center;
+  min-height: 100vh;
+  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
-  padding: 2rem 0;
+  color: #111827;
+  position: relative;
 }
 
-.container {
-  max-width: 1200px;
+.exam-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 0;
+}
+
+/* 顶栏 */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.topwrap {
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0 1rem;
-}
-
-.page-header {
+  padding: 14px 24px;
   display: flex;
-  justify-content: space-between;
+  gap: 16px;
   align-items: center;
-  background: white;
-  padding: 1.5rem 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
 }
 
-.brand {
+.topwrap h1 {
+  font-size: 20px;
+  margin: 0 12px 0 0;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.control-group {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(229, 231, 235, 0.5);
 }
 
-.logo {
-  font-size: 2.5rem;
-}
-
-.brand h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #1f2937;
-}
-
-.subtitle {
-  margin: 0.25rem 0 0 0;
-  font-size: 0.875rem;
+.muted {
   color: #6b7280;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
-.user-info {
+.time {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 10px;
+}
+
+.pill {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 999px;
+  padding: 6px 16px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  font-weight: 600;
+  font-size: 14px;
+  color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(229, 231, 235, 0.5);
 }
 
 .user-name {
-  font-size: 0.875rem;
+  font-size: 14px;
   color: #4b5563;
 }
 
-.control-card {
-  margin-bottom: 1.5rem;
+/* 布局 */
+.wrap {
+  max-width: 1400px;
+  margin: 24px auto;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
 }
 
-.control-row {
+@media (max-width: 900px) {
+  .wrap {
+    grid-template-columns: 1fr;
+    padding: 0 16px;
+  }
+}
+
+/* 侧栏（导航） */
+.side {
+  position: sticky;
+  top: 90px;
+  align-self: start;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.side h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 8px;
+}
+
+.side h3::before {
+  content: '📋';
+  font-size: 18px;
+}
+
+.navgrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.navbtn {
+  padding: 10px 0;
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.navbtn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.navbtn:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.navbtn:hover::before {
+  opacity: 1;
+}
+
+.navbtn.answered {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  color: #667eea;
+  font-weight: 600;
+}
+
+.navbtn.current {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 主区 */
+.main {
+  min-height: 400px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.head .sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.empty-hint {
+  padding: 60px 20px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+/* 题目列表 */
+.qlist {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.q {
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  border-radius: 16px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.q:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.qheader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.qheader b {
+  flex: 1;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #1f2937;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.tag.single {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.tag.multi {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: #fff;
+}
+
+/* 选项 */
+.opts {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 18px;
+  border: 2px solid rgba(229, 231, 235, 0.6);
+  border-radius: 12px;
+  background: rgba(249, 250, 251, 0.8);
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.opt::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.opt:hover:not(:disabled) {
+  border-color: #667eea;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.opt:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.opt.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  color: #667eea;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.opt.correct {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+  color: #059669;
+  font-weight: 600;
+}
+
+.opt:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* 提交按钮 */
+.footact {
+  display: flex;
+  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
-.label-text {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-.question-card {
-  margin-bottom: 1.5rem;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-header .title {
-  font-size: 1.125rem;
+/* 成绩展示 */
+.result-panel h3,
+.review-panel h3 {
+  margin: 0 0 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.card-header .subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
+.result-panel h3::before {
+  content: '🎯';
+  font-size: 22px;
 }
 
-.empty-state {
-  padding: 2rem 0;
+.review-panel h3::before {
+  content: '📖';
+  font-size: 22px;
 }
 
-.question-list {
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart {
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  border-radius: 16px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
 }
 
-.question-item {
-  padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+.chart:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
-.question-header {
+.legend {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.question-number {
+.lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #1f2937;
-  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.question-stem {
-  flex: 1;
-  font-size: 1rem;
-  color: #1f2937;
-  line-height: 1.5;
+.lg.ok {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
 }
 
-.question-options {
-  margin-left: 1.5rem;
+.lg.partial {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
 }
 
-.option-item {
-  display: block;
-  margin: 0.75rem 0;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s;
+.lg.bad {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
 }
 
-.option-item:hover {
-  border-color: #2563eb;
-  background: #eff6ff;
-}
-
-.pagination {
-  margin-top: 1.5rem;
-  display: flex;
-  justify-content: center;
-}
-
-.submit-card {
-  margin-bottom: 1.5rem;
+.stat-text {
+  white-space: pre-line;
   text-align: center;
+  font-size: 15px;
+  color: #4b5563;
+  line-height: 2;
+  font-weight: 500;
 }
 
-.submit-msg {
-  margin-left: 1rem;
-  color: #6b7280;
-  font-size: 0.875rem;
-}
-
-.grade-card {
-  margin-bottom: 1.5rem;
-}
-
-.score-display {
-  margin-bottom: 1.5rem;
-}
-
-.score-main {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  margin-bottom: 1rem;
-}
-
-.score-value {
-  font-size: 3rem;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.score-total {
-  font-size: 1.5rem;
-  color: #6b7280;
-  margin-left: 0.5rem;
-}
-
-.score-grid {
+.qgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-  gap: 0.5rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  width: 100%;
 }
 
-.score-cell {
-  padding: 0.75rem;
+.qcell {
+  padding: 8px 10px;
+  border: 2px solid transparent;
+  border-radius: 10px;
   text-align: center;
-  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
-  border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+  cursor: pointer;
 }
 
-.score-cell.correct {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+.qcell:hover {
+  transform: scale(1.1);
+}
+
+.qcell.ok {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+  border-color: #10b981;
   color: #065f46;
 }
 
-.score-cell.partial {
-  background: #fffbeb;
-  border-color: #fde68a;
+.qcell.partial {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%);
+  border-color: #f59e0b;
   color: #92400e;
 }
 
-.score-cell.wrong {
-  background: #fef2f2;
-  border-color: #fecaca;
+.qcell.bad {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%);
+  border-color: #ef4444;
   color: #991b1b;
 }
 
-.review-card {
-  margin-bottom: 1.5rem;
-}
-
+/* 答案解析 */
 .review-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 16px;
 }
 
-.review-item {
-  padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.review-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.review-number {
-  font-weight: 600;
-  color: #1f2937;
-  flex-shrink: 0;
-}
-
-.review-stem {
-  flex: 1;
-  font-size: 1rem;
-  color: #1f2937;
-  line-height: 1.5;
-}
-
-.review-options {
-  margin: 1rem 0;
-}
-
-.review-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  margin: 0.5rem 0;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-}
-
-.review-option.correct {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-}
-
-.option-label {
-  font-weight: 600;
-  color: #1f2937;
-  flex-shrink: 0;
-}
-
-.option-text {
-  flex: 1;
-  color: #4b5563;
-}
-
-.review-analysis {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: white;
-  border-radius: 6px;
-  border: 1px dashed #e5e7eb;
-}
-
-.analysis-label {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.5rem;
-}
-
-.analysis-content {
-  color: #4b5563;
-  line-height: 1.6;
+.analysis {
   white-space: pre-wrap;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+  padding: 16px;
+  border-radius: 12px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.8;
+  position: relative;
+}
+
+.analysis::before {
+  content: '💡 解析';
+  position: absolute;
+  top: -12px;
+  left: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .topwrap {
+    padding: 12px 16px;
+  }
+  
+  .topwrap h1 {
+    font-size: 16px;
+  }
+  
+  .wrap {
+    margin: 16px auto;
+    gap: 16px;
+  }
+  
+  .card {
+    padding: 16px;
+  }
+  
+  .q {
+    padding: 16px;
+  }
+  
+  .qheader b {
+    font-size: 15px;
+  }
+  
+  .opt {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  
+  .navgrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  
+  .qgrid {
+    grid-template-columns: repeat(8, 1fr);
+  }
 }
 </style>
