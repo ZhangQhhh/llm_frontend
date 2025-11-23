@@ -113,6 +113,10 @@
                 <el-icon><DocumentCopy /></el-icon>
                 <span>Excel 工具</span>
               </el-dropdown-item>
+              <el-dropdown-item command="report-generator">
+                <el-icon><Document /></el-icon>
+                <span>报告生成</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 <span>退出登录</span>
@@ -147,7 +151,8 @@ import {
   ArrowDown, 
   SwitchButton,
   ChatLineSquare,
-  DocumentCopy
+  DocumentCopy,
+  Document
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -165,7 +170,8 @@ export default defineComponent({
     ArrowDown,
     SwitchButton,
     ChatLineSquare,
-    DocumentCopy
+    DocumentCopy,
+    Document
   },
   setup() {
     const store = useStore()
@@ -205,6 +211,8 @@ export default defineComponent({
         router.push('/profile')
       } else if (command === 'excel-tool') {
         router.push('/excel-tool')
+      } else if (command === 'report-generator') {
+        router.push('/report-generator')
       } else if (command === 'admin') {
         router.push('/admin')
       } else if (command === 'super-admin') {

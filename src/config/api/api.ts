@@ -95,6 +95,9 @@ export const API_ENDPOINTS = {
   TASKS: {
     STATUS: '/tasks/status',
   },
+  LLM_SUMMARY:{
+    DOX_SUMMARY:`/entry-exit/generate-full-report`
+  }
 };
 
 // ===== MCQ 模块端点（合并自 mcq.ts） =====

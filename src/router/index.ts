@@ -123,6 +123,15 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/report-generator',
+    name: 'report-generator',
+    component: () => import('../views/ReportGeneratorView.vue'),
+    meta: { 
+      requiresAuth: true,
+      title: '报告生成'
+    }
+  },
+  {
     path: '/feedback',
     name: 'feedback-list',
     component: () => import('../views/FeedbackListView.vue'),
