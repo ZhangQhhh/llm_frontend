@@ -124,12 +124,12 @@
           </transition>
 
           <!-- 结果区域 -->
-          <div v-if="loading || answer || references.length > 0" class="result-area">
+          <div v-if="loading || answer || references.length > 0 || mcqResults.length > 0" class="result-area">
             <!-- 回答与思考 -->
             <div class="answer-section">
               <!-- 思考过程 -->
                 <transition name="el-fade-in">
-                  <div v-if="(loading || thinking) && thinkingMode" class="thinking-section mb-4">
+                  <div v-if="(loading || thinking) && thinkingMode && !(mcqMode && mcqResults.length > 0)" class="thinking-section mb-4">
                     <el-collapse v-model="activeThinking">
                       <el-collapse-item name="1">
                         <template #title>
@@ -152,7 +152,7 @@
                 </transition>
 
                 <!-- 最终回答 -->
-                <el-card class="answer-card glass-effect" :body-style="{ padding: '0' }">
+                <el-card v-if="!(mcqMode && mcqResults.length > 0)" class="answer-card glass-effect" :body-style="{ padding: '0' }">
                   <div class="card-header">
                     <div class="title">
                       <el-icon><ChatDotRound /></el-icon> 智能回答
@@ -224,13 +224,17 @@
                       </div>
                       <el-divider />
                       <div class="option-result">
-                        <div v-if="result.loading" class="loading-placeholder">
+                        <div v-if="result.loading && !result.answer" class="loading-placeholder">
                           <div class="loading-hint">
                             <div class="spinner-small"></div>
                             <span>正在验证选项 {{ result.optionLabel }}...</span>
                           </div>
                         </div>
-                        <div v-else class="markdown-body" v-html="renderMarkdown(result.answer || '等待处理...')"></div>
+                        <div v-if="result.answer" class="markdown-body" v-html="renderMarkdown(result.answer)"></div>
+                        <div v-if="result.loading && result.answer" class="streaming-indicator">
+                          <div class="spinner-small" style="margin-top: 10px;"></div>
+                          <span style="font-size: 12px; color: #666;">流式输出中...</span>
+                        </div>
                       </div>
                     </div>
                   </el-tab-pane>
@@ -239,7 +243,7 @@
             </transition>
 
             <!-- 参考资料与元数据 -->
-            <div class="metadata-section">
+            <div v-if="!(mcqMode && mcqResults.length > 0)" class="metadata-section">
                 <!-- 关键词 -->
                 <transition name="el-zoom-in-top">
                   <el-card v-if="keywords && (keywords.question.length || keywords.document.length)" class="meta-card glass-effect mb-4">
@@ -623,6 +627,11 @@ export default defineComponent({
       } else if (strategy === 'COMPLEX_VALIDATION') {
         // COMPLEX_VALIDATION策略: 分别处理每个选项
         mcqResults.value = [];
+        
+        // 设置全局loading状态以显示结果区域
+        loading.value = true;
+        answer.value = ''; // 清空旧答案
+        references.value = []; // 清空旧引用
 
         // 为每个选项创建一个结果对象
         for (const [key, value] of Object.entries(mcqData.options)) {
@@ -636,8 +645,9 @@ export default defineComponent({
         }
 
         // 逐个处理每个选项
-        let index = 0;
-        for (const [key, value] of Object.entries(mcqData.options)) {
+        const optionEntries = Object.entries(mcqData.options);
+        for (let index = 0; index < optionEntries.length; index++) {
+          const [key, value] = optionEntries[index];
           const formattedQuestion = `问题：${mcqData.stem}\n候选答案：\n${key}. ${value}`;
 
           // 修改当前标签页
@@ -656,24 +666,26 @@ export default defineComponent({
                 insert_block_llm_id: modelId.value
               },
               store.state.user.token,
-              (message: StreamMessage) => {
-                // 处理流式消息
+              ((currentIndex) => (message: StreamMessage) => {
+                // 处理流式消息，使用闭包确保index正确
                 if (message.type === 'CONTENT' && !isStatusMessage(message.data)) {
-                  mcqResults.value[index].answer += message.data;
+                  mcqResults.value[currentIndex].answer += message.data;
                 } else if (message.type === 'DONE') {
-                  mcqResults.value[index].loading = false;
+                  mcqResults.value[currentIndex].loading = false;
+                } else if (message.type === 'ERROR') {
+                  mcqResults.value[currentIndex].answer = `错误: ${message.data}`;
+                  mcqResults.value[currentIndex].loading = false;
                 }
-              }
+              })(index)
             );
-
-            mcqResults.value[index].loading = false;
           } catch (error: any) {
             mcqResults.value[index].answer = `请求失败: ${error.message}`;
             mcqResults.value[index].loading = false;
           }
-
-          index++;
         }
+        
+        // 所有选项处理完成后，设置全局loading为false
+        loading.value = false;
       }
     };
 
@@ -763,6 +775,7 @@ export default defineComponent({
       references.value = [];
       subQuestions.value = null;
       keywords.value = null;
+      mcqResults.value = [];  // 清空选择题结果
       feedbackSubmitted.value = false;
       loading.value = true;
       activeThinking.value = ['1'];
@@ -947,7 +960,7 @@ export default defineComponent({
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
-      renderMarkdown, copyAnswer, toggleRefExpand
+      renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange
     };
   }
 });
@@ -1341,6 +1354,14 @@ export default defineComponent({
   font-size: 15px;
   line-height: 1.8;
   color: #2c3e50;
+}
+
+.streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  opacity: 0.7;
 }
 
 /* Result Area */
