@@ -342,7 +342,8 @@ const handleGenerate = async () => {
         responseType: 'blob',
         headers: {
           'Content-Type': 'multipart/form-data'
-        }
+        },
+        timeout: 900000 // 15分钟超时，报告生成需要较长时间
       }
     );
 
