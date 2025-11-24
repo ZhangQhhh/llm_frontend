@@ -97,7 +97,8 @@ export const API_ENDPOINTS = {
     STATUS: '/tasks/status',
   },
   LLM_SUMMARY:{
-    DOX_SUMMARY:`/entry-exit/generate-full-report`
+    DOX_SUMMARY:`/entry-exit/generate-full-report`,
+    MAX_SUMMARY:`/entryExit/summary-entrance`
   }
 };
 

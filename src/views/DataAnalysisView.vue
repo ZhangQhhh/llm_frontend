@@ -1,5 +1,5 @@
 <template>
-  <div class="report-generator-page">
+  <div class="data-analysis-page">
     <el-container class="main-container">
       <el-main>
         <div class="content-wrapper">
@@ -7,11 +7,11 @@
           <el-card class="header-card glass-effect" shadow="hover">
             <div class="header-content">
               <el-icon :size="60" color="#409eff">
-                <Document />
+                <DataAnalysis />
               </el-icon>
               <div class="header-text">
-                <h1>数据分析</h1>
-                <p>基于 Excel 数据智能生成专业对比分析 Word 报告</p>
+                <h1>报告生成</h1>
+                <p>基于 Excel 数据进行深度分析和对比</p>
               </div>
             </div>
           </el-card>
@@ -108,8 +108,8 @@
                     round
                     class="generate-btn"
                   >
-                    <el-icon v-if="!loading" class="btn-icon"><DocumentAdd /></el-icon>
-                    {{ loading ? '生成中...' : '生成报告' }}
+                    <el-icon v-if="!loading" class="btn-icon"><DataAnalysis /></el-icon>
+                    {{ loading ? '分析中...' : '开始分析' }}
                   </el-button>
                   <el-button
                     size="large"
@@ -136,7 +136,7 @@
                 />
                 <p class="progress-text">
                   <el-icon class="is-loading"><Loading /></el-icon>
-                  正在分析数据并生成报告，请稍候...
+                  正在分析数据，请稍候...
                 </p>
               </div>
             </transition>
@@ -178,13 +178,13 @@
                     </el-step>
                     <el-step>
                       <template #icon>
-                        <el-icon :size="24"><DocumentAdd /></el-icon>
+                        <el-icon :size="24"><DataAnalysis /></el-icon>
                       </template>
                       <template #title>
-                        <span class="step-title">生成报告</span>
+                        <span class="step-title">数据分析</span>
                       </template>
                       <template #description>
-                        <span class="step-desc">点击按钮生成对比分析报告</span>
+                        <span class="step-desc">点击按钮开始数据分析</span>
                       </template>
                     </el-step>
                     <el-step>
@@ -192,10 +192,10 @@
                         <el-icon :size="24"><Download /></el-icon>
                       </template>
                       <template #title>
-                        <span class="step-title">下载报告</span>
+                        <span class="step-title">查看结果</span>
                       </template>
                       <template #description>
-                        <span class="step-desc">报告生成后自动下载 Word 文档</span>
+                        <span class="step-desc">分析完成后显示结果</span>
                       </template>
                     </el-step>
                   </el-steps>
@@ -211,7 +211,7 @@
                       <li>请确保上传的 Excel 文件格式正确，包含完整的数据字段</li>
                       <li>往年数据和今年数据的表格结构应保持一致</li>
                       <li>文件大小建议不超过 20MB，以确保处理速度</li>
-                      <li>生成的报告将自动下载到您的默认下载文件夹</li>
+                      <li>分析结果将在页面中显示</li>
                     </ul>
                   </div>
                 </div>
@@ -228,11 +228,10 @@
 import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
-  Document,
+  DataAnalysis,
   UploadFilled,
   FolderOpened,
   DocumentChecked,
-  DocumentAdd,
   RefreshLeft,
   Loading,
   QuestionFilled,
@@ -336,20 +335,20 @@ const handleGenerate = async () => {
 
   try {
     const response = await http.post(
-      API_ENDPOINTS.LLM_SUMMARY.DOX_SUMMARY,
+      API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
       formData,
       {
         responseType: 'blob',
         headers: {
           'Content-Type': 'multipart/form-data'
         },
-        timeout: 900000 // 15分钟超时，报告生成需要较长时间
+        timeout: 900000 // 15分钟超时，分析需要较长时间
       }
     );
 
     // 获取文件名
     const contentDisposition = response.headers['content-disposition'];
-    let filename = '出入境完整对比报告.docx';
+    let filename = '数据分析报告.docx';
     if (contentDisposition) {
       const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?(.+)/);
       if (filenameMatch) {
@@ -368,12 +367,12 @@ const handleGenerate = async () => {
     window.URL.revokeObjectURL(url);
 
     ElMessage.success({
-      message: '报告生成成功！文件已自动下载',
+      message: '数据分析完成！报告已自动下载',
       duration: 3000
     });
   } catch (error: any) {
-    console.error('生成报告失败:', error);
-    const errorMsg = error.response?.data?.message || error.message || '报告生成失败，请稍后重试';
+    console.error('数据分析失败:', error);
+    const errorMsg = error.response?.data?.message || error.message || '数据分析失败，请稍后重试';
     ElMessage.error({
       message: errorMsg,
       duration: 5000
@@ -398,7 +397,7 @@ const handleReset = () => {
 </script>
 
 <style scoped>
-.report-generator-page {
+.data-analysis-page {
   min-height: 100vh;
   background: url('@/assets/allPic/public/deepbac.jpg') no-repeat center center;
   background-size: cover;
@@ -406,7 +405,7 @@ const handleReset = () => {
   position: relative;
 }
 
-.report-generator-page::before {
+.data-analysis-page::before {
   content: '';
   position: absolute;
   top: 0;

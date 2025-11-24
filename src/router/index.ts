@@ -128,6 +128,15 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/ReportGeneratorView.vue'),
     meta: { 
       requiresAuth: true,
+      title: '数据分析'
+    }
+  },
+  {
+    path: '/data-analysis',
+    name: 'data-analysis',
+    component: () => import('../views/DataAnalysisView.vue'),
+    meta: { 
+      requiresAuth: true,
       title: '报告生成'
     }
   },

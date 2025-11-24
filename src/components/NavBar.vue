@@ -115,6 +115,10 @@
               </el-dropdown-item>
               <el-dropdown-item command="report-generator">
                 <el-icon><Document /></el-icon>
+                <span>数据分析</span>
+              </el-dropdown-item>
+              <el-dropdown-item command="data-analysis">
+                <el-icon><DataAnalysis /></el-icon>
                 <span>报告生成</span>
               </el-dropdown-item>
               <el-dropdown-item command="logout">
@@ -152,7 +156,8 @@ import {
   SwitchButton,
   ChatLineSquare,
   DocumentCopy,
-  Document
+  Document,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -171,7 +176,8 @@ export default defineComponent({
     SwitchButton,
     ChatLineSquare,
     DocumentCopy,
-    Document
+    Document,
+    DataAnalysis
   },
   setup() {
     const store = useStore()
@@ -213,6 +219,8 @@ export default defineComponent({
         router.push('/excel-tool')
       } else if (command === 'report-generator') {
         router.push('/report-generator')
+      } else if (command === 'data-analysis') {
+        router.push('/data-analysis')
       } else if (command === 'admin') {
         router.push('/admin')
       } else if (command === 'super-admin') {
