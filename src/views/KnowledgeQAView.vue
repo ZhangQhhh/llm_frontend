@@ -1009,7 +1009,7 @@ export default defineComponent({
 
 /* Result Area */
 .result-area {
-  max-width: 1200px;  /* 与search-card保持一致 */
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1018,8 +1018,6 @@ export default defineComponent({
 
 .answer-section {
   width: 100%;
-  max-width: 1200px;  /* 与search-card保持一致 */
-  margin: 0 auto;
 }
 
 .metadata-section {
@@ -1085,7 +1083,7 @@ export default defineComponent({
 .search-card {
   margin-bottom: 2rem;
   overflow: visible;
-  max-width: 1200px;  /* 增大宽度，确保所有元素有足够空间 */
+  max-width: 900px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -1097,14 +1095,13 @@ export default defineComponent({
 
 .custom-textarea :deep(.el-textarea__inner) {
   border-radius: 12px;
-  padding: 1rem;
+  padding: 0.75rem;
   font-size: 15px;
-  line-height: 1.6;
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
   background-color: #f8fafc;
   border: 1px solid #e2e8f0;
   transition: all 0.3s;
-  min-height: 120px;  /* 增加最小高度 */
+  min-height: 60px;
 }
 
 .custom-textarea :deep(.el-textarea__inner:focus) {
