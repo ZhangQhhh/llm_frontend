@@ -568,9 +568,8 @@ export default defineComponent({
     // 调用策略判断API
     const callStrategyAPI = async (stem: string, options: { [key: string]: string }): Promise<string> => {
       try {
-        // 构建API URL - 与其他API端点保持一致
-        const baseUrl = window.location.origin;
-        const apiUrl = `${baseUrl}/api/knowledge/mcq_strategy`;
+        // 使用配置文件中的MCQ策略判断端点
+        const apiUrl = API_ENDPOINTS.KNOWLEDGE.MCQ_STRATEGY;
 
         const response = await fetch(apiUrl, {
           method: 'POST',

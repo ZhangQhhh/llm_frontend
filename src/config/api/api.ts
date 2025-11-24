@@ -38,6 +38,8 @@ export const API_ENDPOINTS = {
     CHAT: `${LLM_BASE_URL}/knowledge_chat`,
     CHAT_12367:`${LLM_BASE_URL}/knowledge_chat_12367`,
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
+    // MCQ策略判断 - 使用完整URL
+    MCQ_STRATEGY: `${LLM_BASE_URL}/mcq_strategy`,
     // 会话管理 - 使用相对路径（用于llmHttp）
     CONVERSATION_NEW: `/conversation/new`,
     CONVERSATION_CLEAR: `/conversation/clear`,
