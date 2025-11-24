@@ -1022,7 +1022,7 @@ export default defineComponent({
 
 .metadata-section {
   width: 100%;
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
@@ -1083,7 +1083,7 @@ export default defineComponent({
 .search-card {
   margin-bottom: 2rem;
   overflow: visible;
-  max-width: 900px;
+  max-width: 1100px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -1347,7 +1347,7 @@ export default defineComponent({
 /* Result Area */
 .thinking-section {
   margin-bottom: 1.5rem;
-  max-width: 900px;
+  max-width: 1100px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -1431,7 +1431,7 @@ export default defineComponent({
 /* Answer Card */
 .answer-card {
   min-height: 200px;
-  max-width: 900px;
+  max-width: 1100px;
   margin-left: auto;
   margin-right: auto;
 }
