@@ -42,7 +42,7 @@
                       </el-icon>
                       <div class="upload-text">
                         <p class="primary-text">点击或拖拽上传往年数据</p>
-                        <p class="secondary-text">支持 .xlsx / .xls 格式</p>
+                        <p class="secondary-text">仅支持 .xlsx 格式</p>
                       </div>
                     </div>
                   </el-upload>
@@ -78,7 +78,7 @@
                       </el-icon>
                       <div class="upload-text">
                         <p class="primary-text">点击或拖拽上传今年数据</p>
-                        <p class="secondary-text">支持 .xlsx / .xls 格式</p>
+                        <p class="secondary-text">仅支持 .xlsx 格式</p>
                       </div>
                     </div>
                   </el-upload>
@@ -226,7 +226,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { useRouter } from 'vue-router';
 import {
   DataAnalysis,
   UploadFilled,
@@ -257,6 +258,7 @@ const loading = ref(false);
 const previousUploadRef = ref();
 const currentUploadRef = ref();
 const activeCollapse = ref(['1']);
+const router = useRouter();
 
 // 计算当前步骤
 const currentStep = computed(() => {
@@ -271,26 +273,86 @@ const canGenerate = computed(() => {
   return form.value.previousFile && form.value.currentFile && !loading.value;
 });
 
-// 处理往年数据文件变化
-const handlePreviousFileChange = (uploadFile: UploadFile) => {
-  form.value.previousFile = uploadFile.raw || null;
-  if (form.value.previousFile) {
-    ElMessage.success({
-      message: `已选择往年数据: ${form.value.previousFile.name}`,
-      duration: 2000
-    });
+// 检查文件格式
+const checkFileFormat = async (file: File): Promise<boolean> => {
+  const fileName = file.name.toLowerCase();
+  
+  // 只允许 .xlsx 格式
+  if (!fileName.endsWith('.xlsx')) {
+    if (fileName.endsWith('.xls')) {
+      // 如果是 .xls 格式，提示用户转换
+      try {
+        await ElMessageBox.confirm(
+          '检测到您上传的是 .xls 格式文件，本功能仅支持 .xlsx 格式。请前往 Excel 工具将文件转换为 .xlsx 格式后再继续。',
+          '文件格式不支持',
+          {
+            confirmButtonText: '前往 Excel 工具',
+            cancelButtonText: '取消',
+            type: 'warning',
+            center: true
+          }
+        );
+        // 用户点击确认，跳转到 Excel 工具
+        router.push('/excel-tool');
+      } catch {
+        // 用户点击取消，不做任何操作
+      }
+      return false;
+    } else {
+      // 其他格式直接提示错误
+      ElMessage.error({
+        message: '仅支持 .xlsx 格式的 Excel 文件',
+        duration: 3000
+      });
+      return false;
+    }
   }
+  
+  return true;
+};
+
+// 处理往年数据文件变化
+const handlePreviousFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+  
+  // 验证文件格式
+  const isValid = await checkFileFormat(file);
+  if (!isValid) {
+    // 清除上传的文件
+    if (previousUploadRef.value) {
+      previousUploadRef.value.clearFiles();
+    }
+    return;
+  }
+  
+  form.value.previousFile = file;
+  ElMessage.success({
+    message: `已选择往年数据: ${file.name}`,
+    duration: 2000
+  });
 };
 
 // 处理今年数据文件变化
-const handleCurrentFileChange = (uploadFile: UploadFile) => {
-  form.value.currentFile = uploadFile.raw || null;
-  if (form.value.currentFile) {
-    ElMessage.success({
-      message: `已选择今年数据: ${form.value.currentFile.name}`,
-      duration: 2000
-    });
+const handleCurrentFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+  
+  // 验证文件格式
+  const isValid = await checkFileFormat(file);
+  if (!isValid) {
+    // 清除上传的文件
+    if (currentUploadRef.value) {
+      currentUploadRef.value.clearFiles();
+    }
+    return;
   }
+  
+  form.value.currentFile = file;
+  ElMessage.success({
+    message: `已选择今年数据: ${file.name}`,
+    duration: 2000
+  });
 };
 
 // 清除往年文件
