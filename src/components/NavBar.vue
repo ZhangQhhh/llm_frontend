@@ -121,6 +121,10 @@
                 <el-icon><DataAnalysis /></el-icon>
                 <span>报告生成</span>
               </el-dropdown-item>
+              <el-dropdown-item command="docx-tool">
+                <el-icon><Document /></el-icon>
+                <span>DOCX 工具</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 <span>退出登录</span>
@@ -221,6 +225,9 @@ export default defineComponent({
         router.push('/report-generator')
       } else if (command === 'data-analysis') {
         router.push('/data-analysis')
+      } else if (command === 'docx-tool') {
+        // 跳转到 nginx 代理的 docx 服务
+        window.location.href = '/docx'
       } else if (command === 'admin') {
         router.push('/admin')
       } else if (command === 'super-admin') {
