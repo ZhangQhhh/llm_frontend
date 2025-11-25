@@ -23,6 +23,14 @@
     </el-menu-item>
     
     <el-menu-item 
+      index="/help" 
+      @click="navigateTo('/help')"
+    >
+      <el-icon><QuestionFilled /></el-icon>
+      <span>帮助中心</span>
+    </el-menu-item>
+    
+    <el-menu-item 
       index="/knowledge-qa" 
       @click="navigateTo('/knowledge-qa')"
       v-if="isLoggedIn"
@@ -149,6 +157,7 @@ import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import { 
   HomeFilled, 
+  QuestionFilled,
   Reading, 
   ChatDotRound,
   EditPen,
@@ -169,6 +178,7 @@ export default defineComponent({
   name: 'NavBar',
   components: {
     HomeFilled,
+    QuestionFilled,
     Reading,
     ChatDotRound,
     EditPen,

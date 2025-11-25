@@ -2,6 +2,8 @@
   <div id="app">
     <NavBar v-if="showNavBar" />
     <router-view />
+    <TourGuideButton />
+    <FirstTimeGuide />
   </div>
 </template>
 
@@ -9,11 +11,15 @@
 import { defineComponent, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import NavBar from './components/NavBar.vue';
+import TourGuideButton from './components/TourGuideButton.vue';
+import FirstTimeGuide from './components/FirstTimeGuide.vue';
 
 export default defineComponent({
   name: "App",
   components: {
     NavBar,
+    TourGuideButton,
+    FirstTimeGuide,
   },
   setup() {
     const route = useRoute();
@@ -31,6 +37,8 @@ export default defineComponent({
 </script>
 
 <style>
+@import '@/styles/driver.css';
+
 * {
   margin: 0;
   padding: 0;

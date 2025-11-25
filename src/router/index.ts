@@ -159,6 +159,14 @@ const routes: Array<RouteRecordRaw> = [
       requiresAdmin: true,
       title: '反馈详情'
     }
+  },
+  {
+    path: '/help',
+    name: 'help-center',
+    component: () => import('../views/HelpCenterView.vue'),
+    meta: { 
+      title: '帮助中心'
+    }
   }
 ]
 

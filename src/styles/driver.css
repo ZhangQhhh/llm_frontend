@@ -1,0 +1,106 @@
+/* Driver.js 自定义样式 */
+.driver.js {
+  z-index: 9999 !important;
+}
+
+.driver.js-popover {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  border: none;
+  max-width: 400px;
+}
+
+.driver.js-popover-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.driver.js-popover-description {
+  font-size: 0.95rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.driver.js-popover-footer {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.driver.js-popover-next-btn,
+.driver.js-popover-prev-btn,
+.driver.js-popover-close-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.driver.js-popover-next-btn:hover,
+.driver.js-popover-prev-btn:hover {
+  background: #1d4ed8;
+}
+
+.driver.js-popover-close-btn {
+  background: #6b7280;
+}
+
+.driver.js-popover-close-btn:hover {
+  background: #4b5563;
+}
+
+.driver.js-popover-progress-text {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 高亮区域样式 */
+.driver.js-highlight {
+  border-radius: 8px !important;
+}
+
+.driver.js-overlay {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* 导览指示器动画 */
+@keyframes driver-popover-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.driver.js-popover {
+  animation: driver-popover-appear 0.3s ease-out;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .driver.js-popover {
+    max-width: 300px;
+    margin: 1rem;
+  }
+  
+  .driver.js-popover-title {
+    font-size: 1.1rem;
+  }
+  
+  .driver.js-popover-description {
+    font-size: 0.9rem;
+  }
+}

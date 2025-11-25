@@ -17,6 +17,7 @@
     "codepage": "^1.15.0",
     "core-js": "^3.8.3",
     "dompurify": "^3.3.0",
+    "driver.js": "^1.4.0",
     "element-plus": "^2.11.5",
     "highlight.js": "^11.11.1",
     "jquery": "^3.7.1",
