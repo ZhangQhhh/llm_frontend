@@ -68,6 +68,16 @@
                   <h3>{{ feature.name }}</h3>
                   <p class="feature-desc">{{ feature.description }}</p>
                 </div>
+                <div class="feature-actions">
+                  <el-button 
+                    type="primary" 
+                    size="small" 
+                    @click="viewDetailedDoc(feature.id)"
+                    :loading="loadingDoc === feature.id"
+                  >
+                    查看详细文档
+                  </el-button>
+                </div>
               </div>
               <div class="feature-details">
                 <h4>主要功能：</h4>
@@ -78,6 +88,31 @@
                 <p>{{ feature.useCase }}</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 详细文档 -->
+        <div v-show="activeSection === 'detailed-docs'" class="help-section">
+          <div class="doc-header">
+            <el-button @click="backToFeatures" type="text" class="back-btn">
+              <el-icon><ArrowLeft /></el-icon>
+              返回功能介绍
+            </el-button>
+            <h2>{{ currentDocTitle }}</h2>
+          </div>
+          <div class="doc-content">
+            <div v-if="loadingDocContent" class="doc-loading">
+              <el-skeleton :rows="10" animated />
+            </div>
+            <div v-else-if="docError" class="doc-error">
+              <el-alert
+                title="文档加载失败"
+                :description="docError"
+                type="error"
+                show-icon
+              />
+            </div>
+            <div v-else class="markdown-content" v-html="renderedDocContent"></div>
           </div>
         </div>
 
@@ -128,6 +163,8 @@
 import { defineComponent, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { tourGuide } from '@/utils/tourGuide'
+import { marked } from 'marked'
+import { docs } from '@/docs/index'
 import { 
   QuestionFilled, 
   Guide, 
@@ -139,7 +176,8 @@ import {
   EditPen,
   Briefcase,
   Service,
-  Setting
+  Setting,
+  ArrowLeft
 } from '@element-plus/icons-vue'
 
 export default defineComponent({
@@ -155,12 +193,20 @@ export default defineComponent({
     EditPen,
     Briefcase,
     Service,
-    Setting
+    Setting,
+    ArrowLeft
   },
   setup() {
     const router = useRouter()
     const activeSection = ref('getting-started')
     const activeFaq = ref<string[]>([])
+    
+    // 文档相关状态
+    const loadingDoc = ref<string | null>(null)
+    const loadingDocContent = ref(false)
+    const docError = ref<string | null>(null)
+    const currentDocTitle = ref('')
+    const renderedDocContent = ref('')
 
     const gettingStartedGuides = [
       {
@@ -245,6 +291,19 @@ export default defineComponent({
           '办公流程优化'
         ],
         useCase: '适用于日常办公和业务处理场景'
+      },
+      {
+        id: 'immigration-12367',
+        name: '移民局12367咨询助手',
+        description: '专业的移民局咨询服务AI助手',
+        icon: 'Service',
+        features: [
+          '政策智能搜索',
+          '专业咨询解答',
+          '案例库管理',
+          '服务信息查询'
+        ],
+        useCase: '适用于移民局12367咨询热线业务'
       }
     ]
 
@@ -329,6 +388,60 @@ export default defineComponent({
       console.log('查看详情:', guideId)
     }
 
+    // 文档映射
+    const docMapping: Record<string, { title: string; key: keyof typeof docs }> = {
+      'knowledge-qa': { title: '知识问答系统详细使用指南', key: 'knowledge-qa' },
+      'conversation': { title: '多轮对话系统详细使用指南', key: 'conversation' },
+      'exam': { title: '边检智能家教系统详细使用指南', key: 'exam-system' },
+      'smart-office': { title: '智慧办公工具详细使用指南', key: 'smart-office' },
+      'immigration-12367': { title: '移民局12367咨询助手详细使用指南', key: 'immigration-12367' }
+    }
+
+    // 查看详细文档
+    const viewDetailedDoc = async (featureId: string) => {
+      const docInfo = docMapping[featureId]
+      if (!docInfo) {
+        console.error('未找到对应的文档:', featureId)
+        return
+      }
+
+      loadingDoc.value = featureId
+      loadingDocContent.value = true
+      docError.value = null
+      currentDocTitle.value = docInfo.title
+
+      try {
+        // 从文档索引获取 Markdown 内容
+        const markdownContent = docs[docInfo.key]
+        if (!markdownContent) {
+          throw new Error('文档内容不存在')
+        }
+        
+        // 渲染 Markdown
+        renderedDocContent.value = await marked(markdownContent, {
+          breaks: true,
+          gfm: true
+        })
+
+        // 切换到文档视图
+        activeSection.value = 'detailed-docs'
+      } catch (error) {
+        console.error('加载文档失败:', error)
+        docError.value = '文档加载失败，请稍后重试'
+      } finally {
+        loadingDoc.value = null
+        loadingDocContent.value = false
+      }
+    }
+
+    // 返回功能介绍页面
+    const backToFeatures = () => {
+      activeSection.value = 'features'
+      currentDocTitle.value = ''
+      renderedDocContent.value = ''
+      docError.value = null
+    }
+
     onMounted(() => {
       // 可以在这里记录用户访问帮助中心的行为
     })
@@ -340,9 +453,16 @@ export default defineComponent({
       features,
       faqs,
       shortcuts,
+      loadingDoc,
+      loadingDocContent,
+      docError,
+      currentDocTitle,
+      renderedDocContent,
       handleSectionSelect,
       startTour,
-      viewDetails
+      viewDetails,
+      viewDetailedDoc,
+      backToFeatures
     }
   }
 })
@@ -539,6 +659,155 @@ export default defineComponent({
 .feature-details li {
   color: #6b7280;
   margin-bottom: 0.3rem;
+}
+
+.feature-actions {
+  margin-left: auto;
+}
+
+/* 详细文档样式 */
+.doc-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.back-btn:hover {
+  color: #374151;
+}
+
+.doc-content {
+  max-width: none;
+}
+
+.doc-loading {
+  padding: 2rem 0;
+}
+
+.doc-error {
+  padding: 2rem 0;
+}
+
+.markdown-content {
+  line-height: 1.7;
+  color: #374151;
+}
+
+.markdown-content h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 2rem 0 1rem;
+  color: #1f2937;
+}
+
+.markdown-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem;
+  color: #374151;
+}
+
+.markdown-content h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: #374151;
+}
+
+.markdown-content p {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+}
+
+.markdown-content ul, .markdown-content ol {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.markdown-content code {
+  background: #f3f4f6;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #e11d48;
+}
+
+.markdown-content pre {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+  color: #1f2937;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #dfc9e8;
+  background: #faf9fc;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.markdown-content th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.markdown-content tr:hover {
+  background: #f9fafb;
 }
 
 /* FAQ */
