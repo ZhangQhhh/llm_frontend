@@ -62,8 +62,8 @@
 
 <script lang="ts">
 import { defineComponent, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { tourGuide } from '@/utils/tourGuide'
+import { ElMessage } from 'element-plus'
 import { 
   Guide, 
   Reading, 
@@ -82,7 +82,6 @@ export default defineComponent({
     Briefcase
   },
   setup() {
-    const router = useRouter()
     const showGuide = ref(false)
     const selectedOption = ref('tour')
     const dontShowAgain = ref(false)
@@ -137,9 +136,8 @@ export default defineComponent({
           }, 300)
           break
         case 'help':
-          // 跳转到帮助中心
-          showGuide.value = false
-          router.push('/help')
+          // 帮助中心暂未开放
+          ElMessage.info('帮助中心文档正在完善中，敬请期待...')
           break
         case 'skip':
           // 直接开始使用（已经调用了 completeGuide）

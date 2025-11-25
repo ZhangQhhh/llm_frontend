@@ -24,7 +24,7 @@
     
     <el-menu-item 
       index="/help" 
-      @click="navigateTo('/help')"
+      @click="handleHelpClick"
     >
       <el-icon><QuestionFilled /></el-icon>
       <span>帮助中心</span>
@@ -172,6 +172,7 @@ import {
   Document,
   DataAnalysis
 } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { RoleNames, UserRole } from '@/config/permissions'
 
 export default defineComponent({
@@ -224,6 +225,11 @@ export default defineComponent({
       router.push(path)
     }
 
+    // 帮助中心暂未开放
+    const handleHelpClick = () => {
+      ElMessage.info('帮助中心文档正在完善中，敬请期待...')
+    }
+
     const handleCommand = (command: string) => {
       if (command === 'logout') {
         store.dispatch('logout')
@@ -257,7 +263,8 @@ export default defineComponent({
       roleTagType,
       roleText,
       navigateTo,
-      handleCommand
+      handleCommand,
+      handleHelpClick
     }
   }
 })
