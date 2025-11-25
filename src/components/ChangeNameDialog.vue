@@ -80,6 +80,7 @@ export default defineComponent({
     const showDialog = ref(false)
     const loading = ref(false)
     const formRef = ref<FormInstance>()
+    const hasChecked = ref(false)  // 是否已检查过
 
     const formData = reactive({
       newName: '',
@@ -88,9 +89,6 @@ export default defineComponent({
 
     // 获取当前用户名
     const currentUsername = computed(() => store.state.user.username)
-    
-    // 获取用户是否已修改过用户名
-    const hasChangedName = computed(() => store.state.user.hasChangedName)
     
     // 获取用户是否已登录
     const isLoggedIn = computed(() => store.state.user.is_login)
@@ -121,13 +119,35 @@ export default defineComponent({
       ]
     }
 
-    // 监听登录状态和 hasChangedName 变化
-    watch(
-      [isLoggedIn, hasChangedName],
-      ([loggedIn, changed]) => {
-        // 只有在用户已登录且未修改过用户名时才显示弹窗
-        if (loggedIn && changed === false) {
+    // 从后端获取用户是否已修改过用户名
+    const checkHasChangedName = async () => {
+      if (hasChecked.value) return
+      
+      try {
+        const response = await http.get(API_ENDPOINTS.AUTH.USER_INFO)
+        // 后端返回 { id, username, email, hasChangedName }
+        const userInfo = response.data
+        
+        if (userInfo.hasChangedName === false) {
           showDialog.value = true
+        }
+        
+        // 更新 store 中的状态
+        store.commit('setHasChangedName', userInfo.hasChangedName)
+        hasChecked.value = true
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+      }
+    }
+
+    // 监听登录状态变化
+    watch(
+      isLoggedIn,
+      (loggedIn) => {
+        if (loggedIn) {
+          checkHasChangedName()
+        } else {
+          hasChecked.value = false
         }
       },
       { immediate: true }

@@ -33,8 +33,8 @@
                 <div class="controls-area">
                   <el-select v-model="modelId" placeholder="选择模型" class="control-item" style="width: 150px">
                     <template #prefix><el-icon><Cpu /></el-icon></template>
-                    <el-option label="Qwen-32B (通用)" value="qwen3-32b" />
-                    <el-option label="Qwen-Max (增强)" value="qwen2025" />
+                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen (增强)" value="qwen2025" />
                     <el-option label="DeepSeek-R1 (深度)" value="deepseek" />
                     <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" />
                   </el-select>
