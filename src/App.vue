@@ -4,6 +4,7 @@
     <router-view />
     <TourGuideButton />
     <FirstTimeGuide />
+    <ChangeNameDialog />
   </div>
 </template>
 
@@ -13,6 +14,7 @@ import { useRoute } from 'vue-router';
 import NavBar from './components/NavBar.vue';
 import TourGuideButton from './components/TourGuideButton.vue';
 import FirstTimeGuide from './components/FirstTimeGuide.vue';
+import ChangeNameDialog from './components/ChangeNameDialog.vue';
 
 export default defineComponent({
   name: "App",
@@ -20,6 +22,7 @@ export default defineComponent({
     NavBar,
     TourGuideButton,
     FirstTimeGuide,
+    ChangeNameDialog,
   },
   setup() {
     const route = useRoute();

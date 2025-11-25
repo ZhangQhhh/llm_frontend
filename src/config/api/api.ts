@@ -30,7 +30,7 @@ export const API_ENDPOINTS = {
   USER: {
     LOGIN: `/user/account/token/`,
     REGISTER: `/user/account/register/`,
-    INFO: `/user/account/info/`,
+    INFO: `/user/account/info/`
   },
   // 知识问答相关API
   KNOWLEDGE: {
@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   AUTH: {
     CHANGE_PASSWORD: `/auth/change_password`,
     RESET_PASSWORD: `/auth/reset_password`,
+    CHANGE_NAME:`/auth/change_username`
   },
   // 题库管理API
   QUESTIONS: {

@@ -13,6 +13,7 @@ interface UserInfo {
   email?: string | null;
   policeId?: string | null;
   idCardNumber?: string | null;
+  hasChangedName?: boolean;  // 是否已修改过用户名
 }
 
 // [3] 定义 Vuex state 的完整形状
@@ -71,6 +72,7 @@ const state: UserState = {
   email: null,
   policeId: null,
   idCardNumber: null,
+  hasChangedName: undefined,  // 是否已修改过用户名
 };
 
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
@@ -107,6 +109,7 @@ export default {
       state.email = user.email || null;
       state.policeId = user.policeId || null;
       state.idCardNumber = user.idCardNumber || null;
+      state.hasChangedName = user.hasChangedName;
     },
     // [10] 为 token 参数添加类型
     updateToken(state: UserState, token: string) {
@@ -122,6 +125,15 @@ export default {
       state.email = null;
       state.policeId = null;
       state.idCardNumber = null;
+      state.hasChangedName = undefined;
+    },
+    // 更新用户名
+    updateUsername(state: UserState, username: string) {
+      state.username = username;
+    },
+    // 设置是否已修改过用户名
+    setHasChangedName(state: UserState, value: boolean) {
+      state.hasChangedName = value;
     }
   },
   actions: {  // 修改state的函数写在actions里边
@@ -202,6 +214,7 @@ export default {
             email: userInfo.email || null,
             policeId: userInfo.policeId || null,
             idCardNumber: userInfo.idCardNumber || null,
+            hasChangedName: userInfo.hasChangedName ?? false,  // 默认为 false
             is_login: true,
           };
 
