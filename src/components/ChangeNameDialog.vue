@@ -15,6 +15,9 @@
         <p class="notice-text">
           为了更好地为您提供服务，请将用户名修改为您的<strong>真实姓名</strong>。
         </p>
+        <p class="notice-tip">
+          若当前已经是真实姓名，则再次输入即可。
+        </p>
         <p class="notice-warning">
           <el-icon><Warning /></el-icon>
           注意：用户名只能修改一次，请认真填写！
@@ -234,6 +237,12 @@ export default defineComponent({
 
 .notice-text strong {
   color: #409eff;
+}
+
+.notice-tip {
+  font-size: 0.9rem;
+  color: #67c23a;
+  margin-bottom: 0.75rem;
 }
 
 .notice-warning {

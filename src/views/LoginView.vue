@@ -48,14 +48,14 @@
           <!-- 登录表单 -->
           <form v-if="isLogin" @submit.prevent="handleLogin" class="form">
             <h2 class="form-title">登录账号</h2>
-            <p class="form-subtitle">使用您的账号登录系统</p>
+            <p class="form-subtitle">使用您的警号登录系统</p>
 
             <div class="form-group">
-              <label>用户名</label>
+              <label>警号</label>
               <input
                 type="text"
                 v-model="loginForm.username"
-                placeholder="请输入用户名或工号"
+                placeholder="请输入警号"
                 required
               />
             </div>
