@@ -187,6 +187,12 @@ router.beforeEach((to, from, next) => {
     document.title = `${to.meta.title} - 边检知识问答系统`
   }
   
+  // 未登录用户访问首页，重定向到登录页
+  if (to.name === 'home' && !token) {
+    next({ name: 'login' })
+    return
+  }
+  
   // 检查是否需要登录
   if (to.meta.requiresAuth && !token) {
     ElMessage.warning('请先登录')

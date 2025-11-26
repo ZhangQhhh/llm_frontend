@@ -1,55 +1,23 @@
 <template>
-  <div class="qa-page ai-tech-theme">
-    <!-- 科技感AI背景效果 -->
-    <div class="ai-bg">
-      <!-- 星空粒子背景 -->
-      <div class="stars-layer"></div>
-      <!-- 科技网格 -->
-      <div class="tech-grid"></div>
-      <!-- 光效装饰 -->
-      <div class="glow-orb glow-orb-1"></div>
-      <div class="glow-orb glow-orb-2"></div>
-      <div class="glow-orb glow-orb-3"></div>
-      <!-- 扫描线 -->
-      <div class="scan-line"></div>
-      <!-- 边框装饰线 -->
-      <div class="border-line border-top"></div>
-      <div class="border-line border-bottom"></div>
-      <!-- 角落装饰 -->
-      <div class="corner-decor corner-tl"></div>
-      <div class="corner-decor corner-tr"></div>
-      <div class="corner-decor corner-bl"></div>
-      <div class="corner-decor corner-br"></div>
-      
-      <!-- AI机器人背景图 -->
-      <div class="robot-bg">
-        <div class="robot-glow"></div>
-        <div class="robot-image"></div>
-        <div class="robot-scan-line"></div>
-      </div>
+  <div class="qa-page cyber-theme">
+    <!-- 赛博朋克背景效果 -->
+    <div class="cyber-bg">
+      <div class="cyber-grid"></div>
+      <div class="cyber-scanline"></div>
+      <div class="cyber-glow cyber-glow-1"></div>
+      <div class="cyber-glow cyber-glow-2"></div>
+      <div class="cyber-particles"></div>
     </div>
     <el-container class="main-container">
       <!-- 头部区域 -->
       <el-header class="page-header">
         <div class="brand">
-          <!-- AI机器人图标区域 -->
-          <div class="ai-avatar">
-            <div class="avatar-ring"></div>
-            <div class="avatar-core">
-              <img src="@/assets/allPic/public/4.png" alt="AI" class="ai-logo" />
-            </div>
-            <div class="avatar-pulse"></div>
+          <div class="logo-icon">
+            <img src="@/assets/allPic/public/4.png" alt="Logo" class="logo-image" />
           </div>
           <div class="brand-text">
-            <div class="title-wrapper">
-              <span class="title-prefix">智能</span>
-              <h1>边检知识问答系统</h1>
-            </div>
-            <p class="subtitle">INTELLIGENT BORDER INSPECTION Q&A SYSTEM</p>
-            <div class="status-bar">
-              <span class="status-dot"></span>
-              <span class="status-text">AI引擎运行中</span>
-            </div>
+            <h1>边检知识问答助手</h1>
+            <p>Intelligent Border Inspection Knowledge Assistant</p>
           </div>
         </div>
       </el-header>
@@ -1007,26 +975,28 @@ export default defineComponent({
 </script>
 
 <style scoped>
-/* ========== 国企AI科技感主题变量 ========== */
-.ai-tech-theme {
-  --ai-primary: #00b4ff;
-  --ai-secondary: #6366f1;
-  --ai-accent: #22d3ee;
-  --ai-danger: #ef4444;
-  --ai-success: #10b981;
-  --ai-warning: #f59e0b;
-  --ai-bg-dark: #0a1929;
-  --ai-bg-card: rgba(10, 25, 50, 0.95);
-  --ai-border: rgba(0, 180, 255, 0.3);
-  --ai-glow: 0 0 30px rgba(0, 180, 255, 0.4);
-  --ai-text: #e8f4fc;
-  --ai-text-dim: #94a3b8;
-  --ai-gradient: linear-gradient(135deg, #0a1929 0%, #0d2847 50%, #0a1929 100%);
+/* ========== 赛博朋克主题变量 ========== */
+.cyber-theme {
+  --cyber-primary: #00d4ff;
+  --cyber-secondary: #ff66ff;
+  --cyber-accent: #ffff00;
+  --cyber-danger: #ff4466;
+  --cyber-success: #00ff88;
+  --cyber-bg-dark: #0d1117;
+  --cyber-bg-card: rgba(13, 17, 23, 0.92);
+  --cyber-border: rgba(0, 212, 255, 0.4);
+  --cyber-glow: 0 0 20px rgba(0, 212, 255, 0.5);
+  --cyber-text: #f0f6fc;
+  --cyber-text-dim: #b0b8c4;
 }
 
 .qa-page {
   min-height: 100vh;
-  background: var(--ai-gradient);
+  background: 
+    radial-gradient(ellipse at 20% 20%, rgba(0, 212, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(255, 102, 255, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(0, 100, 150, 0.1) 0%, transparent 70%),
+    linear-gradient(180deg, #0a1628 0%, #0d1117 50%, #0a0f18 100%);
   padding-bottom: 2rem;
   position: relative;
   display: flex;
@@ -1035,8 +1005,8 @@ export default defineComponent({
   overflow: hidden;
 }
 
-/* ========== AI科技感背景效果 ========== */
-.ai-bg {
+/* ========== 赛博朋克背景效果 ========== */
+.cyber-bg {
   position: fixed;
   top: 0;
   left: 0;
@@ -1044,101 +1014,31 @@ export default defineComponent({
   bottom: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
 }
 
-/* 星空粒子层 */
-.stars-layer {
+/* 网格背景 */
+.cyber-grid {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background-image: 
-    radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.8), transparent),
-    radial-gradient(1px 1px at 20% 50%, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 30% 10%, rgba(0, 180, 255, 0.9), transparent),
-    radial-gradient(1px 1px at 40% 80%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 50% 30%, rgba(99, 102, 241, 0.8), transparent),
-    radial-gradient(1px 1px at 60% 70%, rgba(255, 255, 255, 0.7), transparent),
-    radial-gradient(1px 1px at 70% 40%, rgba(0, 180, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 80% 90%, rgba(255, 255, 255, 0.8), transparent),
-    radial-gradient(1px 1px at 90% 15%, rgba(99, 102, 241, 0.7), transparent),
-    radial-gradient(1px 1px at 15% 85%, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 25% 35%, rgba(0, 180, 255, 0.8), transparent),
-    radial-gradient(1px 1px at 35% 65%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1px 1px at 45% 5%, rgba(99, 102, 241, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 55% 95%, rgba(255, 255, 255, 0.7), transparent),
-    radial-gradient(1px 1px at 65% 25%, rgba(0, 180, 255, 0.5), transparent),
-    radial-gradient(1px 1px at 75% 55%, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 85% 75%, rgba(99, 102, 241, 0.7), transparent),
-    radial-gradient(1px 1px at 95% 45%, rgba(255, 255, 255, 0.8), transparent);
-  background-size: 100% 100%;
-  animation: starsTwinkle 8s ease-in-out infinite;
+    linear-gradient(rgba(0, 212, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(255, 102, 255, 0.03) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255, 102, 255, 0.03) 2px, transparent 2px);
+  background-size: 60px 60px, 60px 60px, 120px 120px, 120px 120px;
+  animation: gridPulse 4s ease-in-out infinite;
 }
 
-@keyframes starsTwinkle {
-  0%, 100% { opacity: 0.8; }
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
 
-/* 科技网格 */
-.tech-grid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: 
-    linear-gradient(rgba(0, 180, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 180, 255, 0.03) 1px, transparent 1px);
-  background-size: 80px 80px;
-  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, transparent 70%);
-  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, transparent 70%);
-}
-
-/* 光球效果 */
-.glow-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  animation: orbFloat 8s ease-in-out infinite;
-}
-
-.glow-orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(0, 180, 255, 0.25) 0%, transparent 70%);
-  top: -10%;
-  left: -5%;
-}
-
-.glow-orb-2 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
-  bottom: -10%;
-  right: -5%;
-  animation-delay: 2s;
-}
-
-.glow-orb-3 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation-delay: 4s;
-}
-
-@keyframes orbFloat {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.1); }
-}
-
-/* 扫描线 */
-.scan-line {
+/* 扫描线效果 */
+.cyber-scanline {
   position: absolute;
   top: 0;
   left: 0;
@@ -1146,152 +1046,77 @@ export default defineComponent({
   height: 2px;
   background: linear-gradient(90deg, 
     transparent 0%, 
-    rgba(0, 180, 255, 0.2) 20%, 
-    rgba(0, 180, 255, 0.6) 50%, 
-    rgba(0, 180, 255, 0.2) 80%, 
+    rgba(0, 212, 255, 0.3) 20%, 
+    rgba(0, 212, 255, 0.8) 50%, 
+    rgba(0, 212, 255, 0.3) 80%, 
     transparent 100%);
-  animation: scanMove 6s linear infinite;
-  box-shadow: 0 0 20px rgba(0, 180, 255, 0.4);
+  animation: scanline 4s linear infinite;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.3);
 }
 
-@keyframes scanMove {
+@keyframes scanline {
   0% { top: -2px; opacity: 0; }
-  5% { opacity: 1; }
-  95% { opacity: 1; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
   100% { top: 100%; opacity: 0; }
 }
 
-/* 边框装饰线 */
-.border-line {
+/* 霓虹光晕 */
+.cyber-glow {
   position: absolute;
-  left: 5%;
-  right: 5%;
-  height: 1px;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(0, 180, 255, 0.5) 10%,
-    rgba(0, 180, 255, 0.8) 50%,
-    rgba(0, 180, 255, 0.5) 90%,
-    transparent 100%);
-}
-
-.border-top {
-  top: 60px;
-  box-shadow: 0 0 10px rgba(0, 180, 255, 0.3);
-}
-
-.border-bottom {
-  bottom: 30px;
-  box-shadow: 0 0 10px rgba(0, 180, 255, 0.3);
-}
-
-/* 角落装饰 */
-.corner-decor {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-color: var(--ai-primary);
-  border-style: solid;
-  border-width: 0;
-}
-
-.corner-tl {
-  top: 55px;
-  left: 4%;
-  border-top-width: 2px;
-  border-left-width: 2px;
-}
-
-.corner-tr {
-  top: 55px;
-  right: 4%;
-  border-top-width: 2px;
-  border-right-width: 2px;
-}
-
-.corner-bl {
-  bottom: 25px;
-  left: 4%;
-  border-bottom-width: 2px;
-  border-left-width: 2px;
-}
-
-.corner-br {
-  bottom: 25px;
-  right: 4%;
-  border-bottom-width: 2px;
-  border-right-width: 2px;
-}
-
-/* ========== AI机器人背景图 ========== */
-.robot-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.robot-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url('@/assets/allPic/public/robot.jpg');
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center center;
-  animation: robotBreath 8s ease-in-out infinite;
-  filter: brightness(0.7) contrast(1.1);
-}
-
-@keyframes robotBreath {
-  0%, 100% { transform: scale(1); filter: brightness(0.7) contrast(1.1); }
-  50% { transform: scale(1.02); filter: brightness(0.75) contrast(1.15); }
-}
-
-.robot-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80%;
-  height: 80%;
-  background: radial-gradient(ellipse, rgba(0, 180, 255, 0.15) 0%, transparent 60%);
-  filter: blur(60px);
+  border-radius: 50%;
+  filter: blur(80px);
   animation: glowPulse 4s ease-in-out infinite;
 }
 
-@keyframes glowPulse {
-  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.1); }
+.cyber-glow-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, transparent 70%);
+  top: 5%;
+  left: 5%;
 }
 
-.robot-scan-line {
+.cyber-glow-2 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255, 102, 255, 0.35) 0%, transparent 70%);
+  bottom: 10%;
+  right: 10%;
+  animation-delay: 2s;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.15); }
+}
+
+/* 粒子效果 */
+.cyber-particles {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(180deg, 
-    transparent 0%, 
-    rgba(0, 180, 255, 0.08) 50%, 
-    transparent 51%);
-  background-size: 100% 4px;
-  animation: scanMove 4s linear infinite;
-  opacity: 0.6;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, rgba(0, 212, 255, 0.8), transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255, 102, 255, 0.7), transparent),
+    radial-gradient(3px 3px at 90px 40px, rgba(0, 212, 255, 0.6), transparent),
+    radial-gradient(2px 2px at 130px 80px, rgba(255, 255, 0, 0.5), transparent),
+    radial-gradient(2px 2px at 160px 120px, rgba(255, 102, 255, 0.6), transparent),
+    radial-gradient(3px 3px at 180px 160px, rgba(0, 212, 255, 0.7), transparent),
+    radial-gradient(2px 2px at 60px 180px, rgba(0, 255, 136, 0.5), transparent);
+  background-size: 250px 250px;
+  animation: particleFloat 15s linear infinite;
 }
 
-@keyframes scanMove {
-  0% { background-position: 0 -100%; }
-  100% { background-position: 0 200%; }
+@keyframes particleFloat {
+  0% { transform: translateY(0) translateX(0); opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { transform: translateY(-250px) translateX(20px); opacity: 0.8; }
 }
 
-/* 页面遮罩 */
+/* 页面遮罩 - 轻微的暗角效果 */
 .qa-page::before {
   content: '';
   position: absolute;
@@ -1299,9 +1124,42 @@ export default defineComponent({
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(ellipse at center, transparent 0%, rgba(10, 25, 41, 0.5) 100%);
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(10, 15, 24, 0.4) 100%);
   pointer-events: none;
   z-index: 1;
+}
+
+/* 添加水平光线效果 */
+.cyber-bg::before {
+  content: '';
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.3) 20%, 
+    rgba(0, 212, 255, 0.5) 50%, 
+    rgba(0, 212, 255, 0.3) 80%, 
+    transparent 100%);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.cyber-bg::after {
+  content: '';
+  position: absolute;
+  top: 70%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 102, 255, 0.3) 20%, 
+    rgba(255, 102, 255, 0.5) 50%, 
+    rgba(255, 102, 255, 0.3) 80%, 
+    transparent 100%);
+  box-shadow: 0 0 20px rgba(255, 102, 255, 0.3);
 }
 
 .main-container {
@@ -1349,195 +1207,101 @@ export default defineComponent({
   margin: 0 auto;
 }
 
-/* ========== AI科技感品牌区域 ========== */
+/* ========== 赛博朋克品牌区域 ========== */
 .brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
-  padding: 1rem 2rem;
-  background: linear-gradient(135deg, rgba(0, 180, 255, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
-  border: 1px solid rgba(0, 180, 255, 0.2);
-  border-radius: 16px;
-  position: relative;
+  gap: 1.5rem;
 }
 
-.brand::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 20%;
-  right: 20%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--ai-primary), transparent);
-}
-
-/* AI头像区域 */
-.ai-avatar {
-  position: relative;
-  width: 90px;
-  height: 90px;
+.logo-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.avatar-ring {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 2px solid var(--ai-primary);
-  border-radius: 50%;
-  animation: ringRotate 10s linear infinite;
-  box-shadow: 0 0 20px rgba(0, 180, 255, 0.3);
-}
-
-.avatar-ring::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  background: var(--ai-primary);
-  border-radius: 50%;
-  transform: translateX(-50%);
-  box-shadow: 0 0 10px var(--ai-primary);
-}
-
-@keyframes ringRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.avatar-core {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #0a1929 0%, #0d2847 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(0, 180, 255, 0.5);
   overflow: hidden;
-  z-index: 1;
+  background: linear-gradient(135deg, var(--cyber-bg-dark), #1a1a2e);
+  border: 2px solid var(--cyber-primary);
+  box-shadow: 
+    0 0 20px rgba(0, 240, 255, 0.4),
+    0 0 40px rgba(0, 240, 255, 0.2),
+    inset 0 0 20px rgba(0, 240, 255, 0.1);
+  animation: logoPulse 2s ease-in-out infinite;
 }
 
-.ai-logo {
-  width: 85%;
-  height: 85%;
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), 0 0 40px rgba(0, 240, 255, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.6), 0 0 60px rgba(0, 240, 255, 0.3); }
+}
+
+.logo-image {
+  width: 90%;
+  height: 90%;
   object-fit: cover;
-  filter: drop-shadow(0 0 8px rgba(0, 180, 255, 0.5));
-}
-
-.avatar-pulse {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 1px solid var(--ai-primary);
-  animation: pulseExpand 2s ease-out infinite;
-  opacity: 0;
-}
-
-@keyframes pulseExpand {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
-/* 品牌文字 */
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.title-wrapper {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.title-prefix {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--ai-accent);
-  padding: 4px 12px;
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2) 0%, rgba(34, 211, 238, 0.1) 100%);
-  border: 1px solid rgba(34, 211, 238, 0.3);
-  border-radius: 4px;
+  filter: drop-shadow(0 0 10px var(--cyber-primary));
 }
 
 .brand-text h1 {
-  font-size: 2rem;
+  font-size: 2.4rem;
   font-weight: 700;
-  color: var(--ai-text);
+  color: var(--cyber-text);
   margin: 0;
-  letter-spacing: 2px;
-  text-shadow: 0 0 20px rgba(0, 180, 255, 0.3);
-}
-
-.brand-text .subtitle {
-  font-size: 0.75rem;
-  color: var(--ai-text-dim);
-  margin: 0;
-  font-weight: 500;
+  text-shadow: 
+    0 0 10px var(--cyber-primary),
+    0 0 20px var(--cyber-primary),
+    0 0 40px rgba(0, 240, 255, 0.3);
   letter-spacing: 3px;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  background: linear-gradient(90deg, var(--cyber-primary), var(--cyber-secondary), var(--cyber-primary));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShine 3s linear infinite;
+}
+
+@keyframes textShine {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+.brand-text p {
+  font-size: 0.85rem;
+  color: var(--cyber-text-dim);
+  margin: 0.5rem 0 0 0;
+  font-weight: 400;
+  letter-spacing: 4px;
   text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
 }
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--ai-success);
-  border-radius: 50%;
-  animation: statusBlink 2s ease-in-out infinite;
-  box-shadow: 0 0 8px var(--ai-success);
-}
-
-@keyframes statusBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.status-text {
-  font-size: 0.75rem;
-  color: var(--ai-success);
-  font-weight: 500;
-  letter-spacing: 1px;
-}
-
-/* ========== AI科技感玻璃效果 ========== */
+/* ========== 赛博朋克玻璃效果 ========== */
 .glass-effect {
-  background: var(--ai-bg-card) !important;
+  background: var(--cyber-bg-card) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--ai-border) !important;
+  border: 1px solid var(--cyber-border) !important;
   box-shadow: 
-    0 4px 30px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(0, 180, 255, 0.1),
+    0 0 30px rgba(0, 240, 255, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-radius: 12px !important;
+  border-radius: 4px !important;
   position: relative;
   overflow: hidden;
 }
 
-/* 卡片顶部装饰线 */
+/* 卡片角落装饰 */
 .glass-effect::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--ai-primary), transparent);
+  left: 0;
+  width: 30px;
+  height: 30px;
+  border-top: 2px solid var(--cyber-primary);
+  border-left: 2px solid var(--cyber-primary);
   pointer-events: none;
 }
 
@@ -1545,14 +1309,15 @@ export default defineComponent({
   content: '';
   position: absolute;
   bottom: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+  right: 0;
+  width: 30px;
+  height: 30px;
+  border-bottom: 2px solid var(--cyber-secondary);
+  border-right: 2px solid var(--cyber-secondary);
   pointer-events: none;
 }
 
-/* ========== AI科技感搜索卡片 ========== */
+/* ========== 赛博朋克搜索卡片 ========== */
 .search-card {
   margin-bottom: 2rem;
   overflow: visible;
@@ -1567,27 +1332,27 @@ export default defineComponent({
 }
 
 .custom-textarea :deep(.el-textarea__inner) {
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 1rem;
   font-size: 15px;
-  background: rgba(10, 25, 50, 0.8);
-  border: 1px solid var(--ai-border);
-  color: var(--ai-text);
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text);
   transition: all 0.3s;
   min-height: 80px;
-  font-family: 'Microsoft YaHei', sans-serif;
+  font-family: 'Rajdhani', 'Microsoft YaHei', sans-serif;
 }
 
 .custom-textarea :deep(.el-textarea__inner::placeholder) {
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
 }
 
 .custom-textarea :deep(.el-textarea__inner:focus) {
-  background: rgba(10, 30, 60, 0.95);
-  border-color: var(--ai-primary);
+  background: rgba(30, 38, 48, 0.98);
+  border-color: var(--cyber-primary);
   box-shadow: 
-    0 0 20px rgba(0, 180, 255, 0.2),
-    inset 0 0 10px rgba(0, 180, 255, 0.05);
+    0 0 20px rgba(0, 212, 255, 0.25),
+    inset 0 0 20px rgba(0, 212, 255, 0.08);
 }
 
 .input-footer {
@@ -1704,24 +1469,24 @@ export default defineComponent({
   gap: 4px;
 }
 
-/* ========== AI科技感提交按钮 ========== */
+/* ========== 赛博朋克提交按钮 ========== */
 .submit-btn {
   padding: 14px 36px;
   font-size: 16px;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-secondary) 100%) !important;
-  border: none !important;
-  color: #fff !important;
+  font-weight: 700;
+  background: linear-gradient(135deg, transparent, rgba(0, 240, 255, 0.1));
+  border: 2px solid var(--cyber-primary) !important;
+  color: var(--cyber-primary) !important;
   box-shadow: 
-    0 4px 20px rgba(0, 180, 255, 0.4),
-    0 0 40px rgba(0, 180, 255, 0.2);
+    0 0 20px rgba(0, 240, 255, 0.3),
+    inset 0 0 20px rgba(0, 240, 255, 0.1);
   transition: all 0.3s;
   flex-shrink: 0;
   white-space: nowrap;
-  letter-spacing: 1px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
   position: relative;
   overflow: hidden;
-  border-radius: 8px !important;
 }
 
 .submit-btn::before {
@@ -1731,15 +1496,17 @@ export default defineComponent({
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.4), transparent);
   transition: left 0.5s;
 }
 
 .submit-btn:hover {
   transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.1));
   box-shadow: 
-    0 6px 30px rgba(0, 180, 255, 0.5),
-    0 0 60px rgba(0, 180, 255, 0.3);
+    0 0 30px rgba(0, 240, 255, 0.5),
+    0 0 60px rgba(0, 240, 255, 0.3),
+    inset 0 0 30px rgba(0, 240, 255, 0.2);
 }
 
 .submit-btn:hover::before {
@@ -1749,15 +1516,16 @@ export default defineComponent({
 .submit-btn:active {
   transform: translateY(0);
   box-shadow: 
-    0 2px 15px rgba(0, 180, 255, 0.4);
+    0 0 10px rgba(0, 240, 255, 0.3),
+    inset 0 0 40px rgba(0, 240, 255, 0.3);
 }
 
-/* ========== AI科技感进度条 ========== */
+/* ========== 赛博朋克进度条 ========== */
 .progress-card {
   padding: 1.5rem;
   margin-bottom: 2rem;
-  background: var(--ai-bg-card) !important;
-  border: 1px solid var(--ai-primary) !important;
+  background: var(--cyber-bg-card) !important;
+  border: 1px solid var(--cyber-primary) !important;
   max-width: 1100px;
   margin-left: auto;
   margin-right: auto;
@@ -1772,7 +1540,7 @@ export default defineComponent({
 
 .progress-title {
   font-weight: 600;
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1781,7 +1549,7 @@ export default defineComponent({
 
 .progress-value {
   font-weight: 700;
-  color: var(--ai-warning);
+  color: var(--cyber-accent);
   text-shadow: 0 0 10px rgba(240, 255, 0, 0.5);
   font-family: 'Orbitron', monospace;
 }
@@ -1789,21 +1557,21 @@ export default defineComponent({
 .progress-status {
   text-align: center;
   font-size: 13px;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   margin-top: 0.5rem;
 }
 
 .progress-card :deep(.el-progress-bar__outer) {
   background: rgba(0, 240, 255, 0.1);
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
 }
 
 .progress-card :deep(.el-progress-bar__inner) {
-  background: linear-gradient(90deg, var(--ai-primary), var(--ai-secondary));
+  background: linear-gradient(90deg, var(--cyber-primary), var(--cyber-secondary));
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
 }
 
-/* ========== AI科技感选择题结果卡片 ========== */
+/* ========== 赛博朋克选择题结果卡片 ========== */
 .mcq-results-card {
   margin-top: 2rem;
   margin-bottom: 2rem;
@@ -1812,8 +1580,8 @@ export default defineComponent({
 .mcq-results-card .card-header {
   padding: 1rem 1.5rem;
   background: linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(255, 0, 255, 0.1));
-  border-bottom: 1px solid var(--ai-border);
-  color: var(--ai-text);
+  border-bottom: 1px solid var(--cyber-border);
+  color: var(--cyber-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1825,7 +1593,7 @@ export default defineComponent({
   gap: 0.5rem;
   font-weight: 600;
   font-size: 18px;
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
@@ -1839,18 +1607,18 @@ export default defineComponent({
   line-height: 45px;
   font-weight: 500;
   transition: all 0.3s;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
 }
 
 .mcq-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
   font-weight: 600;
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
 .mcq-tabs :deep(.el-tabs__active-bar) {
-  background: var(--ai-primary);
-  box-shadow: 0 0 10px var(--ai-primary);
+  background: var(--cyber-primary);
+  box-shadow: 0 0 10px var(--cyber-primary);
 }
 
 .tab-content {
@@ -1862,17 +1630,17 @@ export default defineComponent({
 .option-question {
   font-size: 16px;
   margin-bottom: 1rem;
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .option-answer {
   font-size: 15px;
   margin-bottom: 1rem;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   background: rgba(0, 240, 255, 0.05);
   padding: 0.75rem;
   border-radius: 4px;
-  border-left: 3px solid var(--ai-primary);
+  border-left: 3px solid var(--cyber-primary);
 }
 
 .option-result {
@@ -1882,7 +1650,7 @@ export default defineComponent({
 .option-result .markdown-body {
   font-size: 15px;
   line-height: 1.8;
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .streaming-indicator {
@@ -1890,10 +1658,10 @@ export default defineComponent({
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0;
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
-/* ========== AI科技感思考区域 ========== */
+/* ========== 赛博朋克思考区域 ========== */
 .thinking-section {
   margin-bottom: 1.5rem;
   max-width: 1100px;
@@ -1922,7 +1690,7 @@ export default defineComponent({
   font-size: 15px;
   height: auto;
   line-height: 1.5;
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .thinking-section :deep(.el-collapse-item__wrap) {
@@ -1935,21 +1703,21 @@ export default defineComponent({
 }
 
 .thinking-section :deep(.el-collapse-item__arrow) {
-  color: var(--ai-secondary);
+  color: var(--cyber-secondary);
 }
 
 .thinking-header {
   display: flex;
   align-items: center;
   font-weight: 600;
-  color: var(--ai-secondary);
+  color: var(--cyber-secondary);
   gap: 0.5rem;
   text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
 }
 
 .thinking-header .el-icon {
   font-size: 18px;
-  color: var(--ai-secondary);
+  color: var(--cyber-secondary);
 }
 
 .thinking-content {
@@ -1964,7 +1732,7 @@ export default defineComponent({
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   justify-content: center;
   font-size: 14px;
 }
@@ -1972,7 +1740,7 @@ export default defineComponent({
 .thinking-text {
   font-family: 'Consolas', 'Microsoft YaHei', monospace;
   font-size: 14px;
-  color: var(--ai-text);
+  color: var(--cyber-text);
   white-space: pre-wrap;
   line-height: 1.8;
   min-height: 20px;
@@ -1992,11 +1760,11 @@ export default defineComponent({
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--ai-primary);
+  background: var(--cyber-primary);
   border-radius: 3px;
 }
 
-/* ========== AI科技感回答卡片 ========== */
+/* ========== 赛博朋克回答卡片 ========== */
 .answer-card {
   min-height: 200px;
   max-width: 1100px;
@@ -2006,7 +1774,7 @@ export default defineComponent({
 
 .answer-card .card-header {
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--ai-border);
+  border-bottom: 1px solid var(--cyber-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2016,7 +1784,7 @@ export default defineComponent({
 .answer-card .card-header .title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -2025,13 +1793,13 @@ export default defineComponent({
 
 .answer-card .card-header .actions :deep(.el-button) {
   background: transparent;
-  border: 1px solid var(--ai-border);
-  color: var(--ai-text-dim);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text-dim);
 }
 
 .answer-card .card-header .actions :deep(.el-button:hover) {
-  border-color: var(--ai-primary);
-  color: var(--ai-primary);
+  border-color: var(--cyber-primary);
+  color: var(--cyber-primary);
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
 }
 
@@ -2043,7 +1811,7 @@ export default defineComponent({
 .markdown-body {
   font-size: 16px;
   line-height: 1.8;
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .markdown-body :deep(p) {
@@ -2051,13 +1819,13 @@ export default defineComponent({
 }
 
 .markdown-body :deep(strong) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .markdown-body :deep(a) {
-  color: var(--ai-secondary);
+  color: var(--cyber-secondary);
   text-decoration: none;
-  border-bottom: 1px solid var(--ai-secondary);
+  border-bottom: 1px solid var(--cyber-secondary);
 }
 
 .markdown-body :deep(a:hover) {
@@ -2067,7 +1835,7 @@ export default defineComponent({
 .answer-footer {
   padding: 1rem 2rem;
   background: rgba(0, 10, 20, 0.5);
-  border-top: 1px solid var(--ai-border);
+  border-top: 1px solid var(--cyber-border);
   display: flex;
   justify-content: flex-end;
 }
@@ -2080,31 +1848,31 @@ export default defineComponent({
 
 .feedback-label {
   font-size: 13px;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
 }
 
 .feedback-group :deep(.el-button) {
   background: transparent;
-  border: 1px solid var(--ai-border);
-  color: var(--ai-text-dim);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text-dim);
 }
 
 .feedback-group :deep(.el-button:hover) {
-  border-color: var(--ai-primary);
-  color: var(--ai-primary);
+  border-color: var(--cyber-primary);
+  color: var(--cyber-primary);
 }
 
 .feedback-group :deep(.el-button--success) {
-  border-color: var(--ai-success);
-  color: var(--ai-success);
+  border-color: var(--cyber-success);
+  color: var(--cyber-success);
 }
 
 .feedback-group :deep(.el-button--danger) {
-  border-color: var(--ai-danger);
-  color: var(--ai-danger);
+  border-color: var(--cyber-danger);
+  color: var(--cyber-danger);
 }
 
-/* ========== AI科技感元数据卡片 ========== */
+/* ========== 赛博朋克元数据卡片 ========== */
 .meta-card {
   border: none !important;
   margin-bottom: 1.5rem;
@@ -2112,7 +1880,7 @@ export default defineComponent({
 
 .meta-card :deep(.el-card__header) {
   background: linear-gradient(135deg, rgba(0, 240, 255, 0.05), rgba(0, 10, 20, 0.5));
-  border-bottom: 1px solid var(--ai-border);
+  border-bottom: 1px solid var(--cyber-border);
   padding: 1rem 1.5rem;
 }
 
@@ -2125,7 +1893,7 @@ export default defineComponent({
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .meta-header .left {
@@ -2136,9 +1904,9 @@ export default defineComponent({
 }
 
 .meta-header :deep(.el-tag) {
-  background: var(--ai-primary);
+  background: var(--cyber-primary);
   border: none;
-  color: var(--ai-bg-dark);
+  color: var(--cyber-bg-dark);
 }
 
 .keywords-container {
@@ -2152,7 +1920,7 @@ export default defineComponent({
 .group-label {
   font-size: 12px;
   font-weight: 700;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   margin-bottom: 6px;
   display: block;
   text-transform: uppercase;
@@ -2169,45 +1937,45 @@ export default defineComponent({
   border-radius: 2px;
   font-weight: 500;
   background: rgba(0, 240, 255, 0.1) !important;
-  border: 1px solid var(--ai-primary) !important;
-  color: var(--ai-primary) !important;
+  border: 1px solid var(--cyber-primary) !important;
+  color: var(--cyber-primary) !important;
 }
 
 .custom-tag.el-tag--info {
   background: rgba(255, 0, 255, 0.1) !important;
-  border: 1px solid var(--ai-secondary) !important;
-  color: var(--ai-secondary) !important;
+  border: 1px solid var(--cyber-secondary) !important;
+  color: var(--cyber-secondary) !important;
 }
 
-/* AI科技感问题分解 */
+/* 赛博朋克问题分解 */
 .meta-card :deep(.el-timeline) {
   padding-left: 0;
 }
 
 .meta-card :deep(.el-timeline-item__tail) {
-  border-left: 2px solid var(--ai-primary);
+  border-left: 2px solid var(--cyber-primary);
 }
 
 .meta-card :deep(.el-timeline-item__node) {
-  background: var(--ai-primary);
-  box-shadow: 0 0 10px var(--ai-primary);
+  background: var(--cyber-primary);
+  box-shadow: 0 0 10px var(--cyber-primary);
 }
 
 .sub-q-title {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .sub-q-answer {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   line-height: 1.5;
 }
 
-/* ========== AI科技感参考文献 ========== */
+/* ========== 赛博朋克参考文献 ========== */
 .references-list {
   display: flex;
   flex-direction: column;
@@ -2217,7 +1985,7 @@ export default defineComponent({
 
 .reference-item {
   background: rgba(22, 27, 34, 0.85);
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
   border-radius: 4px;
   padding: 1rem;
   transition: all 0.3s;
@@ -2232,14 +2000,14 @@ export default defineComponent({
   left: 0;
   width: 3px;
   height: 100%;
-  background: var(--ai-primary);
+  background: var(--cyber-primary);
   opacity: 0;
   transition: opacity 0.3s;
 }
 
 .reference-item:hover {
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
-  border-color: var(--ai-primary);
+  border-color: var(--cyber-primary);
 }
 
 .reference-item:hover::before {
@@ -2247,7 +2015,7 @@ export default defineComponent({
 }
 
 .reference-item.is-selected {
-  border-left: 3px solid var(--ai-success);
+  border-left: 3px solid var(--cyber-success);
   background: rgba(0, 255, 136, 0.05);
 }
 
@@ -2263,8 +2031,8 @@ export default defineComponent({
 }
 
 .ref-index {
-  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
-  color: var(--ai-bg-dark);
+  background: linear-gradient(135deg, var(--cyber-primary), var(--cyber-secondary));
+  color: var(--cyber-bg-dark);
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 2px;
@@ -2275,7 +2043,7 @@ export default defineComponent({
 .ref-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ai-text);
+  color: var(--cyber-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2283,9 +2051,9 @@ export default defineComponent({
 }
 
 .ref-head :deep(.el-tag--success) {
-  background: var(--ai-success) !important;
+  background: var(--cyber-success) !important;
   border: none !important;
-  color: var(--ai-bg-dark) !important;
+  color: var(--cyber-bg-dark) !important;
 }
 
 .loading-hint {
@@ -2295,8 +2063,8 @@ export default defineComponent({
   padding: 1.5rem;
   background: rgba(0, 240, 255, 0.05);
   border-radius: 4px;
-  border: 1px solid var(--ai-border);
-  color: var(--ai-text-dim);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text-dim);
   justify-content: center;
 }
 
@@ -2304,7 +2072,7 @@ export default defineComponent({
   width: 20px;
   height: 20px;
   border: 2px solid rgba(0, 240, 255, 0.2);
-  border-top-color: var(--ai-primary);
+  border-top-color: var(--cyber-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -2322,14 +2090,14 @@ export default defineComponent({
 
 .ref-sources :deep(.el-tag--primary) {
   background: rgba(0, 240, 255, 0.1) !important;
-  border: 1px solid var(--ai-primary) !important;
-  color: var(--ai-primary) !important;
+  border: 1px solid var(--cyber-primary) !important;
+  color: var(--cyber-primary) !important;
 }
 
 .ref-sources :deep(.el-tag--success) {
   background: rgba(0, 255, 136, 0.1) !important;
-  border: 1px solid var(--ai-success) !important;
-  color: var(--ai-success) !important;
+  border: 1px solid var(--cyber-success) !important;
+  color: var(--cyber-success) !important;
 }
 
 .ref-scores {
@@ -2341,14 +2109,14 @@ export default defineComponent({
 
 .ref-scores :deep(.el-tag) {
   background: rgba(0, 10, 20, 0.8) !important;
-  border: 1px solid var(--ai-border) !important;
-  color: var(--ai-text-dim) !important;
+  border: 1px solid var(--cyber-border) !important;
+  color: var(--cyber-text-dim) !important;
   font-family: 'Consolas', monospace;
 }
 
 .ref-scores :deep(.el-tag--warning) {
-  border-color: var(--ai-warning) !important;
-  color: var(--ai-warning) !important;
+  border-color: var(--cyber-accent) !important;
+  color: var(--cyber-accent) !important;
 }
 
 .ref-keywords {
@@ -2361,14 +2129,14 @@ export default defineComponent({
 
 .keywords-label {
   font-size: 12px;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   font-weight: 600;
 }
 
 .ref-keywords :deep(.el-tag--warning) {
   background: rgba(240, 255, 0, 0.1) !important;
-  border: 1px solid var(--ai-warning) !important;
-  color: var(--ai-warning) !important;
+  border: 1px solid var(--cyber-accent) !important;
+  color: var(--cyber-accent) !important;
 }
 
 .ref-content-wrapper {
@@ -2377,7 +2145,7 @@ export default defineComponent({
 
 .ref-content {
   font-size: 13px;
-  color: var(--ai-text);
+  color: var(--cyber-text);
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -2399,21 +2167,21 @@ export default defineComponent({
   padding: 0;
   height: auto;
   font-size: 12px;
-  color: var(--ai-primary) !important;
+  color: var(--cyber-primary) !important;
 }
 
 .expand-btn:hover {
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
-/* ========== AI科技感 Markdown 样式 ========== */
+/* ========== 赛博朋克 Markdown 样式 ========== */
 .markdown-body :deep(pre) {
   background: rgba(0, 10, 20, 0.9);
-  color: var(--ai-text);
+  color: var(--cyber-text);
   padding: 1rem;
   border-radius: 4px;
   overflow-x: auto;
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
   box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05);
 }
 
@@ -2422,7 +2190,7 @@ export default defineComponent({
   padding: 2px 6px;
   border-radius: 2px;
   font-family: 'JetBrains Mono', 'Consolas', monospace;
-  color: var(--ai-warning);
+  color: var(--cyber-accent);
   border: 1px solid rgba(0, 240, 255, 0.2);
 }
 
@@ -2433,9 +2201,9 @@ export default defineComponent({
 }
 
 .markdown-body :deep(blockquote) {
-  border-left: 3px solid var(--ai-secondary);
+  border-left: 3px solid var(--cyber-secondary);
   padding-left: 1rem;
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
   background: rgba(255, 0, 255, 0.05);
   padding: 0.75rem 0.75rem 0.75rem 1rem;
   margin: 1rem 0;
@@ -2445,7 +2213,7 @@ export default defineComponent({
 .markdown-body :deep(h2),
 .markdown-body :deep(h3),
 .markdown-body :deep(h4) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
@@ -2461,7 +2229,7 @@ export default defineComponent({
 }
 
 .markdown-body :deep(li::marker) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .markdown-body :deep(table) {
@@ -2472,32 +2240,32 @@ export default defineComponent({
 
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
   padding: 0.5rem 0.75rem;
 }
 
 .markdown-body :deep(th) {
   background: rgba(0, 240, 255, 0.1);
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .markdown-body :deep(tr:hover) {
   background: rgba(0, 240, 255, 0.05);
 }
 
-/* ========== AI科技感控件样式 ========== */
+/* ========== 赛博朋克控件样式 ========== */
 .controls-area :deep(.el-select .el-input__wrapper) {
   background: rgba(22, 27, 34, 0.95);
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
   box-shadow: none;
 }
 
 .controls-area :deep(.el-select .el-input__wrapper:hover) {
-  border-color: var(--ai-primary);
+  border-color: var(--cyber-primary);
 }
 
 .controls-area :deep(.el-select .el-input__inner) {
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .controls-area :deep(.el-input-number) {
@@ -2506,59 +2274,59 @@ export default defineComponent({
 
 .controls-area :deep(.el-input-number .el-input__wrapper) {
   background: transparent;
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
   box-shadow: none;
 }
 
 .controls-area :deep(.el-input-number .el-input__inner) {
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .controls-area :deep(.el-checkbox) {
-  --el-checkbox-checked-bg-color: var(--ai-primary);
-  --el-checkbox-checked-input-border-color: var(--ai-primary);
+  --el-checkbox-checked-bg-color: var(--cyber-primary);
+  --el-checkbox-checked-input-border-color: var(--cyber-primary);
 }
 
 .controls-area :deep(.el-checkbox.is-bordered) {
-  border-color: var(--ai-border);
+  border-color: var(--cyber-border);
   background: rgba(22, 27, 34, 0.85);
 }
 
 .controls-area :deep(.el-checkbox.is-bordered.is-checked) {
-  border-color: var(--ai-primary);
+  border-color: var(--cyber-primary);
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
 }
 
 .controls-area :deep(.el-checkbox__label) {
-  color: var(--ai-text-dim);
+  color: var(--cyber-text-dim);
 }
 
 .controls-area :deep(.el-checkbox.is-checked .el-checkbox__label) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .setting-item {
   background: rgba(22, 27, 34, 0.85) !important;
-  border: 1px solid var(--ai-border);
+  border: 1px solid var(--cyber-border);
 }
 
 .setting-item .label {
-  color: var(--ai-text-dim) !important;
+  color: var(--cyber-text-dim) !important;
 }
 
-/* AI科技感反馈对话框 */
+/* 赛博朋克反馈对话框 */
 .feedback-dialog :deep(.el-dialog) {
-  background: var(--ai-bg-card);
-  border: 1px solid var(--ai-border);
+  background: var(--cyber-bg-card);
+  border: 1px solid var(--cyber-border);
 }
 
 .feedback-dialog :deep(.el-dialog__header) {
   background: linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(0, 10, 20, 0.5));
-  border-bottom: 1px solid var(--ai-border);
+  border-bottom: 1px solid var(--cyber-border);
 }
 
 .feedback-dialog :deep(.el-dialog__title) {
-  color: var(--ai-primary);
+  color: var(--cyber-primary);
 }
 
 .feedback-dialog :deep(.el-dialog__body) {
@@ -2566,23 +2334,23 @@ export default defineComponent({
 }
 
 .feedback-dialog :deep(.el-form-item__label) {
-  color: var(--ai-text);
+  color: var(--cyber-text);
 }
 
 .feedback-dialog :deep(.el-input__wrapper),
 .feedback-dialog :deep(.el-textarea__inner) {
   background: rgba(22, 27, 34, 0.95);
-  border: 1px solid var(--ai-border);
-  color: var(--ai-text);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text);
 }
 
-/* AI科技感滚动条 */
+/* 赛博朋克滚动条 */
 .references-card :deep(.el-scrollbar__bar) {
   background: rgba(0, 240, 255, 0.1);
 }
 
 .references-card :deep(.el-scrollbar__thumb) {
-  background: var(--ai-primary);
+  background: var(--cyber-primary);
 }
 
 /* ========== 响应式设计 ========== */
@@ -2633,18 +2401,22 @@ export default defineComponent({
     padding: 0.5rem;
   }
   
-  .tech-grid {
+  .cyber-grid {
     animation: none;
   }
 }
 
-/* AI科技感呼吸效果 */
-@keyframes aiBreath {
+/* 赛博朋克闪烁效果 */
+@keyframes cyberFlicker {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.9; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  95% { opacity: 0.9; }
+  96% { opacity: 1; }
 }
 
 .brand-text h1 {
-  animation: aiBreath 3s ease-in-out infinite;
+  animation: textShine 3s linear infinite, cyberFlicker 5s linear infinite;
 }
 </style>

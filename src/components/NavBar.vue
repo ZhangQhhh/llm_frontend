@@ -277,7 +277,9 @@ export default defineComponent({
   position: sticky;
   top: 0;
   z-index: 1000;
-  padding: 0 2rem;
+  padding: 0 1rem;
+  min-width: 100%;
+  flex-wrap: nowrap;
 }
 
 /* Logo区域 */
@@ -315,8 +317,13 @@ export default defineComponent({
 /* 导航菜单 */
 .navbar-menu {
   display: flex;
-  gap: 2rem;
+  gap: 0.5rem;
   align-items: center;
+}
+
+.navbar-menu :deep(.el-menu-item) {
+  padding: 0 12px;
+  font-size: 14px;
 }
 
 .nav-link {
@@ -351,17 +358,19 @@ export default defineComponent({
   margin-left: auto;
   display: flex;
   align-items: center;
-  padding: 0 0 0 1rem;
+  padding: 0 0 0 0.5rem;
+  flex-shrink: 0;
 }
 
 .user-dropdown {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   cursor: pointer;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 8px;
   transition: background 0.3s;
+  white-space: nowrap;
 }
 
 .user-dropdown:hover {
@@ -376,6 +385,7 @@ export default defineComponent({
 
 .role-tag {
   margin-left: 0.25rem;
+  flex-shrink: 0;
 }
 
 /* 移动端菜单按钮 */

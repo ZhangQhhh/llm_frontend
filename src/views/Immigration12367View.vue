@@ -1,5 +1,11 @@
 <template>
   <div class="immigration-page">
+    <!-- AI机器人背景图 -->
+    <div class="robot-bg">
+      <div class="robot-glow"></div>
+      <div class="robot-image"></div>
+      <div class="robot-scan-line"></div>
+    </div>
     <el-container class="main-container">
       <!-- 头部区域 -->
       <el-header class="page-header">
@@ -668,16 +674,85 @@ export default defineComponent({
 <style scoped>
 .immigration-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
-  background-size: cover;
-  background-attachment: fixed;
+  position: relative;
   padding-bottom: 2rem;
+  background: linear-gradient(135deg, #0a1929 0%, #1a365d 50%, #0d2137 100%);
+}
+
+/* ========== AI机器人背景图 ========== */
+.robot-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.robot-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('@/assets/allPic/public/robot.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  animation: robotBreath 8s ease-in-out infinite;
+  filter: brightness(0.7) contrast(1.1);
+}
+
+@keyframes robotBreath {
+  0%, 100% { transform: scale(1); filter: brightness(0.7) contrast(1.1); }
+  50% { transform: scale(1.02); filter: brightness(0.75) contrast(1.15); }
+}
+
+.robot-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  background: radial-gradient(ellipse, rgba(0, 180, 255, 0.15) 0%, transparent 60%);
+  filter: blur(60px);
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+.robot-scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgba(0, 180, 255, 0.08) 50%, 
+    transparent 51%);
+  background-size: 100% 4px;
+  animation: scanMove 4s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes scanMove {
+  0% { background-position: 0 -100%; }
+  100% { background-position: 0 200%; }
 }
 
 .main-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 1rem;
+  position: relative;
+  z-index: 1;
 }
 
 /* Header */
