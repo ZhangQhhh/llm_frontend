@@ -239,7 +239,7 @@ C. 活字印刷术由蔡伦发明。
 <style scoped>
 .test-explain-page {
   min-height: calc(100vh - 60px);
-  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   padding: 2rem 0;

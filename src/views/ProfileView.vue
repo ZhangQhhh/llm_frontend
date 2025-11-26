@@ -258,7 +258,7 @@ export default defineComponent({
 <style scoped>
 .profile-page {
   min-height: calc(100vh - 60px);
-  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
 }

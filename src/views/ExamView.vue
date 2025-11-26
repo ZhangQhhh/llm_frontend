@@ -866,7 +866,7 @@ export default defineComponent({
 
 .exam-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   color: #111827;

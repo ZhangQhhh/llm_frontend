@@ -301,7 +301,7 @@ export default defineComponent({
 <style scoped>
 .auth-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/wide_bac.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/nrobt.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   display: flex;

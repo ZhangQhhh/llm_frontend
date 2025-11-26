@@ -469,7 +469,7 @@ export default defineComponent({
     });
 
     const backgroundStyle = {
-      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/wide_bac.jpg') + ")",
+      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/robot.jpg') + ")",
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
