@@ -49,37 +49,37 @@ export class TourGuide {
         description: '这是您的智能工作助手平台，集成了多种AI服务功能，让您的工作更加高效便捷。接下来我将为您详细介绍各项功能。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/help"]',
+        element: '.nav-help',
         title: '帮助中心',
         description: '这里是您的学习起点！包含详细的功能介绍、使用指南和常见问题解答。遇到问题时可以随时查阅。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/knowledge-qa"]',
+        element: '.nav-knowledge-qa',
         title: '知识问答 - 核心功能',
         description: '智能问答系统，可以回答边检相关的各种问题。支持复杂查询，提供准确答案和参考来源。适合快速获取专业知识。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/conversation"]',
+        element: '.nav-conversation',
         title: '多轮对话 - 深度交流',
         description: '支持连续对话的AI助手，能理解上下文，记住对话历史。适合深入探讨复杂问题或进行长时间的专业咨询。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/exam"]',
+        element: '.nav-exam',
         title: '边检智能家教 - 学习助手',
         description: 'AI驱动的个性化学习系统，提供题目练习、详细解析和知识点梳理。帮助您系统性地学习边检业务知识。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/smart-office"]',
+        element: '.nav-smart-office',
         title: '智慧办公 - 效率工具',
         description: '集成多种办公工具，包括文档处理、数据分析、报告生成等功能，大幅提升日常工作效率。'
       },
       {
-        element: '.navbar-menu .el-menu-item[index="/immigration-12367"]',
+        element: '.nav-immigration',
         title: '移民局12367 - 专业咨询',
         description: '专门针对移民局12367咨询热线的智能助手，提供准确的政策解读和业务指导。'
       },
       {
-        element: '.navbar-right .user-dropdown',
+        element: '.navbar-right',
         title: '个人中心 - 账户管理',
         description: '管理您的个人信息、查看使用历史、访问专业工具。根据您的权限级别，这里还可能包含管理功能。'
       },
@@ -109,7 +109,7 @@ export class TourGuide {
       {
         element: '.submit-button, .el-button--primary',
         title: '提交问题',
-        description: '点击提交后，AI将分析您的问题并提供详细回答。通常几秒钟内就能得到结果。'
+        description: '点击提交后，AI将分析您的问题并提供详细回答。很快就能得到结果。'
       },
       {
         element: '.answer-container, .answer-display',
@@ -177,7 +177,7 @@ export class TourGuide {
       {
         element: '.conversation-settings, .session-options',
         title: '对话设置',
-        description: '可以管理对话会话，包括重命名、删除、导出对话记录等功能。'
+        description: '可以管理对话会话，包括重命名、删除、导出对话记录等功能。（暂未开通）'
       },
       {
         element: 'body',

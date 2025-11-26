@@ -163,17 +163,7 @@
               </div>
               <h3>智能检索引擎</h3>
             </div>
-            <p>向量检索 + BM25 混合检索，配合重排序算法，精准定位相关知识</p>
-            <div class="tech-stats">
-              <div class="stat-mini">
-                <span class="stat-value">10K+</span>
-                <span class="stat-label">知识库</span>
-              </div>
-              <div class="stat-mini">
-                <span class="stat-value">&lt;60s</span>
-                <span class="stat-label">平均响应</span>
-              </div>
-            </div>
+            <p>高召回率检索技术，让您的问题得到全面、精准的解答</p>
           </div>
 
           <!-- 多轮对话 -->

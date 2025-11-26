@@ -17,7 +17,7 @@
     </div>
 
     <!-- 导航菜单项 -->
-    <el-menu-item index="/" @click="navigateTo('/')">
+    <el-menu-item index="/" @click="navigateTo('/')" class="nav-home">
       <el-icon><HomeFilled /></el-icon>
       <span>首页</span>
     </el-menu-item>
@@ -25,6 +25,7 @@
     <el-menu-item 
       index="/help" 
       @click="handleHelpClick"
+      class="nav-help"
     >
       <el-icon><QuestionFilled /></el-icon>
       <span>帮助中心</span>
@@ -34,6 +35,7 @@
       index="/knowledge-qa" 
       @click="navigateTo('/knowledge-qa')"
       v-if="isLoggedIn"
+      class="nav-knowledge-qa"
     >
       <el-icon><Reading /></el-icon>
       <span>知识问答</span>
@@ -43,6 +45,7 @@
       index="/conversation" 
       @click="navigateTo('/conversation')"
       v-if="isLoggedIn"
+      class="nav-conversation"
     >
       <el-icon><ChatDotRound /></el-icon>
       <span>多轮对话</span>
@@ -52,6 +55,7 @@
       index="/exam" 
       @click="navigateTo('/exam')"
       v-if="isLoggedIn"
+      class="nav-exam"
     >
       <el-icon><EditPen /></el-icon>
       <span>边检智能家教</span>
@@ -61,6 +65,7 @@
       index="/smart-office" 
       @click="navigateTo('/smart-office')"
       v-if="isLoggedIn"
+      class="nav-smart-office"
     >
       <el-icon><Briefcase /></el-icon>
       <span>智慧办公</span>
@@ -70,6 +75,7 @@
       index="/immigration-12367" 
       @click="navigateTo('/immigration-12367')"
       v-if="isLoggedIn"
+      class="nav-immigration"
     >
       <el-icon><Service /></el-icon>
       <span>移民局12367</span>

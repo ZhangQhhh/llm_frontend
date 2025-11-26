@@ -32,18 +32,17 @@ export default defineComponent({
       default: '页面导览'
     }
   },
-  setup(props) {
+  setup() {
     const route = useRoute()
 
     const showTourButton = computed(() => {
-      return props.forceShow || tourGuide.shouldShowFirstTimeTour(route.name as string)
+      // 在支持导览的页面始终显示按钮
+      const supportedPages = ['home', 'knowledge-qa', 'conversation', 'exam', 'smart-office', 'immigration-12367', 'admin']
+      return supportedPages.includes(route.name as string)
     })
 
     const startCurrentPageTour = () => {
       const pageName = route.name as string
-      
-      // 标记导览已启动，隐藏按钮
-      tourGuide.markTourCompleted(pageName)
       
       switch (pageName) {
         case 'home':
