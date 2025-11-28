@@ -31,7 +31,7 @@
         <p class="hero-subtitle">
           <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</span>
         </p>
-        <div class="hero-decorations">
+        <!-- <div class="hero-decorations">
           <div class="decoration-item">
             <div class="decoration-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -65,7 +65,7 @@
             </div>
             <div class="decoration-label">专业解答</div>
           </div>
-        </div>
+        </div> -->
         <div class="hero-actions">
           <router-link to="/knowledge-qa" class="btn btn-primary">
             <span class="btn-shine"></span>
@@ -87,37 +87,31 @@
       </div>
 
       <div class="hero-visual">
-        <div class="floating-card card-1">
+        <router-link to="/data-analysis" class="floating-card card-1">
           <div class="card-glow"></div>
-          <div class="card-icon"><el-icon><Cpu /></el-icon></div>
-          <div class="card-text">AI智能分析</div>
+          <div class="card-icon"><el-icon><QuestionFilled /></el-icon></div>
+          <div class="card-text">报告生成</div>
           <div class="card-progress"></div>
-        </div>
-        <div class="floating-card card-2">
+        </router-link>
+        <router-link to="/office" class="floating-card card-2">
           <div class="card-glow"></div>
-          <div class="card-icon"><el-icon><Document /></el-icon></div>
-          <div class="card-text">知识库检索</div>
+          <div class="card-icon"><el-icon><OfficeBuilding /></el-icon></div>
+          <div class="card-text">智慧办公</div>
           <div class="card-progress"></div>
-        </div>
-        <div class="floating-card card-3">
+        </router-link>
+        <router-link to="/exam" class="floating-card card-3">
           <div class="card-glow"></div>
-          <div class="card-icon"><el-icon><Lightning /></el-icon></div>
-          <div class="card-text">实时响应</div>
+          <div class="card-icon"><el-icon><Reading /></el-icon></div>
+          <div class="card-text">智能家教</div>
           <div class="card-progress"></div>
-        </div>
+        </router-link>
       </div>
       
-      <!-- Scroll Indicator -->
-      <div class="scroll-indicator">
-        <div class="scroll-mouse">
-          <div class="scroll-wheel"></div>
-        </div>
-        <span>向下滚动探索更多</span>
-      </div>
+      <!-- Scroll Indicator 已移除 -->
     </section>
 
     <!-- Tech Advantages Section -->
-    <section class="tech-advantages">
+    <!-- <section class="tech-advantages">
       <div class="container">
         <div class="section-header">
           <div class="section-badge">⚡ TECHNOLOGY</div>
@@ -125,11 +119,11 @@
             <span class="gradient-text">技术优势</span>
           </h2>
           <p class="section-subtitle">基于前沿AI技术，打造专业可靠的智能问答系统</p>
-        </div>
-
-        <div class="advantages-grid">
+        </div> -->
+<!-- 
+        <div class="advantages-grid"> -->
           <!-- 大语言模型 -->
-          <div class="advantage-card large">
+          <!-- <div class="advantage-card large">
             <div class="card-header">
               <div class="card-icon-large">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -150,10 +144,10 @@
               <span class="tech-tag">DeepSeek-R1</span>
               <span class="tech-tag">思考模式</span>
             </div>
-          </div>
+          </div> -->
 
           <!-- 向量检索 -->
-          <div class="advantage-card">
+          <!-- <div class="advantage-card">
             <div class="card-header">
               <div class="card-icon-medium">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -164,10 +158,10 @@
               <h3>智能检索引擎</h3>
             </div>
             <p>高召回率检索技术，让您的问题得到全面、精准的解答</p>
-          </div>
+          </div> -->
 
           <!-- 多轮对话 -->
-          <div class="advantage-card">
+          <!-- <div class="advantage-card">
             <div class="card-header">
               <div class="card-icon-medium">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -195,10 +189,10 @@
                 历史追溯
               </div>
             </div>
-          </div>
+          </div> -->
 
           <!-- 来源追溯 -->
-          <div class="advantage-card">
+          <!-- <div class="advantage-card">
             <div class="card-header">
               <div class="card-icon-medium">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -223,10 +217,10 @@
                 评分展示
               </div>
             </div>
-          </div>
+          </div> -->
 
           <!-- 智能评测 -->
-          <div class="advantage-card accent">
+          <!-- <div class="advantage-card accent">
             <div class="card-header">
               <div class="card-icon-medium">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -238,16 +232,16 @@
                 </svg>
               </div>
               <h3>智能评测系统</h3>
-            </div>
-            <p>在线考试、自动评分、详细解析，助力专业能力提升</p>
-            <div class="accent-badge">NEW</div>
-          </div>
-        </div>
-      </div>
-    </section>
+            </div> -->
+            <!-- <p>在线考试、自动评分、详细解析，助力专业能力提升</p>
+            <div class="accent-badge">NEW</div> -->
+          <!-- </div> -->
+        <!-- </div> -->
+      <!-- </div> -->
+    <!-- </section> -->
 
     <!-- CTA Section -->
-    <section class="cta">
+    <!-- <section class="cta">
       <div class="cta-content">
         <h2>准备好开始了吗？</h2>
         <p>立即体验AI驱动的智能问答系统</p>
@@ -260,7 +254,7 @@
           </router-link>
         </div>
       </div>
-    </section>
+    </section> -->
 
     <!-- Footer -->
     <footer class="footer">
@@ -294,17 +288,17 @@
 import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
 import * as THREE from 'three';
 import { 
-  Cpu, 
-  Document, 
-  Lightning 
+  QuestionFilled, 
+  OfficeBuilding, 
+  Reading 
 } from '@element-plus/icons-vue';
 
 export default defineComponent({
   name: 'HomeView',
   components: {
-    Cpu,
-    Document,
-    Lightning
+    QuestionFilled,
+    OfficeBuilding,
+    Reading
   },
   setup() {
     const threeCanvas = ref<HTMLCanvasElement | null>(null);
@@ -459,7 +453,7 @@ export default defineComponent({
     });
 
     const backgroundStyle = {
-      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/robot.jpg') + ")",
+      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/card.jpg') + ")",
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
@@ -938,6 +932,15 @@ export default defineComponent({
   box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
   position: relative;
   overflow: hidden;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.floating-card:hover {
+  transform: translateY(-5px) scale(1.05);
+  border-color: rgba(96, 165, 250, 0.6);
+  box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
 }
 
 .card-glow {

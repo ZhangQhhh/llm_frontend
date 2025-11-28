@@ -925,8 +925,31 @@ export default defineComponent({
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-      // 将 <NEWLINE> 替换为 <br>
-      return escaped.replace(/&lt;NEWLINE&gt;/g, '<br>');
+      
+      // 按行处理，渲染 Markdown 标题和加粗/斜体
+      const lines = escaped.split('\n');
+      const formattedLines = lines.map((line) => {
+        // 匹配标题：# ~ ######
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const content = headingMatch[2];
+          return `<h${level} class="md-heading md-h${level}">${content}</h${level}>`;
+        }
+        
+        // 处理加粗：**text** 或 __text__
+        let processed = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        processed = processed.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        
+        // 处理斜体：*text* 或 _text_（注意避免与加粗冲突）
+        processed = processed.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+        processed = processed.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+        
+        return processed;
+      });
+      
+      // 将 <NEWLINE> 替换为 <br>，并用 <br> 连接各行
+      return formattedLines.join('<br>').replace(/&lt;NEWLINE&gt;/g, '<br>');
     };
 
     onMounted(async () => {
@@ -1485,6 +1508,52 @@ export default defineComponent({
 .bubble-content {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Markdown 标题样式 */
+.bubble-content :deep(.md-heading) {
+  margin: 0.5em 0 0.3em 0;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+.bubble-content :deep(.md-h1) {
+  font-size: 1.5em;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.3em;
+}
+
+.bubble-content :deep(.md-h2) {
+  font-size: 1.35em;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.2em;
+}
+
+.bubble-content :deep(.md-h3) {
+  font-size: 1.2em;
+}
+
+.bubble-content :deep(.md-h4) {
+  font-size: 1.1em;
+}
+
+.bubble-content :deep(.md-h5) {
+  font-size: 1.05em;
+}
+
+.bubble-content :deep(.md-h6) {
+  font-size: 1em;
+  color: #4b5563;
+}
+
+.bubble-content :deep(strong) {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.bubble-content :deep(em) {
+  font-style: italic;
 }
 
 .bubble-sources {
