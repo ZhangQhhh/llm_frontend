@@ -249,7 +249,7 @@ export default defineComponent({
         router.push('/data-analysis')
       } else if (command === 'docx-tool') {
         // 跳转到 nginx 代理的 docx 服务
-        window.location.href = '/docx'
+        window.location.href = '/docx/'
       } else if (command === 'admin') {
         router.push('/admin')
       } else if (command === 'super-admin') {

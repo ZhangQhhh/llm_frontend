@@ -83,22 +83,37 @@
             <span class="icon">📝</span>
             <span>智能家教</span>
           </router-link>
+          <router-link to="/smart-office" class="btn btn-secondary">
+            <span class="btn-shine"></span>
+            <span class="icon">💼</span>
+            <span>智慧办公</span>
+          </router-link>
+          <router-link to="/immigration-12367" class="btn btn-secondary">
+            <span class="btn-shine"></span>
+            <span class="icon">📞</span>
+            <span>移民局12367</span>
+          </router-link>
+          <a href="javascript:void(0)" class="btn btn-secondary" @click="handleHelpClick">
+            <span class="btn-shine"></span>
+            <span class="icon">❓</span>
+            <span>帮助中心</span>
+          </a>
         </div>
       </div>
 
       <div class="hero-visual">
-        <router-link to="/data-analysis" class="floating-card card-1">
+        <a href="/docx/" class="floating-card card-1">
           <div class="card-glow"></div>
-          <div class="card-icon"><el-icon><QuestionFilled /></el-icon></div>
+          <div class="card-icon"><el-icon><Document /></el-icon></div>
           <div class="card-text">报告生成</div>
           <div class="card-progress"></div>
-        </router-link>
-        <router-link to="/office" class="floating-card card-2">
+        </a>
+        <a href="/office" class="floating-card card-2">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><OfficeBuilding /></el-icon></div>
           <div class="card-text">智慧办公</div>
           <div class="card-progress"></div>
-        </router-link>
+        </a>
         <router-link to="/exam" class="floating-card card-3">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><Reading /></el-icon></div>
@@ -264,16 +279,16 @@
             <h4>边检知识问答系统</h4>
             <p>为边防检查工作提供专业智能支持</p>
           </div>
-          <div class="footer-section">
-            <h4>快速链接</h4>
-            <ul>
+          <!-- <div class="footer-section"> -->
+            <!-- <h4>快速链接</h4> -->
+            <!-- <ul>
               <li><router-link to="/knowledge-qa">知识问答</router-link></li>
               <li><router-link to="/conversation">多轮对话</router-link></li>
               <li><router-link to="/exam">智能家教</router-link></li>
               <li><router-link to="/test-explain">题目解析</router-link></li>
-              <li><router-link to="/login">登录</router-link></li>
-            </ul>
-          </div>
+              <li><router-link to="/login">登录</router-link></li> -->
+            <!-- </ul> -->
+          <!-- </div> -->
           <div class="footer-section">
             <h4>关于</h4>
             <p>© 2025 边检知识问答系统<br>保留所有权利</p>
@@ -286,9 +301,10 @@
 
 <script lang="ts">
 import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
+import { ElMessage } from 'element-plus';
 import * as THREE from 'three';
 import { 
-  QuestionFilled, 
+  Document,
   OfficeBuilding, 
   Reading 
 } from '@element-plus/icons-vue';
@@ -296,7 +312,7 @@ import {
 export default defineComponent({
   name: 'HomeView',
   components: {
-    QuestionFilled,
+    Document,
     OfficeBuilding,
     Reading
   },
@@ -453,17 +469,23 @@ export default defineComponent({
     });
 
     const backgroundStyle = {
-      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/card.jpg') + ")",
+      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/robot.jpg') + ")",
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
       minHeight: '100vh'
     };
 
+    // 帮助中心暂未开放
+    const handleHelpClick = () => {
+      ElMessage.info('帮助中心文档正在完善中，敬请期待...');
+    };
+
     return {
       threeCanvas,
       getParticleStyle,
-      backgroundStyle
+      backgroundStyle,
+      handleHelpClick
     };
   }
 });
@@ -817,19 +839,21 @@ export default defineComponent({
 }
 
 .hero-actions {
-  display: flex;
-  gap: 1.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem 2rem;
+  max-width: 750px;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem 2.5rem;
-  border-radius: 16px;
-  font-size: 18px;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-radius: 14px;
+  font-size: 16px;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -886,7 +910,7 @@ export default defineComponent({
 }
 
 .btn .icon {
-  font-size: 24px;
+  font-size: 20px;
 }
 
 /* Hero Visual */
@@ -901,20 +925,21 @@ export default defineComponent({
 
 @media (min-width: 1200px) {
   .hero {
-    justify-content: space-between;
+    justify-content: center;
     padding: 4rem 10%;
   }
 
   .hero-content {
-    text-align: left;
+    text-align: center;
+    max-width: 900px;
   }
 
   .hero-actions {
-    justify-content: flex-start;
+    justify-content: center;
   }
 
   .hero-visual {
-    display: block;
+    display: none;
   }
 }
 

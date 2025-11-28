@@ -872,9 +872,11 @@ export default defineComponent({
                     console.warn('[SSE] 解析来源映射失败:', e);
                   }
                 } else if (s.startsWith('CONTENT:')) {
-                  // 处理内容流
-                  const content = s.substring(8);
+                  // 处理内容流，将 <NEWLINE> 转换为真实换行符
+                  const content = s.substring(8).replace(/<NEWLINE>/g, '\n');
                   aiMsg.text += content;
+                  console.log('[DEBUG] CONTENT 原始:', s.substring(8));
+                  console.log('[DEBUG] CONTENT 转换后:', content);
                 } else if (s.startsWith('ERROR:')) {
                   // 处理错误
                   aiMsg.role = 'error';
@@ -918,19 +920,31 @@ export default defineComponent({
 
     const formatMessage = (text: string): string => {
       if (!text) return '';
-      // 转义 HTML 特殊字符，防止 XSS
-      const escaped = text
+      
+      // 1. 先将 <NEWLINE> 标记转换为真实换行符（兜底处理）
+      let processed = text.replace(/<NEWLINE>/g, '\n');
+      
+      // 2. 移除 <think>...</think> 标签（思考过程不显示在正文中）
+      processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
+      // 移除可能残留的单独标签
+      processed = processed.replace(/<\/?think>/gi, '');
+      
+      // 3. 转义 HTML 特殊字符，防止 XSS
+      const escaped = processed
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
       
-      // 按行处理，渲染 Markdown 标题和加粗/斜体
+      // 4. 按行处理，渲染 Markdown 标题和加粗/斜体
       const lines = escaped.split('\n');
       const formattedLines = lines.map((line) => {
-        // 匹配标题：# ~ ######
-        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        // 跳过空行
+        if (!line.trim()) return '';
+        
+        // 匹配标题：# ~ ######（允许 # 后有或无空格）
+        const headingMatch = line.match(/^(#{1,6})\s*(.+)$/);
         if (headingMatch) {
           const level = headingMatch[1].length;
           const content = headingMatch[2];
@@ -938,18 +952,18 @@ export default defineComponent({
         }
         
         // 处理加粗：**text** 或 __text__
-        let processed = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        processed = processed.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        let result = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        result = result.replace(/__(.+?)__/g, '<strong>$1</strong>');
         
         // 处理斜体：*text* 或 _text_（注意避免与加粗冲突）
-        processed = processed.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-        processed = processed.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+        result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+        result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
         
-        return processed;
+        return result;
       });
       
-      // 将 <NEWLINE> 替换为 <br>，并用 <br> 连接各行
-      return formattedLines.join('<br>').replace(/&lt;NEWLINE&gt;/g, '<br>');
+      // 5. 过滤空行并用 <br> 连接
+      return formattedLines.filter(line => line !== '').join('<br>');
     };
 
     onMounted(async () => {
