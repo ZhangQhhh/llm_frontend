@@ -281,7 +281,7 @@
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </div>
-              <div class="analysis" v-html="formatText(item.analysis) || '（无解析）'">
+              <div class="analysis" v-html="formatAnalysis(item.analysis) || '（无解析）'">
               </div>
             </div>
           </div>
@@ -314,6 +314,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick } from
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MCQ_BASE_URL } from '@/config/api/api'
+import { renderMarkdown } from '@/utils/markdown'
 
 // API endpoints matching mcq_public_routes.py
 const API_ENDPOINTS = {
@@ -554,6 +555,16 @@ export default defineComponent({
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/&lt;NEWLINE&gt;/g, '<br>')
+    }
+
+    // 格式化解析文本：渲染 markdown 并过滤"参考来源"
+    const formatAnalysis = (text: string | undefined | null): string => {
+      if (!text) return ''
+      // 过滤掉"参考来源"（可能被加粗）
+      let cleaned = text
+        .replace(/\*\*参考来源\*\*[：:\s]*/g, '')
+        .replace(/参考来源[：:\s]*/g, '')
+      return renderMarkdown(cleaned)
     }
 
     const toggleMultiOption = (qid: string, label: string) => {
@@ -1051,6 +1062,7 @@ export default defineComponent({
       handlePageSizeChange,
       getScoreClass,
       formatText,
+      formatAnalysis,
       toggleMultiOption,
       selectSingleOption,
       handleChangePassword,

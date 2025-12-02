@@ -228,8 +228,8 @@
               </div>
             </div>
             <div class="col-lg-6 col-12">
-              <div class="config-section options-row" style="align-items: flex-end; gap: 24px; height: 100%;">
-                <div class="option-item" style="display: flex; align-items: center; gap: 8px;">
+              <div class="config-section" style="display: flex; flex-direction: row; align-items: flex-end; gap: 24px; height: 100%;">
+                <div class="option-item" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
                   <label class="config-label-inline" style="margin: 0; white-space: nowrap;">
                     <el-icon><MagicStick /></el-icon>
                     <span>写作模式</span>
