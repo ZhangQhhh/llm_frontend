@@ -6,7 +6,7 @@
         <div class="visual-content">
           <h2>欢迎来到</h2>
           <h1>边检知识问答系统</h1>
-          <p>基于大语言模型的专业知识库，为边境检查工作提供精准、高效的智能问答服务</p>
+          <p>基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</p>
           <div class="visual-features">
             <div class="feature-item">
               <span class="icon">✨</span>

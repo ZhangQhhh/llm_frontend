@@ -338,8 +338,7 @@
 
 
                 <div v-if="showingAnalysis[q.qid]" class="q-analysis">
-                  <div class="q-analysis-text">
-                    {{ processAnalysisText(q.analysis) }}
+                  <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
                   </div>
 
                   <!-- 参考资料折叠块（结构参考 qa_public.html） -->
@@ -465,7 +464,7 @@
                 type="danger"
                 @click="clearRecycleBin"
               >
-                清空回收站（30天前）
+                清空回收站
               </el-button>
               <span class="status-msg">{{ recycleMessage }}</span>
             </div>
@@ -659,6 +658,7 @@ import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filte
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface Question {
   qid: string
@@ -1252,7 +1252,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1288,6 +1288,17 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: candidates.map((it:any)=>({ id: it.qid, status: 'approved', explain: it.analysis || '' })) })
         })
+        // 检查响应状态码，防止解析 HTML 错误页面
+        if (!resp.ok) {
+          const text = await resp.text()
+          throw new Error(`请求失败 (${resp.status}): ${text.substring(0, 100)}`)
+        }
+        const contentType = resp.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          const text = await resp.text()
+          throw new Error(`响应格式错误，预期 JSON 但收到: ${text.substring(0, 100)}`)
+        }
+
         const data = await resp.json()
         if (data?.ok) { ElMessage.success(`已通过 ${data.count || candidates.length} 题`); loadQuestions() }
         else throw new Error(data?.msg || '操作失败')
@@ -1307,6 +1318,17 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         })
+        // 检查响应状态码，防止解析 HTML 错误页面
+        if (!resp.ok) {
+          const text = await resp.text()
+          throw new Error(`请求失败 (${resp.status}): ${text.substring(0, 100)}`)
+        }
+        const contentType = resp.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          const text = await resp.text()
+          throw new Error(`响应格式错误，预期 JSON 但收到: ${text.substring(0, 100)}`)
+        }
+
         const data = await resp.json()
         if (!data?.ok) throw new Error(data?.msg || '批量驳回失败')
         ElMessage.success(`批量驳回 ${data.count||candidates.length} 题`)
@@ -1344,7 +1366,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1377,7 +1399,7 @@ export default defineComponent({
       try {
         const resp = await fetch(`${MCQ_BASE_URL}/bank/deleted`, {
           headers: {
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           }
         })
@@ -1412,7 +1434,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1447,7 +1469,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1483,7 +1505,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1529,7 +1551,7 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
@@ -1557,7 +1579,7 @@ export default defineComponent({
     const clearRecycleBin = async () => {
       try {
         await ElMessageBox.confirm(
-          '确认清空回收站？将永久删除30天前的所有题目！',
+          '确认清空回收站？将永久删除回收站中的所有题目，此操作无法撤销！',
           '警告',
           { confirmButtonText: '确定清空', cancelButtonText: '取消', type: 'error' }
         )
@@ -1565,12 +1587,11 @@ export default defineComponent({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Name': store.state.user.username,
+            'X-User-Name': encodeURIComponent(store.state.user.username),
             'X-User-Role': userRole.value
           },
           body: JSON.stringify({
-            user: store.state.user.username,
-            days: 30
+            user: store.state.user.username
           })
         })
         const data = await resp.json()
@@ -1627,11 +1648,31 @@ export default defineComponent({
     }
     const isEditing = (id: string) => editingId.value === id
 
+    // 清理 markdown 符号用于编辑框显示
+    const cleanMarkdownForEdit = (text: string): string => {
+      if (!text) return ''
+      let cleaned = text
+        .replace(/<NEWLINE>/g, '\n')           // <NEWLINE> 转换为真实换行
+        .replace(/^#{1,6}\s*/gm, '')           // 移除标题符号
+        .replace(/\*\*(.+?)\*\*/g, '$1')       // 移除加粗
+        .replace(/\*\*参考来源\*\*[：:\s]*/g, '') // 移除加粗的"参考来源"
+        .replace(/参考来源[：:\s]*/g, '')       // 移除普通"参考来源"
+        .replace(/\*(.+?)\*/g, '$1')           // 移除斜体
+        .replace(/__(.+?)__/g, '$1')           // 移除加粗
+        .replace(/_(.+?)_/g, '$1')             // 移除斜体
+        .replace(/^[-*]\s+/gm, '')             // 移除列表符号
+        .replace(/```[\s\S]*?```/g, '')        // 移除代码块
+        .replace(/`(.+?)`/g, '$1')             // 移除行内代码
+        .replace(/\n{3,}/g, '\n\n')            // 清理多余空行
+      return cleaned.trim()
+    }
+
     const editRow = (row: any) => {
       editingId.value = row.qid
       editBuf.stem = row.stem || ''
       editBuf.answer = row.answer || ''
-      editBuf.explain = row.analysis || ''
+      // 清理 markdown 符号，方便编辑
+      editBuf.explain = cleanMarkdownForEdit(row.analysis || '')
 
       const map: Record<string, string> = {}
       ;(row.options || []).forEach((o: any) => {
@@ -1740,8 +1781,10 @@ export default defineComponent({
     })
 
     const processAnalysisText = (text: string | null | undefined): string => {
-      if (!text) return '暂无解析'
-      return text.replace(/<NEWLINE>/g, '\n')
+      if (!text) return '<p>暂无解析</p>'
+      // 过滤掉每次输出末尾的"参考来源"（分项解析可能有多次）
+      let cleaned = text.replace(/参考来源[：:\s]*/g, '')
+      return renderMarkdown(cleaned)
     }
     const createPaper = async () => {
       // 仍然要求填写标题，和原行为保持一致

@@ -228,20 +228,58 @@
               </div>
             </div>
             <div class="col-lg-6 col-12">
-              <div class="config-section">
-                <label class="config-label">
-                  <el-icon><ChatDotRound /></el-icon>
-                  <span>高级选项</span>
-                </label>
-                <div class="switch-container">
+              <div class="config-section options-row" style="align-items: flex-end; gap: 24px; height: 100%;">
+                <div class="option-item" style="display: flex; align-items: center; gap: 8px;">
+                  <label class="config-label-inline" style="margin: 0; white-space: nowrap;">
+                    <el-icon><MagicStick /></el-icon>
+                    <span>写作模式</span>
+                  </label>
+                  <div class="mode-selector-compact" style="margin: 0;">
+                    <el-radio-group v-model="writeMode" size="small">
+                      <el-radio-button value="generate">生成</el-radio-button>
+                      <el-radio-button value="complete">补全</el-radio-button>
+                    </el-radio-group>
+                  </div>
+                </div>
+                <div class="option-item" style="display: flex; align-items: center; gap: 8px;">
+                  <label class="config-label-inline" style="margin: 0; white-space: nowrap;">
+                    <el-icon><ChatDotRound /></el-icon>
+                    <span>高级选项</span>
+                  </label>
                   <el-switch
                     v-model="thinkingMode"
-                    active-text="启用思考模式"
-                    inactive-text="标准模式"
-                    size="large"
+                    active-text="思考"
+                    inactive-text="标准"
+                    size="small"
                     style="--el-switch-on-color: #409eff"
                   />
                 </div>
+              </div>
+            </div>
+            <!-- OCR 按钮暂时隐藏 -->
+            <div class="col-lg-4 col-12" v-if="false">
+              <div class="config-section">
+                <label class="config-label">
+                  <el-icon><Picture /></el-icon>
+                  <span>图片识别</span>
+                </label>
+                <input
+                  ref="ocrFileInputRef"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style="display: none"
+                  @change="uploadOcrImages"
+                />
+                <el-button
+                  type="warning"
+                  :loading="ocrUploading"
+                  @click="ocrFileInputRef?.click()"
+                  class="ocr-btn w-100"
+                >
+                  <el-icon class="me-1"><Picture /></el-icon>
+                  图片OCR识别
+                </el-button>
               </div>
             </div>
           </div>
@@ -286,6 +324,18 @@
             <el-icon class="title-icon" :size="18"><ChatDotRound /></el-icon>
             <span class="card-title">对话区域</span>
             <el-badge :value="messages.length" :max="99" type="primary" class="ms-2" />
+            <div class="title-actions">
+              <el-button
+                type="success"
+                size="small"
+                :disabled="!hasExportableContent"
+                @click="exportToWord"
+                class="export-btn"
+              >
+                <el-icon class="me-1"><Download /></el-icon>
+                导出 Word
+              </el-button>
+            </div>
           </div>
 
           <div ref="chatWindowRef" class="chat-window">
@@ -335,12 +385,43 @@
             </div>
           </div>
 
+          <!-- OCR 识别结果显示区域 -->
+          <div v-if="ocrResults.length" class="ocr-results-section">
+            <div class="ocr-header">
+              <span class="ocr-title">
+                <el-icon><Picture /></el-icon>
+                图片识别结果
+              </span>
+              <el-button size="small" type="danger" plain @click="clearOcrResults">
+                <el-icon><Delete /></el-icon>
+                清除
+              </el-button>
+            </div>
+            <div class="ocr-results">
+              <div 
+                v-for="(result, idx) in ocrResults" 
+                :key="idx" 
+                :class="['ocr-result-item', { 'success': result.success, 'failed': !result.success }]"
+              >
+                <div class="result-header">
+                  <span class="filename">{{ result.filename }}</span>
+                  <el-tag :type="result.success ? 'success' : 'danger'" size="small">
+                    {{ result.success ? '识别成功' : '识别失败' }}
+                  </el-tag>
+                </div>
+                <div v-if="result.success && result.text" class="result-text">
+                  {{ result.text }}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="input-bar">
             <el-input
               v-model="prompt"
               type="textarea"
               :autosize="{ minRows: 3, maxRows: 8 }"
-              placeholder="请输入写作意图、主题或大纲... (Shift+Enter 换行，Enter 发送)"
+              :placeholder="inputPlaceholder"
               class="input-textarea"
               @keydown.enter.stop.prevent="handleEnter"
             />
@@ -348,13 +429,14 @@
               type="primary"
               :loading="sending"
               size="large"
-              class="send-btn"
+              :class="['send-btn', writeMode === 'complete' ? 'complete-mode' : '']"
               @click="sendMessage"
             >
               <el-icon class="me-2" :size="18">
-                <Promotion />
+                <MagicStick v-if="writeMode === 'complete'" />
+                <Promotion v-else />
               </el-icon>
-              <span>{{ sending ? '生成中...' : '发送' }}</span>
+              <span>{{ sendButtonText }}</span>
             </el-button>
           </div>
         </el-card>
@@ -425,7 +507,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, nextTick } from 'vue';
+import { defineComponent, onMounted, ref, nextTick, computed } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -440,7 +522,12 @@ import {
   Key,
   Warning,
   Delete,
+  MagicStick,
+  Download,
+  Picture,
 } from '@element-plus/icons-vue';
+import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { saveAs } from 'file-saver';
 import { LLM_BASE_URL, WRITER_BASE_URL } from '@/config/api/api';
 import ThreeBackground from '@/components/ThreeBackground.vue';
 
@@ -473,6 +560,9 @@ export default defineComponent({
     Key,
     Warning,
     Delete,
+    MagicStick,
+    Download,
+    Picture,
     ThreeBackground,
   },
   setup() {
@@ -492,8 +582,13 @@ export default defineComponent({
 
     const sessionFileInputRef = ref<HTMLInputElement | null>(null);
     const kbFileInputRef = ref<HTMLInputElement | null>(null);
+    const ocrFileInputRef = ref<HTMLInputElement | null>(null);
+
+    const ocrUploading = ref<boolean>(false);
+    const ocrResults = ref<Array<{ filename: string; text: string; success: boolean }>>([]);
 
     const thinkingMode = ref<boolean>(false);
+    const writeMode = ref<'generate' | 'complete'>('generate');
     const modelOptions = ref<string[]>([]);
     const selectedModel = ref<string>('');
 
@@ -509,6 +604,21 @@ export default defineComponent({
     const abortController = ref<AbortController | null>(null);
 
     const writerBase = WRITER_BASE_URL || LLM_BASE_URL || '';
+
+    // 根据模式动态计算 placeholder 和按钮文字
+    const inputPlaceholder = computed(() => {
+      if (writeMode.value === 'complete') {
+        return '请输入需要补全的文本内容，AI 将根据上下文提供专业术语和固定用语的补全建议... (Shift+Enter 换行，Enter 发送)';
+      }
+      return '请输入写作意图、主题或大纲... (Shift+Enter 换行，Enter 发送)';
+    });
+
+    const sendButtonText = computed(() => {
+      if (sending.value) {
+        return writeMode.value === 'complete' ? '补全中...' : '生成中...';
+      }
+      return writeMode.value === 'complete' ? '补全' : '发送';
+    });
 
     const scrollToBottom = () => {
       nextTick(() => {
@@ -711,6 +821,83 @@ export default defineComponent({
       }
     };
 
+    // OCR 图片识别上传
+    const uploadOcrImages = async () => {
+      const input = ocrFileInputRef.value;
+      if (!input || !input.files || input.files.length === 0) {
+        ElMessage.warning('请先选择要识别的图片');
+        return;
+      }
+
+      const fd = new FormData();
+      Array.from(input.files).forEach((f) => fd.append('files', f));
+
+      ocrUploading.value = true;
+      try {
+        const resp = await fetch(`${writerBase}/writer/ocr`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: fd,
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          throw new Error(data.error || 'OCR 识别失败');
+        }
+        
+        // 保存识别结果
+        const results = data.results || [];
+        ocrResults.value = results;
+        
+        // 检查是否有OCR服务错误
+        const failedResults = results.filter((r: any) => !r.success);
+        const serviceErrors = failedResults
+          .filter((r: any) => r.error && (r.error.includes('服务') || r.error.includes('超时')))
+          .map((r: any) => r.error);
+        
+        // 如果有服务层错误，优先显示
+        if (serviceErrors.length > 0) {
+          ElMessage.error(serviceErrors[0]);
+          if (input) input.value = '';
+          return;
+        }
+        
+        // 成功识别的文本合并到提示框
+        const successTexts = results
+          .filter((r: any) => r.success && r.text)
+          .map((r: any) => `【${r.filename}】\n${r.text}`)
+          .join('\n\n');
+        
+        if (successTexts) {
+          // 将 OCR 结果追加到输入框
+          if (prompt.value) {
+            prompt.value += '\n\n--- OCR 识别内容 ---\n' + successTexts;
+          } else {
+            prompt.value = '--- OCR 识别内容 ---\n' + successTexts;
+          }
+          ElMessage.success(`成功识别 ${data.success_count || 0} 张图片`);
+        } else {
+          // 检查是否有其他错误
+          const otherErrors = failedResults.map((r: any) => r.error).filter(Boolean);
+          if (otherErrors.length > 0) {
+            ElMessage.warning(`识别失败：${otherErrors[0]}`);
+          } else {
+            ElMessage.warning('未能从图片中识别出文字');
+          }
+        }
+        
+        if (input) input.value = '';
+      } catch (e: any) {
+        ElMessage.error(`OCR 识别失败：${e?.message || String(e)}`);
+      } finally {
+        ocrUploading.value = false;
+      }
+    };
+
+    // 清除 OCR 结果
+    const clearOcrResults = () => {
+      ocrResults.value = [];
+    };
+
     const onRecognizeTemplate = async () => {
       await ensureSession();
       if (!sessionId.value) {
@@ -778,7 +965,10 @@ export default defineComponent({
     const sendMessage = async () => {
       const text = prompt.value.trim();
       if (!text) {
-        ElMessage.warning('请输入写作意图 / 主题 / 大纲');
+        const warningMsg = writeMode.value === 'complete' 
+          ? '请输入需要补全的文本内容' 
+          : '请输入写作意图 / 主题 / 大纲';
+        ElMessage.warning(warningMsg);
         return;
       }
 
@@ -815,6 +1005,7 @@ export default defineComponent({
         enable_thinking: !!thinkingMode.value,
         use_kb: !!useKb.value,
         kb_selected: kbSelected,
+        write_mode: writeMode.value,
       };
 
       const ac = new AbortController();
@@ -851,6 +1042,8 @@ export default defineComponent({
           const decoder = new TextDecoder('utf-8');
           let sources: any[] = [];
           
+          const aiMsgIndex = messages.value.length - 1;
+          
           // eslint-disable-next-line no-constant-condition
           while (true) {
             const { done, value } = await reader.read();
@@ -875,13 +1068,14 @@ export default defineComponent({
                   // 处理内容流，将 <NEWLINE> 转换为真实换行符
                   const content = s.substring(8).replace(/<NEWLINE>/g, '\n');
                   aiMsg.text += content;
-                  console.log('[DEBUG] CONTENT 原始:', s.substring(8));
-                  console.log('[DEBUG] CONTENT 转换后:', content);
+                  // 强制触发 Vue 响应式更新
+                  messages.value[aiMsgIndex] = { ...aiMsg };
                 } else if (s.startsWith('ERROR:')) {
                   // 处理错误
                   aiMsg.role = 'error';
                   const errorMsg = s.substring(6);
                   aiMsg.text = errorMsg;
+                  messages.value[aiMsgIndex] = { ...aiMsg };
                   ElMessage.error(errorMsg);
                 } else if (s.startsWith('THINKING:')) {
                   // 处理思考过程（可选显示）
@@ -966,6 +1160,194 @@ export default defineComponent({
       return formattedLines.filter(line => line !== '').join('<br>');
     };
 
+    // 检查是否有可导出的内容（只要有对话消息就可以导出）
+    const hasExportableContent = computed(() => {
+      return messages.value.some(msg => (msg.role === 'assistant' || msg.role === 'user') && msg.text.trim());
+    });
+
+    // 导出为 Word 文档
+    const exportToWord = async () => {
+      // 获取所有助手消息
+      const assistantMessages = messages.value.filter(msg => msg.role === 'assistant' && msg.text.trim());
+      if (!assistantMessages.length) {
+        ElMessage.warning('没有可导出的内容');
+        return;
+      }
+
+      try {
+        const docChildren: Paragraph[] = [];
+
+        // 处理每条助手消息
+        assistantMessages.forEach((msg, msgIdx) => {
+          if (msgIdx > 0) {
+            // 消息之间添加分隔
+            docChildren.push(new Paragraph({ text: '', spacing: { after: 400 } }));
+          }
+
+          // 预处理文本
+          let text = msg.text.replace(/<NEWLINE>/g, '\n');
+          text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+          text = text.replace(/<\/?think>/gi, '');
+
+          const lines = text.split('\n');
+
+          lines.forEach((line) => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) {
+              // 空行
+              docChildren.push(new Paragraph({ text: '', spacing: { after: 100 } }));
+              return;
+            }
+
+            // 检查是否是标题
+            const headingMatch = trimmedLine.match(/^(#{1,6})\s*(.+)$/);
+            if (headingMatch) {
+              const level = headingMatch[1].length;
+              const content = headingMatch[2];
+              const headingLevelMap: Record<number, typeof HeadingLevel[keyof typeof HeadingLevel]> = {
+                1: HeadingLevel.HEADING_1,
+                2: HeadingLevel.HEADING_2,
+                3: HeadingLevel.HEADING_3,
+                4: HeadingLevel.HEADING_4,
+                5: HeadingLevel.HEADING_5,
+                6: HeadingLevel.HEADING_6,
+              };
+              docChildren.push(
+                new Paragraph({
+                  text: content,
+                  heading: headingLevelMap[level] || HeadingLevel.HEADING_1,
+                  spacing: { before: 240, after: 120 },
+                })
+              );
+              return;
+            }
+
+            // 检查是否是列表项
+            const listMatch = trimmedLine.match(/^[-*•]\s+(.+)$/);
+            if (listMatch) {
+              const content = listMatch[1];
+              docChildren.push(
+                new Paragraph({
+                  children: parseInlineFormatting(content),
+                  bullet: { level: 0 },
+                  spacing: { after: 60 },
+                })
+              );
+              return;
+            }
+
+            // 检查是否是数字列表
+            const numberedListMatch = trimmedLine.match(/^(\d+)[.)]\s+(.+)$/);
+            if (numberedListMatch) {
+              const content = numberedListMatch[2];
+              docChildren.push(
+                new Paragraph({
+                  children: parseInlineFormatting(content),
+                  numbering: { reference: 'default-numbering', level: 0 },
+                  spacing: { after: 60 },
+                })
+              );
+              return;
+            }
+
+            // 普通段落
+            docChildren.push(
+              new Paragraph({
+                children: parseInlineFormatting(trimmedLine),
+                spacing: { after: 120 },
+              })
+            );
+          });
+
+          // 添加参考资料
+          if (msg.sources && msg.sources.length > 0) {
+            docChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+            docChildren.push(
+              new Paragraph({
+                children: [new TextRun({ text: '参考资料：', bold: true })],
+                spacing: { after: 60 },
+              })
+            );
+            msg.sources.forEach((src) => {
+              docChildren.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `[${src.id}] ${src.fileName}` })],
+                  spacing: { after: 40 },
+                })
+              );
+            });
+          }
+        });
+
+        // 创建文档
+        const doc = new DocxDocument({
+          numbering: {
+            config: [{
+              reference: 'default-numbering',
+              levels: [{
+                level: 0,
+                format: 'decimal',
+                text: '%1.',
+                alignment: AlignmentType.START,
+              }],
+            }],
+          },
+          sections: [{
+            properties: {},
+            children: docChildren,
+          }],
+        });
+
+        // 生成并下载
+        const blob = await Packer.toBlob(doc);
+        const filename = `智能写作_${new Date().toISOString().slice(0, 10)}.docx`;
+        saveAs(blob, filename);
+        ElMessage.success('导出成功');
+      } catch (e: any) {
+        console.error('导出失败:', e);
+        ElMessage.error(`导出失败：${e?.message || String(e)}`);
+      }
+    };
+
+    // 解析行内格式（加粗、斜体）
+    const parseInlineFormatting = (text: string): TextRun[] => {
+      const runs: TextRun[] = [];
+      // 正则匹配加粗和斜体
+      const regex = /(\*\*(.+?)\*\*|__(.+?)__|(?<!\*)\*([^*]+)\*(?!\*)|(?<!_)_([^_]+)_(?!_))/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        // 添加匹配前的普通文本
+        if (match.index > lastIndex) {
+          runs.push(new TextRun({ text: text.slice(lastIndex, match.index) }));
+        }
+
+        // 判断是加粗还是斜体
+        if (match[2] || match[3]) {
+          // 加粗 **text** 或 __text__
+          runs.push(new TextRun({ text: match[2] || match[3], bold: true }));
+        } else if (match[4] || match[5]) {
+          // 斜体 *text* 或 _text_
+          runs.push(new TextRun({ text: match[4] || match[5], italics: true }));
+        }
+
+        lastIndex = regex.lastIndex;
+      }
+
+      // 添加剩余的普通文本
+      if (lastIndex < text.length) {
+        runs.push(new TextRun({ text: text.slice(lastIndex) }));
+      }
+
+      // 如果没有任何格式化，返回原始文本
+      if (runs.length === 0) {
+        runs.push(new TextRun({ text }));
+      }
+
+      return runs;
+    };
+
     onMounted(async () => {
       await ensureSession();
       await refreshKbList();
@@ -984,7 +1366,15 @@ export default defineComponent({
       sessionUploading,
       sessionFileInputRef,
       kbFileInputRef,
+      ocrFileInputRef,
+      ocrUploading,
+      ocrResults,
+      uploadOcrImages,
+      clearOcrResults,
       thinkingMode,
+      writeMode,
+      inputPlaceholder,
+      sendButtonText,
       modelOptions,
       selectedModel,
       templateFile,
@@ -1004,6 +1394,8 @@ export default defineComponent({
       handleEnter,
       sendMessage,
       formatMessage,
+      hasExportableContent,
+      exportToWord,
     };
   },
 });
@@ -1335,6 +1727,117 @@ export default defineComponent({
   color: #1f2937;
 }
 
+.title-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.export-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: all 0.3s;
+}
+
+.export-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(103, 194, 58, 0.3);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* OCR 图片识别按钮 */
+.ocr-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  padding: 6px 16px;
+  transition: all 0.3s;
+  box-shadow: 0 2px 6px rgba(245, 166, 35, 0.2);
+}
+
+.ocr-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 166, 35, 0.4);
+}
+
+.w-100 {
+  width: 100%;
+}
+
+/* ========== OCR 识别结果区域 ========== */
+.ocr-results-section {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(245, 166, 35, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 248, 230, 0.5);
+}
+
+.ocr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ocr-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #f5a623;
+}
+
+.ocr-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ocr-result-item {
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e8eaed;
+  background: white;
+}
+
+.ocr-result-item.success {
+  border-color: rgba(103, 194, 58, 0.3);
+  background: rgba(240, 252, 241, 0.8);
+}
+
+.ocr-result-item.failed {
+  border-color: rgba(245, 108, 108, 0.3);
+  background: rgba(254, 242, 242, 0.8);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.filename {
+  font-weight: 500;
+  color: #374151;
+}
+
+.result-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4b5563;
+  white-space: pre-wrap;
+  background: rgba(249, 250, 251, 0.8);
+  padding: 8px;
+  border-radius: 4px;
+}
+
 .config-section {
   display: flex;
   flex-direction: column;
@@ -1375,6 +1878,112 @@ export default defineComponent({
 
 .switch-container {
   padding: 8px 0;
+}
+
+/* ========== 选项行（写作模式 + 高级选项 + OCR） ========== */
+.options-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-label-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.mode-selector-compact :deep(.el-radio-group) {
+  display: flex;
+}
+
+.mode-selector-compact :deep(.el-radio-button__inner) {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.mode-selector-compact :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 4px 0 0 4px;
+}
+
+.mode-selector-compact :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 4px 4px 0;
+}
+
+.mode-selector-compact :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+}
+
+/* ========== 模式选择器 ========== */
+.mode-selector {
+  padding: 8px 0;
+}
+
+.mode-selector :deep(.el-radio-group) {
+  display: flex;
+  width: 100%;
+}
+
+.mode-selector :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.mode-selector :deep(.el-radio-button__inner) {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.mode-selector :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 8px 0 0 8px;
+}
+
+.mode-selector :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 8px 8px 0;
+}
+
+.mode-selector :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.mode-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* 补全模式按钮样式 */
+.send-btn.complete-mode {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+}
+
+.send-btn.complete-mode:hover {
+  background: linear-gradient(135deg, #e080ea 0%, #e4465b 100%);
+  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.4);
 }
 
 .session-files-section {

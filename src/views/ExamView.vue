@@ -98,7 +98,7 @@
         <div v-else class="qlist">
           <div v-for="(q, idx) in currentPageQuestions" :key="q.qid" class="q">
             <div class="qheader">
-              <b>{{ getQuestionNumber(idx) }}. {{ q.stem }}</b>
+              <b><span>{{ getQuestionNumber(idx) }}. </span><span v-html="formatText(q.stem)"></span></b>
               <span :class="['tag', q.qtype === 'multi' ? 'multi' : 'single']">
                 {{ q.qtype === 'multi' ? '多选' : '单选' }}
               </span>
@@ -113,7 +113,7 @@
                   @click="toggleMultiOption(q.qid, opt.label)"
                   :disabled="submitted"
                 >
-                  {{ opt.label }}. {{ opt.text }}
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </template>
               <!-- 单选题 -->
@@ -125,7 +125,7 @@
                   @click="selectSingleOption(q.qid, opt.label)"
                   :disabled="submitted"
                 >
-                  {{ opt.label }}. {{ opt.text }}
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </template>
             </div>
@@ -138,6 +138,75 @@
             交卷并评分
           </el-button>
           <span class="muted">{{ submitMessage }}</span>
+        </div>
+
+        <!-- 错题统计与知识点分析 -->
+        <div v-if="reviewData && wrongQuestions.length > 0" class="card wrong-stats-panel">
+          <h3>错题统计与知识点分析</h3>
+          
+          <!-- 概览统计 -->
+          <div class="stats-overview">
+            <div class="stat-item wrong">
+              <span class="stat-num">{{ wrongQuestions.length }}</span>
+              <span class="stat-label">错题数</span>
+            </div>
+            <div class="stat-item kp">
+              <span class="stat-num">{{ knowledgePointStats.length }}</span>
+              <span class="stat-label">涉及知识点</span>
+            </div>
+          </div>
+
+          <!-- 知识点统计表格 -->
+          <div class="kp-stats" v-if="knowledgePointStats.length > 0">
+            <h4>📚 薄弱知识点排行（按错题数降序）</h4>
+            <div class="kp-table">
+              <div class="kp-row kp-header">
+                <span class="kp-name">知识点名称</span>
+                <span class="kp-count">错题数</span>
+                <span class="kp-action">操作</span>
+              </div>
+              <div 
+                v-for="(kp, idx) in knowledgePointStats" 
+                :key="idx" 
+                class="kp-row"
+                :class="{ 'kp-danger': kp.count >= 3, 'kp-warning': kp.count === 2 }"
+              >
+                <span class="kp-name">《{{ kp.name }}》</span>
+                <span class="kp-count">
+                  <span class="count-badge">{{ kp.count }}</span>
+                </span>
+                <span class="kp-action">
+                  <el-button size="small" type="primary" text @click="scrollToWrongByKp(kp.name)">
+                    查看错题
+                  </el-button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 无知识点提示 -->
+          <div v-else class="no-kp-hint">
+            <el-alert type="info" :closable="false" show-icon>
+              部分错题暂无知识点信息，请查看下方详细解析
+            </el-alert>
+          </div>
+
+          <!-- 复习建议 -->
+          <div class="review-suggestion" v-if="knowledgePointStats.length > 0">
+            <h4>💡 复习建议</h4>
+            <p>根据您的答题情况，建议重点复习以下知识点：</p>
+            <div class="suggestion-tags">
+              <span 
+                v-for="(kp, idx) in knowledgePointStats.slice(0, 5)" 
+                :key="idx" 
+                class="suggestion-tag"
+                :class="{ 'urgent': kp.count >= 3 }"
+              >
+                {{ kp.name }}
+                <span class="tag-count">{{ kp.count }}题</span>
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- 成绩展示 -->
@@ -170,8 +239,15 @@
               </div>
             </div>
           </div>
-          <div style="margin-top: 10px">
+          <div style="margin-top: 10px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
             <el-button @click="exportReport" :loading="exporting">导出成绩报告（DOCX）</el-button>
+            <el-button 
+              type="warning" 
+              @click="exportWrongReport" 
+              :loading="exportingWrong"
+            >
+              导出错题报告（DOCX）
+            </el-button>
             <span class="muted">{{ exportMessage }}</span>
           </div>
         </div>
@@ -182,7 +258,7 @@
           <div class="review-list">
             <div v-for="(item, idx) in reviewData.items" :key="idx" class="q">
               <div class="qheader">
-                <b>{{ idx + 1 }}. {{ item.stem }}</b>
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(item.stem)"></span></b>
                 <span :class="['tag', item.qtype === 'multi' ? 'multi' : 'single']">
                   {{ item.qtype === 'multi' ? '多选' : '单选' }}
                 </span>
@@ -202,11 +278,10 @@
                   }]"
                   disabled
                 >
-                  {{ opt.label }}. {{ opt.text }}
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </div>
-              <div class="analysis">
-                {{ item.analysis || '（无解析）' }}
+              <div class="analysis" v-html="formatText(item.analysis) || '（无解析）'">
               </div>
             </div>
           </div>
@@ -252,7 +327,8 @@ const API_ENDPOINTS = {
     REVIEW: `${MCQ_BASE_URL}/exam/review`
   },
   STUDENT: {
-    EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`
+    EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`,
+    EXPORT_WRONG_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_wrong_report_docx`
   },
   AUTH: {
     CHANGE_PASSWORD: '/api/auth/change_password'
@@ -329,6 +405,7 @@ export default defineComponent({
     const gradeReport = ref<GradeReport | null>(null)
     const reviewData = ref<ReviewData | null>(null)
     const exporting = ref(false)
+    const exportingWrong = ref(false)
     const exportMessage = ref('')
     const scoreChartRef = ref<HTMLCanvasElement | null>(null)
 
@@ -367,6 +444,69 @@ export default defineComponent({
       return Math.round((correctCount.value / total) * 100)
     })
 
+    // 错题列表
+    const wrongQuestions = computed(() => {
+      if (!reviewData.value) return []
+      return reviewData.value.items.filter(item => !item.is_correct)
+    })
+
+    // 从解析文本中提取知识点
+    const extractKnowledgePoints = (analysis: string): string[] => {
+      if (!analysis) return []
+      // 匹配 "知识点：《XXX》、《YYY》" 格式
+      const match = analysis.match(/知识点：(.+?)(?:\n|$)/)
+      if (!match) return []
+      // 提取所有《XXX》中的内容
+      const kpText = match[1]
+      const kpMatches = kpText.match(/《([^》]+)》/g)
+      if (!kpMatches) return []
+      return kpMatches.map(kp => kp.replace(/[《》]/g, ''))
+    }
+
+    // 知识点统计（按错题数排序）
+    const knowledgePointStats = computed(() => {
+      const kpMap: Record<string, { name: string; count: number; questionIndices: number[] }> = {}
+      
+      wrongQuestions.value.forEach((item) => {
+        const kps = extractKnowledgePoints(item.analysis)
+        kps.forEach(kp => {
+          if (!kpMap[kp]) {
+            kpMap[kp] = { name: kp, count: 0, questionIndices: [] }
+          }
+          kpMap[kp].count++
+          // 记录原始索引（在reviewData.items中的位置）
+          const originalIdx = reviewData.value?.items.findIndex(q => q.qid === item.qid) ?? -1
+          if (originalIdx >= 0) {
+            kpMap[kp].questionIndices.push(originalIdx)
+          }
+        })
+      })
+      
+      // 按错题数降序排列
+      return Object.values(kpMap).sort((a, b) => b.count - a.count)
+    })
+
+    // 滚动到指定知识点的错题
+    const scrollToWrongByKp = (kpName: string) => {
+      const stat = knowledgePointStats.value.find(kp => kp.name === kpName)
+      if (stat && stat.questionIndices.length > 0) {
+        // 滚动到第一个相关错题
+        const targetIdx = stat.questionIndices[0]
+        const reviewPanel = document.querySelector('.review-panel')
+        if (reviewPanel) {
+          const questionElements = reviewPanel.querySelectorAll('.q')
+          if (questionElements[targetIdx]) {
+            questionElements[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' })
+            // 添加高亮效果
+            questionElements[targetIdx].classList.add('highlight-question')
+            setTimeout(() => {
+              questionElements[targetIdx].classList.remove('highlight-question')
+            }, 2000)
+          }
+        }
+      }
+    }
+
     const getQuestionNumber = (idx: number) => {
       return (currentPage.value - 1) * pageSize.value + idx + 1
     }
@@ -403,6 +543,17 @@ export default defineComponent({
       if (item.is_correct) return 'ok'
       if (item.score > 0) return 'partial'
       return 'bad'
+    }
+
+    // 将 <NEWLINE> 标识符转换为换行显示
+    const formatText = (text: string | undefined | null): string => {
+      if (!text) return ''
+      // 先转义 HTML 特殊字符，再将 <NEWLINE> 替换为 <br>
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/&lt;NEWLINE&gt;/g, '<br>')
     }
 
     const toggleMultiOption = (qid: string, label: string) => {
@@ -752,6 +903,59 @@ export default defineComponent({
       }
     }
 
+    const exportWrongReport = async () => {
+      if (!attemptId.value) {
+        ElMessage.warning('缺少会话信息')
+        return
+      }
+      if (wrongQuestions.value.length === 0) {
+        ElMessage.success('恭喜！本次考试全部正确，没有错题需要导出 🎉')
+        return
+      }
+      exportingWrong.value = true
+      exportMessage.value = '导出错题报告中…'
+      try {
+        const formData = new FormData()
+        formData.append('attempt_id', attemptId.value)
+        
+        const data = await mcqFetch(API_ENDPOINTS.STUDENT.EXPORT_WRONG_REPORT_DOCX, {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!data.ok) {
+          throw new Error(data.detail || '导出失败')
+        }
+
+        if (data.download_url) {
+          let downloadUrl = data.download_url
+          if (downloadUrl.startsWith('/')) {
+            downloadUrl = `${MCQ_BASE_URL}${downloadUrl}`
+          }
+          
+          const link = document.createElement('a')
+          link.href = downloadUrl
+          link.download = data.filename || '错题报告.docx'
+          link.target = '_blank'
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+
+          exportMessage.value = `已导出（${data.wrong_count}道错题，${data.kp_count}个知识点）`
+          setTimeout(() => { exportMessage.value = '' }, 3000)
+          ElMessage.success('错题报告导出成功')
+        } else {
+          throw new Error('未获取到下载链接')
+        }
+      } catch (error: any) {
+        exportMessage.value = '导出失败'
+        ElMessage.error('导出错题报告失败：' + (error.message || '未知错误'))
+        console.error('导出错题报告错误：', error)
+      } finally {
+        exportingWrong.value = false
+      }
+    }
+
     const handleChangePassword = () => {
       passwordDialogVisible.value = true
       passwordForm.value = { oldPassword: '', newPassword: '' }
@@ -823,8 +1027,13 @@ export default defineComponent({
       correctCount,
       correctRate,
       reviewData,
+      wrongQuestions,
+      knowledgePointStats,
+      scrollToWrongByKp,
       exporting,
+      exportingWrong,
       exportMessage,
+      exportWrongReport,
       scoreChartRef,
       passwordDialogVisible,
       passwordForm,
@@ -841,6 +1050,7 @@ export default defineComponent({
       nextPage,
       handlePageSizeChange,
       getScoreClass,
+      formatText,
       toggleMultiOption,
       selectSingleOption,
       handleChangePassword,
@@ -1418,6 +1628,236 @@ export default defineComponent({
 }
 
 /* 响应式优化 */
+/* 错题统计与知识点分析 */
+.wrong-stats-panel h3 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wrong-stats-panel h3::before {
+  content: '📊';
+  font-size: 22px;
+}
+
+.stats-overview {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid transparent;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.stat-item.wrong {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+}
+
+.stat-item.kp {
+  border-color: rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.stat-num {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.stat-item.wrong .stat-num {
+  color: #ef4444;
+}
+
+.stat-item.kp .stat-num {
+  color: #667eea;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.kp-stats h4,
+.review-suggestion h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 16px;
+}
+
+.kp-table {
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.kp-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 100px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.4);
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.kp-row:last-child {
+  border-bottom: none;
+}
+
+.kp-row:not(.kp-header):hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.kp-header {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  font-weight: 600;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.kp-row.kp-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(220, 38, 38, 0.04) 100%);
+}
+
+.kp-row.kp-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.04) 100%);
+}
+
+.kp-name {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.kp-count {
+  text-align: center;
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.kp-row.kp-warning .count-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+
+.kp-action {
+  text-align: center;
+}
+
+.no-kp-hint {
+  margin-bottom: 20px;
+}
+
+.review-suggestion {
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.04) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 12px;
+}
+
+.review-suggestion p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.suggestion-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.suggestion-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #667eea;
+  transition: all 0.3s ease;
+}
+
+.suggestion-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.suggestion-tag.urgent {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #dc2626;
+}
+
+.tag-count {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: rgba(102, 126, 234, 0.15);
+  border-radius: 999px;
+  color: #667eea;
+}
+
+.suggestion-tag.urgent .tag-count {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+/* 错题高亮动画 */
+.highlight-question {
+  animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+  25%, 75% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3), 0 4px 20px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.4), 0 6px 24px rgba(239, 68, 68, 0.3);
+  }
+}
+
 @media (max-width: 768px) {
   .topwrap {
     padding: 12px 16px;
@@ -1455,6 +1895,25 @@ export default defineComponent({
   
   .qgrid {
     grid-template-columns: repeat(8, 1fr);
+  }
+  
+  .stats-overview {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .kp-row {
+    grid-template-columns: 1fr 80px 80px;
+    padding: 12px 14px;
+  }
+  
+  .suggestion-tags {
+    gap: 8px;
+  }
+  
+  .suggestion-tag {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 }
 </style>
