@@ -1680,8 +1680,8 @@ export default defineComponent({
       
       let cleaned = text
         .replace(/<NEWLINE>/g, '\n')           // <NEWLINE> 转换为真实换行
-        // 移除从"参考来源"开始到结尾的所有内容（包括各种格式）
-        .replace(/[*]*参考来源[*]*[^\n]*[\s\S]*$/g, '')
+        // 仅移除"参考来源"关键词及其 markdown 符号，不删除后续内容
+        .replace(/[*]*参考来源[*]*[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
         .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
@@ -1819,8 +1819,22 @@ export default defineComponent({
 
     const processAnalysisText = (text: string | null | undefined): string => {
       if (!text) return '<p>暂无解析</p>'
-      // 过滤掉每次输出末尾的"参考来源"（分项解析可能有多次）
-      let cleaned = text.replace(/参考来源[：:\s]*/g, '')
+      // 将带选项字母的进度提示替换为选项分隔标记
+      const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
+      
+      let cleaned = text
+        // 仅移除"参考来源"关键词及其 markdown 符号
+        .replace(/[*]*参考来源[*]*[：:\s]*/g, '')
+        // 将带选项字母的进度提示替换为选项分隔标记
+        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        // 移除不带选项字母的通用进度提示
+        .replace(/^正在进行混合检索[.…]*\s*$/gm, '')
+        .replace(/^已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, '')
+        .replace(/^未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, '')
+        .replace(/^正在使用精准检索分析[.…]*\s*$/gm, '')
       return renderMarkdown(cleaned)
     }
     const createPaper = async () => {
