@@ -535,6 +535,24 @@
                 <span class="status-msg">{{ paperMessage }}</span>
               </el-form-item>
             </el-form>
+            
+            <!-- 试卷列表 -->
+            <div style="margin-top: 20px;">
+              <div class="action-bar" style="margin-bottom: 10px;">
+                <el-button @click="loadPaperList" :loading="loadingPaperList">刷新列表</el-button>
+                <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份试卷</span>
+              </div>
+              <el-table :data="paperList" stripe border style="width: 100%">
+                <el-table-column prop="title" label="试卷名称" min-width="200" />
+                <el-table-column prop="paper_id" label="文件名" min-width="250" />
+                <el-table-column label="操作" width="200" fixed="right">
+                  <template #default="{ row }">
+                    <el-button size="small" @click="downloadPaper(row.paper_id)">下载</el-button>
+                    <el-button size="small" type="danger" @click="deletePaper(row.paper_id, row.title)" :loading="deletingPaper[row.paper_id]">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -848,6 +866,10 @@ export default defineComponent({
     const paperTitle = ref('')
     const creatingPaper = ref(false)
     const paperMessage = ref('')
+    // 试卷列表管理
+    const paperList = ref<Paper[]>([])
+    const loadingPaperList = ref(false)
+    const deletingPaper = reactive<Record<string, boolean>>({})
     const exportPapers = ref<Paper[]>([])
     const selectedExportPaper = ref('')
     const loadingExportPapers = ref(false)
@@ -1633,7 +1655,9 @@ export default defineComponent({
         const fd = new FormData(); fd.append('file', f)
         const r = await fetch(`${MCQ_BASE_URL}/bank/import_docx`, { method:'POST', body: fd })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '导入失败')
-        ElMessage.success(`导入成功：${j.count||0} 题`)
+        // 显示更详细的导入结果
+        const msg = j.msg || `导入成功：更新 ${j.updated||0} 题，新增 ${j.added||0} 题`
+        ElMessage.success(msg)
         await loadQuestions()
       } catch(e:any) { ElMessage.error(`导入失败：${e?.message||e}`) }
       finally { importingBank.value = false; if (bankImportRef.value) bankImportRef.value.value='' }
@@ -1651,12 +1675,25 @@ export default defineComponent({
     // 清理 markdown 符号用于编辑框显示
     const cleanMarkdownForEdit = (text: string): string => {
       if (!text) return ''
+      // 将带选项字母的进度提示替换为选项分隔标记（保留选项标识）
+      const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
+      
       let cleaned = text
         .replace(/<NEWLINE>/g, '\n')           // <NEWLINE> 转换为真实换行
+        // 移除从"参考来源"开始到结尾的所有内容（包括各种格式）
+        .replace(/[*]*参考来源[*]*[^\n]*[\s\S]*$/g, '')
+        // 将带选项字母的进度提示替换为选项分隔标记
+        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        // 移除不带选项字母的通用进度提示
+        .replace(/^正在进行混合检索[.…]*\s*$/gm, '')
+        .replace(/^已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, '')
+        .replace(/^未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, '')
+        .replace(/^正在使用精准检索分析[.…]*\s*$/gm, '')
         .replace(/^#{1,6}\s*/gm, '')           // 移除标题符号
         .replace(/\*\*(.+?)\*\*/g, '$1')       // 移除加粗
-        .replace(/\*\*参考来源\*\*[：:\s]*/g, '') // 移除加粗的"参考来源"
-        .replace(/参考来源[：:\s]*/g, '')       // 移除普通"参考来源"
         .replace(/\*(.+?)\*/g, '$1')           // 移除斜体
         .replace(/__(.+?)__/g, '$1')           // 移除加粗
         .replace(/_(.+?)_/g, '$1')             // 移除斜体
@@ -1826,12 +1863,68 @@ export default defineComponent({
         paperMessage.value = '试卷已生成'
         ElMessage.success('试卷生成成功')
         setTimeout(() => { paperMessage.value = '' }, 1500)
+        // 生成成功后刷新列表
+        loadPaperList()
       } catch (error: any) {
         const msg = error?.message || error
         paperMessage.value = '生成失败：' + msg
         ElMessage.error(paperMessage.value)
       } finally {
         creatingPaper.value = false
+      }
+    }
+
+    // 试卷列表管理函数
+    const loadPaperList = async () => {
+      loadingPaperList.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/papers`, { method: 'GET', cache: 'no-store' })
+        const j = await r.json()
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || `HTTP ${r.status}`)
+        }
+        paperList.value = Array.isArray(j.papers) ? j.papers : []
+      } catch (error: any) {
+        ElMessage.error('加载试卷列表失败：' + (error?.message || error))
+      } finally {
+        loadingPaperList.value = false
+      }
+    }
+
+    const downloadPaper = (paperId: string) => {
+      const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(paperId)}`
+      openInNewTab(url)
+    }
+
+    const deletePaper = async (paperId: string, title: string) => {
+      try {
+        await ElMessageBox.confirm(
+          `确认删除试卷「${title}」？同时会删除对应的学生版文件。`,
+          '删除确认',
+          { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning' }
+        )
+        deletingPaper[paperId] = true
+        const r = await fetch(`${MCQ_BASE_URL}/bank/delete_paper`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Name': encodeURIComponent(store.state.user.username),
+            'X-User-Role': userRole.value
+          },
+          body: JSON.stringify({ paper_id: paperId })
+        })
+        const j = await r.json()
+        if (!j?.ok) {
+          throw new Error(j?.msg || '删除失败')
+        }
+        ElMessage.success(j.msg || '删除成功')
+        loadPaperList()
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败：' + (error?.message || error))
+        }
+      } finally {
+        deletingPaper[paperId] = false
       }
     }
 
@@ -2075,6 +2168,7 @@ export default defineComponent({
     onMounted(() => {
       loadQuestions()
       loadExportPapers()
+      loadPaperList()  // 加载试卷管理列表
       loadUsers()
       loadPendingUsers()
     })
@@ -2083,7 +2177,10 @@ export default defineComponent({
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage,
       questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
-      paperTitle, creatingPaper, paperMessage, exportPapers, selectedExportPaper,
+      paperTitle, creatingPaper, paperMessage,
+      // 试卷列表管理
+      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
+      exportPapers, selectedExportPaper,
       loadingExportPapers, exportingZip, exportingDocx, exportMessage,
       userSearch, users, loadingUsers, actionLoadingId,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
