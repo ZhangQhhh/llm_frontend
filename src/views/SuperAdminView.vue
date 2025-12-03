@@ -932,7 +932,7 @@ export default defineComponent({
 <style scoped>
 .super-admin-page {
   min-height: calc(100vh - 60px);
-  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/userInfo.png') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   padding: 2rem 0;

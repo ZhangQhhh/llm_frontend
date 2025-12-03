@@ -2,15 +2,22 @@
   <div class="home-page" :style="backgroundStyle">
     <!-- Hero Section -->
     <section class="hero">
+      <!-- HUD Decorations -->
+      <div class="hud-corner top-left"></div>
+      <div class="hud-corner top-right"></div>
+      <div class="hud-corner bottom-left"></div>
+      <div class="hud-corner bottom-right"></div>
+      <div class="scan-line"></div>
+
       <!-- 3D Canvas Background -->
       <canvas ref="threeCanvas" class="three-canvas"></canvas>
       
       <!-- Animated Grid Background -->
       <div class="grid-background"></div>
       
-      <!-- Floating Particles -->
-      <div class="particles">
-        <div class="particle" v-for="i in 50" :key="i" :style="getParticleStyle()"></div>
+      <!-- Sakura Petals -->
+      <div class="sakura-container">
+        <div class="sakura" v-for="i in 30" :key="i" :style="getSakuraStyle()"></div>
       </div>
       
       <!-- Glowing Orbs -->
@@ -353,6 +360,27 @@ export default defineComponent({
       };
     };
 
+    // 樱花样式生成
+    const getSakuraStyle = () => {
+      const size = Math.random() * 15 + 10; // 10-25px
+      const duration = Math.random() * 10 + 8; // 8-18s
+      const delay = Math.random() * 8;
+      const x = Math.random() * 100;
+      const rotation = Math.random() * 360;
+      const swayDuration = Math.random() * 3 + 2;
+      
+      return {
+        width: `${size}px`,
+        height: `${size}px`,
+        left: `${x}%`,
+        top: `-${size}px`,
+        animationDuration: `${duration}s`,
+        animationDelay: `${delay}s`,
+        '--rotation': `${rotation}deg`,
+        '--sway-duration': `${swayDuration}s`
+      };
+    };
+
     // 初始化Three.js场景
     const initThree = () => {
       if (!threeCanvas.value) return;
@@ -495,6 +523,7 @@ export default defineComponent({
     return {
       threeCanvas,
       getParticleStyle,
+      getSakuraStyle,
       backgroundStyle,
       handleHelpClick
     };
@@ -592,6 +621,71 @@ export default defineComponent({
   100% {
     transform: translateY(-100vh) translateX(50px);
     opacity: 0;
+  }
+}
+
+/* Sakura Petals - 樱花飘落效果 */
+.sakura-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sakura {
+  position: absolute;
+  background: linear-gradient(135deg, #ffb7c5 0%, #ffc0cb 50%, #fff0f5 100%);
+  border-radius: 150% 0 150% 0;
+  opacity: 0.8;
+  animation: sakuraFall linear infinite, sakuraSway ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(255, 183, 197, 0.5);
+  transform-origin: center center;
+}
+
+.sakura::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.6) 50%, transparent 60%);
+  border-radius: inherit;
+}
+
+@keyframes sakuraFall {
+  0% {
+    top: -30px;
+    opacity: 0;
+    transform: rotate(var(--rotation, 0deg)) translateX(0);
+  }
+  10% {
+    opacity: 0.9;
+  }
+  90% {
+    opacity: 0.9;
+  }
+  100% {
+    top: 110vh;
+    opacity: 0;
+    transform: rotate(calc(var(--rotation, 0deg) + 720deg)) translateX(100px);
+  }
+}
+
+@keyframes sakuraSway {
+  0%, 100% {
+    margin-left: 0;
+  }
+  25% {
+    margin-left: 30px;
+  }
+  50% {
+    margin-left: -20px;
+  }
+  75% {
+    margin-left: 40px;
   }
 }
 
@@ -741,6 +835,54 @@ export default defineComponent({
   background-clip: text;
   animation: gradientShift 5s ease infinite;
   background-size: 200% 200%;
+  position: relative;
+  text-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+}
+
+.gradient-text::before,
+.gradient-text::after {
+  content: '皖美智脑';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0.8;
+}
+
+.gradient-text::before {
+  animation: glitch-1 2.5s infinite;
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+  transform: translate(-0.025em, -0.0125em);
+  opacity: 0.75;
+}
+
+.gradient-text::after {
+  animation: glitch-2 2.5s infinite;
+  clip-path: polygon(0 80%, 100% 20%, 100% 100%, 0 100%);
+  transform: translate(0.025em, 0.0125em);
+  opacity: 0.75;
+}
+
+@keyframes glitch-1 {
+  0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); }
+  20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
+  40% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); }
+  60% { clip-path: inset(80% 0 5% 0); transform: translate(2px, -2px); }
+  80% { clip-path: inset(10% 0 70% 0); transform: translate(-1px, 1px); }
+  100% { clip-path: inset(30% 0 50% 0); transform: translate(1px, -1px); }
+}
+
+@keyframes glitch-2 {
+  0% { clip-path: inset(10% 0 60% 0); transform: translate(2px, -1px); }
+  20% { clip-path: inset(80% 0 5% 0); transform: translate(-2px, 2px); }
+  40% { clip-path: inset(30% 0 20% 0); transform: translate(2px, -2px); }
+  60% { clip-path: inset(10% 0 80% 0); transform: translate(-1px, 1px); }
+  80% { clip-path: inset(50% 0 30% 0); transform: translate(1px, -1px); }
+  100% { clip-path: inset(70% 0 10% 0); transform: translate(-2px, 2px); }
 }
 
 @keyframes gradientShift {
@@ -759,11 +901,26 @@ export default defineComponent({
   line-height: 1.8;
   font-family: 'ZhaoPai', sans-serif;
   letter-spacing: 2px;
+  position: relative;
 }
 
 .typing-text {
   display: inline-block;
-  animation: fadeIn 1s ease-out 0.5s both;
+  overflow: hidden;
+  border-right: 3px solid #60a5fa;
+  white-space: nowrap;
+  animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+  max-width: 100%;
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent; }
+  50% { border-color: #60a5fa; }
 }
 
 @keyframes fadeIn {
@@ -931,25 +1088,179 @@ export default defineComponent({
   font-size: 20px;
 }
 
-/* 模块按钮样式 */
+/* HUD Decorations */
+.hud-corner {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.top-left {
+  top: 40px;
+  left: 40px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 20px;
+}
+
+.top-left::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: #60a5fa;
+  box-shadow: 0 0 10px #60a5fa;
+}
+
+.top-left::after {
+  content: 'SYS.ONLINE';
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: rgba(96, 165, 250, 0.8);
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  animation: textBlink 2s infinite;
+}
+
+.top-right {
+  top: 40px;
+  right: 40px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 20px;
+}
+
+.top-right::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 2px;
+  background: #60a5fa;
+  box-shadow: 0 0 10px #60a5fa;
+}
+
+.top-right::after {
+  content: 'AI.CORE';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: rgba(96, 165, 250, 0.8);
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+.bottom-left {
+  bottom: 40px;
+  left: 40px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 20px;
+}
+
+.bottom-left::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: #60a5fa;
+  box-shadow: 0 0 10px #60a5fa;
+}
+
+.bottom-right {
+  bottom: 40px;
+  right: 40px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 20px;
+}
+
+.bottom-right::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 40px;
+  height: 2px;
+  background: #60a5fa;
+  box-shadow: 0 0 10px #60a5fa;
+}
+
+@keyframes textBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Scan Line Effect */
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(59, 130, 246, 0.1) 50%, transparent 100%);
+  background-size: 100% 100%;
+  animation: scanMove 8s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes scanMove {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* 增强按钮样式 */
 .btn-module {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.1);
   backdrop-filter: blur(20px);
   color: white;
   border: 1px solid rgba(96, 165, 250, 0.3);
   padding: 0.75rem 1.5rem;
   font-family: 'ZhaoPai', sans-serif;
-  font-size: 15px;
-  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+  transition: all 0.3s ease;
   white-space: nowrap;
-  flex-shrink: 0;
+  text-align: center;
+  min-width: 120px;
+  max-width: 160px;
+}
+
+.btn-module::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #60a5fa, transparent, #60a5fa);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .btn-module:hover {
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(96, 165, 250, 0.6);
   transform: translateY(-4px);
-  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+  border-color: #60a5fa;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+.btn-module:hover::before {
+  opacity: 0.5;
 }
 
 .module-icon {
@@ -988,7 +1299,7 @@ export default defineComponent({
 }
 
 .floating-card {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 20px;
@@ -997,19 +1308,38 @@ export default defineComponent({
   align-items: center;
   gap: 1rem;
   color: white;
-  animation: float 3s ease-in-out infinite;
-  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+  animation: float 4s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2), inset 0 0 20px rgba(59, 130, 246, 0.1);
   position: relative;
   overflow: hidden;
   text-decoration: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 10;
+}
+
+.floating-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+  opacity: 0;
+  transform: rotate(45deg);
+  transition: opacity 0.3s ease;
 }
 
 .floating-card:hover {
-  transform: translateY(-5px) scale(1.05);
-  border-color: rgba(96, 165, 250, 0.6);
-  box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
+  transform: translateY(-10px) scale(1.05) rotateX(5deg) rotateY(5deg);
+  border-color: #60a5fa;
+  box-shadow: 0 20px 50px rgba(59, 130, 246, 0.4), inset 0 0 30px rgba(59, 130, 246, 0.2);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.floating-card:hover::after {
+  opacity: 1;
 }
 
 .card-glow {

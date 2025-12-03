@@ -1298,7 +1298,7 @@ export default defineComponent({
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('@/assets/allPic/public/robot.jpg');
+  background-image: url('@/assets/allPic/public/cybo.png');
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;

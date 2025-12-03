@@ -44,8 +44,8 @@
               <label class="control-item">
                 <span class="label-text">模型</span>
                 <select v-model="modelId">
-                  <option value="qwen3-32b">Qwen-32B</option>
-                  <option value="qwen2025">Qwen满血版</option>
+                  <option value="qwen3-32b">Qwen(通用)</option>
+                  <option value="qwen2025">Qwen(增强)</option>
                   <option value="deepseek">DeepSeek-R1</option>
                 </select>
               </label>
@@ -185,12 +185,21 @@
             </div>
           </div>
 
+          <!-- 参考来源折叠按钮 -->
+          <div class="references-toggle" @click="showReferences = !showReferences">
+            <span class="toggle-icon">{{ showReferences ? '▶' : '◀' }}</span>
+            <span class="toggle-text">参考来源</span>
+            <span class="toggle-count">{{ filteredReferences.length }}</span>
+          </div>
+
           <!-- 参考来源侧边栏 -->
-          <div class="references-sidebar">
-            <div class="sidebar-header">
-              <h3>参考来源</h3>
-              <span class="count">{{ filteredReferences.length }} 条</span>
-            </div>
+          <transition name="slide-right">
+            <div v-show="showReferences" class="references-sidebar">
+              <div class="sidebar-header">
+                <h3>参考来源</h3>
+                <span class="count">{{ filteredReferences.length }} 条</span>
+                <button class="close-btn" @click="showReferences = false">✕</button>
+              </div>
 
             <div class="references-list">
               <div v-if="filteredReferences.length === 0" class="empty-state">
@@ -270,6 +279,7 @@
               </div>
             </div>
           </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -335,6 +345,7 @@ export default defineComponent({
     const question = ref('');
     const messages = ref<Message[]>([]);
     const references = ref<ReferenceSource[]>([]);
+    const showReferences = ref(false);  // 参考来源默认隐藏
     
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -825,6 +836,7 @@ export default defineComponent({
       showProgress,
       progressInfo,
       progressMessage,
+      showReferences,
       handleSubmit,
       handleNewSession,
       handleSelectSession,
@@ -1028,9 +1040,8 @@ export default defineComponent({
 
 /* 内容区域 */
 .content-area {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 2rem;
+  display: block;
+  position: relative;
   margin-top: 2rem;
 }
 
@@ -1323,14 +1334,75 @@ export default defineComponent({
   51%, 100% { opacity: 0; }
 }
 
-/* 参考来源侧边栏 */
-.references-sidebar {
-  background: #f9fafb;
-  border-radius: 16px;
-  padding: 1.5rem;
-  height: 600px;
+/* 参考来源折叠按钮 */
+.references-toggle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 8px;
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+
+.references-toggle:hover {
+  padding-right: 12px;
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.3);
+}
+
+.references-toggle .toggle-icon {
+  font-size: 12px;
+}
+
+.references-toggle .toggle-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.references-toggle .toggle-count {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 参考来源侧边栏 */
+.references-sidebar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  width: 380px;
+  background: #f9fafb;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  z-index: 99;
+}
+
+/* 滑入动画 */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-right-enter-from,
+.slide-right-leave-to {
+  transform: translateX(100%);
 }
 
 .sidebar-header {
@@ -1340,6 +1412,22 @@ export default defineComponent({
   margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid #e5e7eb;
+}
+
+.sidebar-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.sidebar-header .close-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .sidebar-header h3 {
@@ -1600,13 +1688,15 @@ export default defineComponent({
 }
 
 /* 响应式 */
-@media (max-width: 1200px) {
-  .content-area {
-    grid-template-columns: 1fr;
+@media (max-width: 768px) {
+  .references-sidebar {
+    width: 100%;
   }
 
-  .references-sidebar {
-    height: 400px;
+  .references-toggle {
+    top: auto;
+    bottom: 20px;
+    transform: none;
   }
 }
 </style>

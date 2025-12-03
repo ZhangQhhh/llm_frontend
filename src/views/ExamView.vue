@@ -1088,10 +1088,10 @@ export default defineComponent({
 
 .exam-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/card.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
-  color: #111827;
+  color: #e5e7eb;
   position: relative;
 }
 
@@ -1102,7 +1102,7 @@ export default defineComponent({
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
   z-index: 0;
 }
@@ -1112,10 +1112,10 @@ export default defineComponent({
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .topwrap {
@@ -1145,13 +1145,13 @@ export default defineComponent({
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(30, 41, 59, 0.8);
   border-radius: 10px;
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  border: 1px solid rgba(96, 165, 250, 0.3);
 }
 
 .muted {
-  color: #6b7280;
+  color: #94a3b8;
   font-size: 14px;
   white-space: nowrap;
 }
@@ -1214,18 +1214,18 @@ export default defineComponent({
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 16px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
 }
 
 .card:hover {
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 30px rgba(96, 165, 250, 0.2);
   transform: translateY(-2px);
 }
 
@@ -1233,7 +1233,7 @@ export default defineComponent({
   margin: 0 0 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1252,13 +1252,14 @@ export default defineComponent({
 
 .navbtn {
   padding: 10px 0;
-  border: 1px solid rgba(229, 231, 235, 0.6);
+  border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(30, 41, 59, 0.8);
   text-align: center;
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  color: #e5e7eb;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -1351,17 +1352,17 @@ export default defineComponent({
 }
 
 .q {
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 16px;
   padding: 24px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(30, 41, 59, 0.85);
   backdrop-filter: blur(10px);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
 }
 
 .q:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(96, 165, 250, 0.2);
   transform: translateY(-2px);
 }
 
@@ -1376,7 +1377,7 @@ export default defineComponent({
   flex: 1;
   font-size: 16px;
   line-height: 1.7;
-  color: #1f2937;
+  color: #e5e7eb;
 }
 
 .tag {
@@ -1413,9 +1414,10 @@ export default defineComponent({
   width: 100%;
   text-align: left;
   padding: 14px 18px;
-  border: 2px solid rgba(229, 231, 235, 0.6);
+  border: 2px solid rgba(96, 165, 250, 0.3);
   border-radius: 12px;
-  background: rgba(249, 250, 251, 0.8);
+  background: rgba(30, 41, 59, 0.8);
+  color: #e5e7eb;
   cursor: pointer;
   font-size: 15px;
   transition: all 0.3s ease;

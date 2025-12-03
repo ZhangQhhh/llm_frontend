@@ -63,10 +63,10 @@
                 <el-icon><DocumentCopy /></el-icon>
                 <span>Excel 工具</span>
               </el-dropdown-item>
-              <el-dropdown-item command="report-generator">
+              <!-- <el-dropdown-item command="report-generator">
                 <el-icon><Document /></el-icon>
                 <span>数据分析</span>
-              </el-dropdown-item>
+              </el-dropdown-item> -->
               <el-dropdown-item command="data-analysis">
                 <el-icon><DataAnalysis /></el-icon>
                 <span>报告生成</span>

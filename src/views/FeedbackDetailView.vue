@@ -279,7 +279,7 @@ onMounted(() => {
 <style scoped>
 .feedback-detail-page {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/robot.jpg') no-repeat center center;
+  background: url('@/assets/allPic/public/card.jpg') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   padding: 2rem 1rem;
