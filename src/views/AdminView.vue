@@ -1680,18 +1680,18 @@ export default defineComponent({
       
       let cleaned = text
         .replace(/<NEWLINE>/g, '\n')           // <NEWLINE> 转换为真实换行
-        // 仅移除"参考来源"关键词及其 markdown 符号，不删除后续内容
-        .replace(/[*]*参考来源[*]*[：:\s]*/g, '')
+        // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
+        .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
         .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
-        // 移除不带选项字母的通用进度提示
-        .replace(/^正在进行混合检索[.…]*\s*$/gm, '')
-        .replace(/^已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, '')
-        .replace(/^未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, '')
-        .replace(/^正在使用精准检索分析[.…]*\s*$/gm, '')
+        // 移除不带选项字母的通用进度提示（支持行内任意位置）
+        .replace(/正在进行混合检索[.…]*\s*/g, '')
+        .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
+        .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
+        .replace(/正在使用精准检索分析[.…]*\s*/g, '')
         .replace(/^#{1,6}\s*/gm, '')           // 移除标题符号
         .replace(/\*\*(.+?)\*\*/g, '$1')       // 移除加粗
         .replace(/\*(.+?)\*/g, '$1')           // 移除斜体
@@ -1823,18 +1823,18 @@ export default defineComponent({
       const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
       
       let cleaned = text
-        // 仅移除"参考来源"关键词及其 markdown 符号
-        .replace(/[*]*参考来源[*]*[：:\s]*/g, '')
+        // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
+        .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
         .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
         .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
-        // 移除不带选项字母的通用进度提示
-        .replace(/^正在进行混合检索[.…]*\s*$/gm, '')
-        .replace(/^已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, '')
-        .replace(/^未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, '')
-        .replace(/^正在使用精准检索分析[.…]*\s*$/gm, '')
+        // 移除不带选项字母的通用进度提示（支持行内任意位置）
+        .replace(/正在进行混合检索[.…]*\s*/g, '')
+        .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
+        .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
+        .replace(/正在使用精准检索分析[.…]*\s*/g, '')
       return renderMarkdown(cleaned)
     }
     const createPaper = async () => {
