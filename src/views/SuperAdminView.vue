@@ -208,8 +208,8 @@
                   <div class="admin-card" v-for="admin in filteredAdmins" :key="admin.id || admin.username">
                     <div class="admin-card-header">
                       <div class="admin-identity">
-                        <el-avatar :size="40">
-                          {{ admin.username?.slice(0, 1)?.toUpperCase() || 'A' }}
+                        <el-avatar :size="40" class="default-avatar">
+                          <el-icon><User /></el-icon>
                         </el-avatar>
                         <div class="admin-info">
                           <div class="admin-name">{{ admin.username }}</div>
@@ -1081,6 +1081,18 @@ export default defineComponent({
   background: #f9fafb;
   border-radius: 10px;
   padding: 0.75rem;
+}
+
+/* 默认头像样式 */
+.default-avatar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.default-avatar .el-icon {
+  color: white;
+  font-size: 20px;
 }
 
 .admin-card-actions {

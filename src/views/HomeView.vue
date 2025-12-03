@@ -286,7 +286,7 @@
       <div class="container">
         <div class="footer-content">
           <div class="footer-section">
-            <h4>边检知识问答系统</h4>
+            <h4>皖美智脑</h4>
             <p>为边防检查工作提供专业智能支持</p>
           </div>
           <!-- <div class="footer-section"> -->
