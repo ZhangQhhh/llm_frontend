@@ -95,7 +95,7 @@
           </router-link>
            <router-link to="/data-analysis" class="btn btn-secondary">
             <span class="btn-shine"></span>
-            <span class="icon"></span>
+            <span class="icon">📊</span>
             <span>报告生成</span>
           </router-link>
           <!-- <a href="javascript:void(0)" class="btn btn-secondary" @click="handleHelpClick"> -->
