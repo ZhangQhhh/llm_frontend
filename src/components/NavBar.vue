@@ -1,87 +1,23 @@
 <template>
-  <el-menu
-    :default-active="activeIndex"
-    mode="horizontal"
-    :ellipsis="false"
-    background-color="#ffffff"
-    text-color="#4b5563"
-    active-text-color="#2563eb"
-    class="navbar-menu"
-  >
+  <nav class="navbar-menu">
+    <el-menu
+      :default-active="activeIndex"
+      mode="horizontal"
+      :ellipsis="false"
+      :style="{ background: 'transparent', backgroundColor: 'transparent' }"
+      text-color="rgba(255, 255, 255, 0.9)"
+      active-text-color="#60a5fa"
+      class="navbar-inner"
+    >
     <!-- Logo -->
     <div class="navbar-brand">
       <router-link to="/" class="brand-link">
         <img src="@/assets/logo.png" alt="logo" class="logo-image" />
-        <span class="logo-text">皖美边检-智慧大脑</span>
+        <span class="logo-text">边检知识问答系统</span>
       </router-link>
     </div>
 
-    <!-- 导航菜单项 -->
-    <el-menu-item index="/" @click="navigateTo('/')" class="nav-home">
-      <el-icon><HomeFilled /></el-icon>
-      <span>首页</span>
-    </el-menu-item>
-    
-    <el-menu-item 
-      index="/help" 
-      @click="handleHelpClick"
-      class="nav-help"
-    >
-      <el-icon><QuestionFilled /></el-icon>
-      <span>帮助中心</span>
-    </el-menu-item>
-    
-    <el-menu-item 
-      index="/knowledge-qa" 
-      @click="navigateTo('/knowledge-qa')"
-      v-if="isLoggedIn"
-      class="nav-knowledge-qa"
-    >
-      <el-icon><Reading /></el-icon>
-      <span>知识问答</span>
-    </el-menu-item>
-    
-    <el-menu-item 
-      index="/conversation" 
-      @click="navigateTo('/conversation')"
-      v-if="isLoggedIn"
-      class="nav-conversation"
-    >
-      <el-icon><ChatDotRound /></el-icon>
-      <span>多轮对话</span>
-    </el-menu-item>
-    
-    <el-menu-item 
-      index="/exam" 
-      @click="navigateTo('/exam')"
-      v-if="isLoggedIn"
-      class="nav-exam"
-    >
-      <el-icon><EditPen /></el-icon>
-      <span>边检智能家教</span>
-    </el-menu-item>
-
-    <el-menu-item 
-      index="/smart-office" 
-      @click="navigateTo('/smart-office')"
-      v-if="isLoggedIn"
-      class="nav-smart-office"
-    >
-      <el-icon><Briefcase /></el-icon>
-      <span>智慧办公</span>
-    </el-menu-item>
-
-    <el-menu-item 
-      index="/immigration-12367" 
-      @click="navigateTo('/immigration-12367')"
-      v-if="isLoggedIn"
-      class="nav-immigration"
-    >
-      <el-icon><Service /></el-icon>
-      <span>移民局12367</span>
-    </el-menu-item>
-
-    <!-- 管理入口（仅管理员可见） -->
+    <!-- 中间留空 -->
     <!-- 右侧用户区域 -->
     <div class="navbar-right">
       <template v-if="isLoggedIn">
@@ -99,7 +35,7 @@
             >
               {{ roleText }}
             </el-tag>
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            <el-icon class="el-icon--right arrow-icon"><ArrowDown /></el-icon>
           </div>
           <template #dropdown>
             <el-dropdown-menu>
@@ -154,7 +90,8 @@
         </el-button>
       </template>
     </div>
-  </el-menu>
+    </el-menu>
+  </nav>
 </template>
 
 <script lang="ts">
@@ -162,13 +99,6 @@ import { defineComponent, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import { 
-  HomeFilled, 
-  QuestionFilled,
-  Reading, 
-  ChatDotRound,
-  EditPen,
-  Briefcase,
-  Service,
   Setting, 
   User, 
   ArrowDown, 
@@ -178,19 +108,11 @@ import {
   Document,
   DataAnalysis
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { RoleNames, UserRole } from '@/config/permissions'
 
 export default defineComponent({
   name: 'NavBar',
   components: {
-    HomeFilled,
-    QuestionFilled,
-    Reading,
-    ChatDotRound,
-    EditPen,
-    Briefcase,
-    Service,
     Setting,
     User,
     ArrowDown,
@@ -231,11 +153,6 @@ export default defineComponent({
       router.push(path)
     }
 
-    // 帮助中心暂未开放
-    const handleHelpClick = () => {
-      ElMessage.info('帮助中心文档正在完善中，敬请期待...')
-    }
-
     const handleCommand = (command: string) => {
       if (command === 'logout') {
         store.dispatch('logout')
@@ -269,23 +186,53 @@ export default defineComponent({
       roleTagType,
       roleText,
       navigateTo,
-      handleCommand,
-      handleHelpClick
+      handleCommand
     }
   }
 })
 </script>
 
 <style scoped>
-/* Element UI Menu 样式覆盖 */
+/* 外层 nav 容器 */
 .navbar-menu {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: transparent !important;
   position: sticky;
   top: 0;
   z-index: 1000;
-  padding: 0 1rem;
+  width: 100%;
+}
+
+/* 内层 el-menu */
+.navbar-inner {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  padding: 0 2rem;
   min-width: 100%;
-  flex-wrap: nowrap;
+  display: flex;
+  align-items: center;
+  font-family: 'ZhaoPai', sans-serif;
+}
+
+/* 穿透 Element Plus 默认样式 */
+:deep(.el-menu) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
+:deep(.el-menu--horizontal) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+  --el-menu-bg-color: transparent !important;
+}
+
+:deep(.el-menu--horizontal.el-menu) {
+  background: transparent !important;
+  background-color: transparent !important;
+  --el-menu-bg-color: transparent !important;
 }
 
 /* Logo区域 */
@@ -301,23 +248,28 @@ export default defineComponent({
   text-decoration: none;
   font-size: 20px;
   font-weight: 700;
-  color: #1f2937;
-  transition: color 0.3s;
+  color: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s;
+  font-family: 'ZhaoPai', sans-serif;
 }
 
 .brand-link:hover {
-  color: #2563eb;
+  color: #60a5fa;
+  text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
 }
 
 .logo-image {
-  height: 40px;
+  height: 48px;
   width: auto;
   object-fit: contain;
 }
 
 .logo-text {
-  font-size: 18px;
+  font-size: 32px;
   white-space: nowrap;
+  font-family: 'ZhaoPai', sans-serif;
+  letter-spacing: 4px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 /* 导航菜单 */
@@ -380,18 +332,28 @@ export default defineComponent({
 }
 
 .user-dropdown:hover {
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .user-name {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'ZhaoPai', sans-serif;
 }
 
 .role-tag {
   margin-left: 0.25rem;
   flex-shrink: 0;
+}
+
+.arrow-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 登录按钮样式 */
+.navbar-right :deep(.el-button) {
+  font-family: 'ZhaoPai', sans-serif;
 }
 
 /* 移动端菜单按钮 */

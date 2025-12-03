@@ -14,7 +14,7 @@
             <img src="@/assets/allPic/public/logo.png" alt="Logo" class="logo-image" />
           </div>
           <div class="brand-text">
-            <h1>移民局12367</h1>
+            <h1>12367 助手</h1>
             <p>国家移民管理局12367服务热线</p>
           </div>
         </div>

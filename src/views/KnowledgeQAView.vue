@@ -43,7 +43,7 @@
           <div class="brand-text">
             <div class="title-wrapper">
               <span class="title-prefix">智能</span>
-              <h1>边检知识问答系统</h1>
+              <h1>业务问答</h1>
             </div>
             <p class="subtitle">INTELLIGENT BORDER INSPECTION Q&A SYSTEM</p>
             <div class="status-bar">
@@ -71,12 +71,12 @@
               />
               <div class="input-footer">
                 <div class="controls-area">
-                  <el-select v-model="modelId" placeholder="选择模型" class="control-item" style="width: 150px">
+                  <el-select v-model="modelId" placeholder="选择模型" class="model-select">
                     <template #prefix><el-icon><Cpu /></el-icon></template>
                     <el-option label="Qwen (通用)" value="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
-                    <el-option label="DeepSeek-R1 (深度)" value="deepseek" />
-                    <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" />
+                    <el-option label="DeepSeek-R1" value="deepseek" />
+                    <!-- <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" /> -->
                   </el-select>
 
                   <el-tooltip content="设置检索参考文档的数量" placement="top">
@@ -206,7 +206,7 @@
                     </div>
                   </div>
 
-                  <div class="answer-body">
+                  <div class="answer-body" ref="answerBodyRef">
                     <div v-if="loading && !answer && !thinking" class="loading-placeholder">
                       <div class="loading-hint">
                         <div class="spinner-small"></div>
@@ -464,14 +464,14 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import {
    Cpu, Aim, Operation, Promotion, Loading, Connection,
-  ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-  Sunny, Setting
-} from '@element-plus/icons-vue';
+    ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
+    Sunny, Setting
+  } from '@element-plus/icons-vue';
 import {
   sendStreamChatRequest,
   submitLikeFeedback,
@@ -515,6 +515,8 @@ export default defineComponent({
     const thinking = ref('');
     const references = ref<ReferenceSource[]>([]);
     const activeThinking = ref(['1']); // 默认展开思考
+    const answerBodyRef = ref<HTMLElement | null>(null);
+    const autoScrollEnabled = ref(true); // 自动滚动开关
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -565,17 +567,39 @@ export default defineComponent({
 
     const mockReferencesEnabled = shouldUseReferenceMocks();
 
-    const applyReferenceMocks = () => {
+    // 模拟流式输出效果
+    const simulateStreamOutput = async (text: string, targetRef: typeof answer | typeof thinking, delay = 30) => {
+      const chars = text.split('');
+      for (let i = 0; i < chars.length; i++) {
+        targetRef.value += chars[i];
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    };
+
+    const applyReferenceMocks = async () => {
+      // 设置 loading 状态
+      loading.value = true;
+      answer.value = '';
+      thinking.value = '';
+      autoScrollEnabled.value = true;  // 重置自动滚动
+      
+      // 模拟流式输出思考过程
+      const mockThinking = getMockThinking();
+      if (thinkingMode.value && mockThinking) {
+        await simulateStreamOutput(mockThinking, thinking, 15);
+      }
+      
+      // 模拟流式输出回答
+      const mockAnswer = getMockAnswer();
+      if (mockAnswer) {
+        await simulateStreamOutput(mockAnswer, answer, 20);
+      }
+      
+      // 设置参考文献
       references.value = getMockReferences();
-      if (!answer.value) {
-        answer.value = getMockAnswer();
-      }
-      if (!thinking.value) {
-        thinking.value = getMockThinking();
-      }
-      if (!subQuestions.value) {
-        subQuestions.value = getMockSubQuestions();
-      }
+      subQuestions.value = getMockSubQuestions();
+      
+      loading.value = false;
     };
 
 
@@ -805,7 +829,7 @@ export default defineComponent({
       if (!question.value.trim() || loading.value) return;
 
       if (mockReferencesEnabled) {
-        applyReferenceMocks();
+        await applyReferenceMocks();
         return;
       }
 
@@ -819,6 +843,7 @@ export default defineComponent({
       feedbackSubmitted.value = false;
       loading.value = true;
       activeThinking.value = ['1'];
+      autoScrollEnabled.value = true;  // 重置自动滚动
 
       if (insertBlock.value) {
         showProgress.value = true;
@@ -981,24 +1006,56 @@ export default defineComponent({
       }
     };
 
+    // 自动滚动到页面底部
+    const autoScrollToBottom = () => {
+      if (autoScrollEnabled.value && answerBodyRef.value) {
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'auto'
+        });
+      }
+    };
+
+    // 监听用户滚动，如果用户向上滚动则禁用自动滚动
+    let lastScrollTop = 0;
+    const handleUserScroll = () => {
+      const currentScrollTop = window.scrollY;
+      // 如果用户向上滚动超过50px，禁用自动滚动
+      if (currentScrollTop < lastScrollTop - 50) {
+        autoScrollEnabled.value = false;
+      }
+      lastScrollTop = currentScrollTop;
+    };
+
+    // 监听 answer 和 thinking 变化，自动滚动
+    watch([answer, thinking], () => {
+      if (loading.value) {
+        autoScrollToBottom();
+      }
+    });
+
     // 监听 mcqMode 变化
     onMounted(() => {
-      if (mockReferencesEnabled) {
-        applyReferenceMocks();
-      }
-
       // 监听选择题模式变化
       store.watch(
         () => mcqMode.value,
         (newVal) => handleMcqModeChange(newVal)
       );
+      // 添加滚动监听
+      window.addEventListener('wheel', handleUserScroll);
+      window.addEventListener('touchmove', handleUserScroll);
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('wheel', handleUserScroll);
+      window.removeEventListener('touchmove', handleUserScroll);
     });
 
     return {
       question, answer, thinking, references, filteredReferences, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
-      showProgress, progressInfo, progressMessage, activeThinking,
+      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
       renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange
     };
@@ -1651,6 +1708,43 @@ export default defineComponent({
   gap: 0.5rem;
 }
 
+/* 模型选择框样式 - 确保回显可见 */
+.model-select {
+  width: 200px !important;
+  flex-shrink: 0 !important;
+}
+
+.model-select :deep(.el-select__wrapper) {
+  background: rgba(0, 180, 255, 0.15) !important;
+  border: 1px solid var(--ai-border) !important;
+  box-shadow: none !important;
+  min-width: 200px !important;
+}
+
+.model-select :deep(.el-select__selected-item) {
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.model-select :deep(.el-select__input) {
+  color: #fff !important;
+}
+
+.model-select :deep(.el-select__placeholder) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.model-select :deep(.el-select__prefix) {
+  color: var(--ai-primary) !important;
+}
+
+.model-select :deep(.el-select__suffix) {
+  color: var(--ai-primary) !important;
+}
+
 .setting-item {
   background: rgba(241, 245, 249, 0.8);
   padding: 4px 8px;
@@ -1979,8 +2073,8 @@ export default defineComponent({
 }
 
 .custom-scrollbar {
-  max-height: 300px;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -2038,6 +2132,7 @@ export default defineComponent({
 .answer-body {
   padding: 2rem;
   background: rgba(22, 27, 34, 0.6);
+  position: relative;
 }
 
 .markdown-body {

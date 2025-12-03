@@ -34,7 +34,7 @@
         <div class="input-section">
           <textarea
             v-model="question"
-            placeholder="请输入您的问题，支持多轮对话..."
+            placeholder="请输入您的问题，支持智能对话..."
             @keydown.enter.exact.prevent="handleSubmit"
             :disabled="loading"
           ></textarea>
@@ -86,7 +86,7 @@
           <!-- 对话区 -->
           <div class="conversation-box" ref="conversationBox">
             <div v-if="messages.length === 0" class="welcome-message">
-              欢迎使用智能多轮对话系统，请输入问题开始对话
+              欢迎使用智能对话系统，请输入问题开始对话
             </div>
 
             <div v-for="(msg, index) in messages" :key="index" class="message" :class="msg.role">

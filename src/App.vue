@@ -42,6 +42,15 @@ export default defineComponent({
 <style>
 @import '@/styles/driver.css';
 
+/* 也字工厂招牌体 */
+@font-face {
+  font-family: 'ZhaoPai';
+  src: url('@/assets/fonts/也字工厂招牌体.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -77,5 +86,17 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* 导航栏透明背景 - 全局覆盖 Element Plus */
+.navbar-menu,
+.navbar-inner,
+.navbar-inner.el-menu,
+.navbar-inner.el-menu--horizontal {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+  --el-menu-bg-color: transparent !important;
+  --el-menu-hover-bg-color: transparent !important;
 }
 </style>

@@ -19,14 +19,13 @@
       <div class="orb orb-3"></div>
       
       <div class="hero-content">
-        <div class="hero-badge">
+        <!-- <div class="hero-badge">
           <span class="badge-icon">🛡</span>
           <span class="badge-text">安徽出入境边防检查总站智能助手</span>
           <span class="badge-pulse"></span>
-        </div>
+        </div> -->
         <h1 class="hero-title">
-          <span class="title-line">边检知识</span>
-          <span class="title-line gradient-text">问答系统</span>
+          <span class="title-line gradient-text">皖美智脑</span>
         </h1>
         <p class="hero-subtitle">
           <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</span>
@@ -67,36 +66,35 @@
           </div>
         </div> -->
         <div class="hero-actions">
-          <router-link to="/knowledge-qa" class="btn btn-primary">
+          <router-link to="/knowledge-qa" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">🎓</span>
-            <span>知识问答</span>
-            <span class="btn-arrow">→</span>
+            <el-icon class="module-icon"><Search /></el-icon>
+            <span>业务问答</span>
           </router-link>
-          <router-link to="/conversation" class="btn btn-secondary">
+          <router-link to="/conversation" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">💬</span>
-            <span>多轮对话</span>
+            <el-icon class="module-icon"><ChatDotRound /></el-icon>
+            <span>智能对话</span>
           </router-link>
-          <router-link to="/exam" class="btn btn-secondary">
+          <router-link to="/exam" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">📝</span>
-            <span>智能家教</span>
+            <el-icon class="module-icon"><Reading /></el-icon>
+            <span>边检智学</span>
           </router-link>
-          <router-link to="/smart-office" class="btn btn-secondary">
+          <router-link to="/smart-office" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">💼</span>
-            <span>智慧办公</span>
+            <el-icon class="module-icon"><Document /></el-icon>
+            <span>公文助手</span>
           </router-link>
-          <router-link to="/immigration-12367" class="btn btn-secondary">
+          <router-link to="/immigration-12367" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">📞</span>
-            <span>移民局12367</span>
+            <el-icon class="module-icon"><Phone /></el-icon>
+            <span>12367 助手</span>
           </router-link>
-           <router-link to="/data-analysis" class="btn btn-secondary">
+          <router-link to="/data-analysis" class="btn btn-module">
             <span class="btn-shine"></span>
-            <span class="icon">📊</span>
-            <span>报告生成</span>
+            <el-icon class="module-icon"><DataLine /></el-icon>
+            <span>数研报告</span>
           </router-link>
           <!-- <a href="javascript:void(0)" class="btn btn-secondary" @click="handleHelpClick"> -->
             <!-- <span class="btn-shine"></span> -->
@@ -110,19 +108,19 @@
         <a href="/docx/" class="floating-card card-1">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><Document /></el-icon></div>
-          <div class="card-text">报告生成</div>
+          <div class="card-text">数研报告</div>
           <div class="card-progress"></div>
         </a>
         <a href="/office" class="floating-card card-2">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><OfficeBuilding /></el-icon></div>
-          <div class="card-text">智慧办公</div>
+          <div class="card-text">公文助手</div>
           <div class="card-progress"></div>
         </a>
         <router-link to="/exam" class="floating-card card-3">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><Reading /></el-icon></div>
-          <div class="card-text">智能家教</div>
+          <div class="card-text">边检智学</div>
           <div class="card-progress"></div>
         </router-link>
       </div>
@@ -311,7 +309,11 @@ import * as THREE from 'three';
 import { 
   Document,
   OfficeBuilding, 
-  Reading 
+  Reading,
+  Search,
+  ChatDotRound,
+  Phone,
+  DataLine
 } from '@element-plus/icons-vue';
 
 export default defineComponent({
@@ -319,7 +321,11 @@ export default defineComponent({
   components: {
     Document,
     OfficeBuilding,
-    Reading
+    Reading,
+    Search,
+    ChatDotRound,
+    Phone,
+    DataLine
   },
   setup() {
     const threeCanvas = ref<HTMLCanvasElement | null>(null);
@@ -474,7 +480,7 @@ export default defineComponent({
     });
 
     const backgroundStyle = {
-      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.85), rgba(10, 14, 39, 0.95)), url(" + require('@/assets/allPic/public/robot.jpg') + ")",
+      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.7), rgba(20, 30, 80, 0.85)), url(" + require('@/assets/allPic/public/gebac.jpg') + ")",
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
@@ -501,6 +507,8 @@ export default defineComponent({
   min-height: 100vh;
   background: #0a0e27;
   scroll-behavior: smooth;
+  margin-top: -60px;  /* 向上延伸覆盖导航栏 */
+  padding-top: 60px;  /* 补偿内容位置 */
 }
 
 /* Hero Section */
@@ -527,7 +535,7 @@ export default defineComponent({
   opacity: 0.6;
 }
 
-/* Animated Grid Background */
+/* Animated Grid Background - 科幻网格 */
 .grid-background {
   position: absolute;
   top: 0;
@@ -535,10 +543,10 @@ export default defineComponent({
   width: 100%;
   height: 100%;
   background-image: 
-    linear-gradient(rgba(96, 165, 250, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: gridMove 20s linear infinite;
+    linear-gradient(rgba(0, 212, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.15) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridMove 25s linear infinite;
   z-index: 1;
   transition: transform 0.1s ease-out;
 }
@@ -587,39 +595,39 @@ export default defineComponent({
   }
 }
 
-/* Glowing Orbs */
+/* Glowing Orbs - 科幻风格 */
 .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.3;
+  filter: blur(100px);
+  opacity: 0.4;
   animation: orbFloat 20s infinite ease-in-out;
 }
 
 .orb-1 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
-  top: -10%;
-  left: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #00d4ff 0%, #0066ff 40%, transparent 70%);
+  top: -15%;
+  left: -15%;
   animation-delay: 0s;
 }
 
 .orb-2 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
-  bottom: -10%;
-  right: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #a855f7 0%, #6366f1 40%, transparent 70%);
+  bottom: -15%;
+  right: -15%;
   animation-delay: 7s;
 }
 
 .orb-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
-  top: 50%;
-  left: 50%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #22d3ee 0%, #0ea5e9 40%, transparent 70%);
+  top: 40%;
+  left: 60%;
   animation-delay: 14s;
 }
 
@@ -693,7 +701,7 @@ export default defineComponent({
 }
 
 .hero-title {
-  font-size: 72px;
+  font-size: 96px;
   font-weight: 900;
   color: white;
   margin: 0 0 1.5rem 0;
@@ -702,6 +710,8 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  font-family: 'ZhaoPai', sans-serif;
+  letter-spacing: 8px;
 }
 
 .title-line {
@@ -743,10 +753,12 @@ export default defineComponent({
 }
 
 .hero-subtitle {
-  font-size: 20px;
+  font-size: 22px;
   color: rgba(255, 255, 255, 0.8);
   margin: 0 0 2rem 0;
   line-height: 1.8;
+  font-family: 'ZhaoPai', sans-serif;
+  letter-spacing: 2px;
 }
 
 .typing-text {
@@ -844,10 +856,11 @@ export default defineComponent({
 }
 
 .hero-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem 2rem;
-  max-width: 750px;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 0.75rem;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -916,6 +929,32 @@ export default defineComponent({
 
 .btn .icon {
   font-size: 20px;
+}
+
+/* 模块按钮样式 */
+.btn-module {
+  background: rgba(59, 130, 246, 0.15);
+  backdrop-filter: blur(20px);
+  color: white;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  padding: 0.75rem 1.5rem;
+  font-family: 'ZhaoPai', sans-serif;
+  font-size: 15px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-module:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(96, 165, 250, 0.6);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+}
+
+.module-icon {
+  font-size: 20px;
+  color: #60a5fa;
 }
 
 /* Hero Visual */

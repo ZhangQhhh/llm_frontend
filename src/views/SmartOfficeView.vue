@@ -111,7 +111,7 @@
                 </div>
               </div>
               <div class="header-text">
-                <h1 class="page-title">智能写作助手</h1>
+                <h1 class="page-title">公文助手</h1>
                 <p class="page-description">
                   <el-icon class="desc-icon"><Collection /></el-icon>
                   <span>支持知识库检索</span>

@@ -5,20 +5,32 @@
       <div class="auth-visual">
         <div class="visual-content">
           <h2>欢迎来到</h2>
-          <h1>边检知识问答系统</h1>
+          <h1>皖美智脑</h1>
           <p>基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</p>
           <div class="visual-features">
             <div class="feature-item">
-              <span class="icon">✨</span>
-              <span>AI智能分析</span>
+              <el-icon class="feature-icon"><Search /></el-icon>
+              <span>业务问答</span>
             </div>
             <div class="feature-item">
-              <span class="icon">🚀</span>
-              <span>实时响应</span>
+              <el-icon class="feature-icon"><ChatDotRound /></el-icon>
+              <span>智能对话</span>
             </div>
             <div class="feature-item">
-              <span class="icon">🔒</span>
-              <span>安全可靠</span>
+              <el-icon class="feature-icon"><Reading /></el-icon>
+              <span>边检智学</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon"><Document /></el-icon>
+              <span>公文助手</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon"><Phone /></el-icon>
+              <span>12367 助手</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon"><DataLine /></el-icon>
+              <span>数研报告</span>
             </div>
           </div>
         </div>
@@ -168,11 +180,20 @@ import { defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { Search, ChatDotRound, Reading, Document, Phone, DataLine } from '@element-plus/icons-vue';
 import http from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
 
 export default defineComponent({
   name: 'LoginView',
+  components: {
+    Search,
+    ChatDotRound,
+    Reading,
+    Document,
+    Phone,
+    DataLine
+  },
   setup() {
     const store = useStore();
     const router = useRouter();
@@ -380,29 +401,37 @@ export default defineComponent({
 }
 
 .visual-features {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
 }
 
 .feature-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s;
 }
 
-.feature-item .icon {
-  font-size: 24px;
+.feature-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  font-size: 20px;
+  color: #60a5fa;
 }
 
 .feature-item span:last-child {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* 右侧表单 */

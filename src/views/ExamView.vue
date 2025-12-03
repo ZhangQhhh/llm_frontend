@@ -3,7 +3,7 @@
     <!-- 顶部工具栏 -->
     <div class="topbar">
       <div class="topwrap">
-        <h1>📝 学生端考试</h1>
+        <h1>📝 边检智学</h1>
         
         <div class="control-group">
           <label class="muted">试卷：</label>

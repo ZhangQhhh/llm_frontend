@@ -10,7 +10,7 @@
                 <DataAnalysis />
               </el-icon>
               <div class="header-text">
-                <h1>报告生成</h1>
+                <h1>数研报告</h1>
                 <p>基于 Excel 数据进行深度分析和对比</p>
               </div>
             </div>
