@@ -37,12 +37,12 @@
               />
               <div class="input-footer">
                 <div class="controls-area">
-                  <el-select v-model="modelId" placeholder="选择模型" class="control-item" style="width: 160px">
+                  <el-select v-model="modelId" placeholder="选择模型" class="model-select">
                     <template #prefix><el-icon><Cpu /></el-icon></template>
-                    <el-option label="Qwen-32B (通用)" value="qwen3-32b" />
-                    <el-option label="Qwen-Max (增强)" value="qwen2025" />
-                    <el-option label="DeepSeek-R1 (深度)" value="deepseek" />
-                    <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" />
+                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen (增强)" value="qwen2025" />
+                    <el-option label="DeepSeek-R1" value="deepseek" />
+                    <!-- <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" /> -->
                   </el-select>
                   
                   <el-tooltip content="设置检索参考文档的数量" placement="top">
@@ -142,7 +142,7 @@
                     </div>
                   </div>
                   
-                  <div class="answer-body">
+                  <div class="answer-body" ref="answerBodyRef">
                     <div v-if="loading && !answer && !thinking" class="loading-placeholder">
                       <div class="loading-hint">
                         <div class="spinner-small"></div>
@@ -363,7 +363,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, ref } from 'vue';
+import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import {
@@ -414,6 +414,8 @@ export default defineComponent({
     const thinking = ref('');
     const references = ref<ReferenceSource[]>([]);
     const activeThinking = ref(['1']); // 默认展开思考
+    const answerBodyRef = ref<HTMLElement | null>(null);
+    const autoScrollEnabled = ref(true); // 自动滚动开关
     
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -463,12 +465,6 @@ export default defineComponent({
       }
     };
 
-    onMounted(() => {
-      if (mockReferencesEnabled) {
-        applyReferenceMocks();
-      }
-    });
-
     // 复制回答
     const copyAnswer = async () => {
         if(!answer.value) return;
@@ -498,6 +494,7 @@ export default defineComponent({
       feedbackSubmitted.value = false;
       loading.value = true;
       activeThinking.value = ['1'];
+      autoScrollEnabled.value = true;  // 重置自动滚动
       
       if (insertBlock.value) {
         showProgress.value = true;
@@ -660,11 +657,53 @@ export default defineComponent({
       }
     };
 
+    // 自动滚动到页面底部
+    const autoScrollToBottom = () => {
+      if (autoScrollEnabled.value && answerBodyRef.value) {
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'auto'
+        });
+      }
+    };
+
+    // 监听用户滚动，如果用户向上滚动则禁用自动滚动
+    let lastScrollTop = 0;
+    const handleUserScroll = () => {
+      const currentScrollTop = window.scrollY;
+      // 如果用户向上滚动超过50px，禁用自动滚动
+      if (currentScrollTop < lastScrollTop - 50) {
+        autoScrollEnabled.value = false;
+      }
+      lastScrollTop = currentScrollTop;
+    };
+
+    // 监听 answer 和 thinking 变化，自动滚动
+    watch([answer, thinking], () => {
+      if (loading.value) {
+        autoScrollToBottom();
+      }
+    });
+
+    // 添加滚动监听
+    onMounted(() => {
+      if (mockReferencesEnabled) {
+        applyReferenceMocks();
+      }
+      window.addEventListener('wheel', handleUserScroll);
+      window.addEventListener('touchmove', handleUserScroll);
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('wheel', handleUserScroll);
+      window.removeEventListener('touchmove', handleUserScroll);
+    });
+
     return {
       question, answer, thinking, references, filteredReferences, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
-      showProgress, progressInfo, progressMessage, activeThinking,
+      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
       renderMarkdown, copyAnswer, toggleRefExpand
     };
@@ -876,6 +915,43 @@ export default defineComponent({
   font-size: 12px;
   color: #64748b;
   margin-right: 6px;
+}
+
+/* 模型选择框样式 - 确保回显可见 */
+.model-select {
+  width: 200px !important;
+  flex-shrink: 0 !important;
+}
+
+.model-select :deep(.el-select__wrapper) {
+  background: rgba(0, 180, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: none !important;
+  min-width: 200px !important;
+}
+
+.model-select :deep(.el-select__selected-item) {
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.model-select :deep(.el-select__input) {
+  color: #fff !important;
+}
+
+.model-select :deep(.el-select__placeholder) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.model-select :deep(.el-select__prefix) {
+  color: #00b4ff !important;
+}
+
+.model-select :deep(.el-select__suffix) {
+  color: #00b4ff !important;
 }
 
 .toggles {
