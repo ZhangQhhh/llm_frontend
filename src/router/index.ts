@@ -167,6 +167,16 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       title: '帮助中心'
     }
+  },
+  {
+    path: '/qa-logs',
+    name: 'qa-logs',
+    component: () => import('../views/QALogsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSuperAdmin: true,
+      title: '问答日志管理'
+    }
   }
 ]
 

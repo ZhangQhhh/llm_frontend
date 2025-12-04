@@ -13,7 +13,7 @@
     <div class="navbar-brand">
       <router-link to="/" class="brand-link">
         <img src="@/assets/logo.png" alt="logo" class="logo-image" />
-        <span class="logo-text">边检知识问答系统</span>
+        <span class="logo-text">安徽出入境边防检查总站</span>
       </router-link>
     </div>
 

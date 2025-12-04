@@ -1,5 +1,5 @@
 <template>
-  <div class="home-page" :style="backgroundStyle">
+  <div class="home-page">
     <!-- Hero Section -->
     <section class="hero">
       <!-- HUD Decorations -->
@@ -12,13 +12,13 @@
       <!-- 3D Canvas Background -->
       <canvas ref="threeCanvas" class="three-canvas"></canvas>
       
+      <!-- Video Background -->
+      <video class="video-background" autoplay loop muted playsinline>
+        <source :src="require('@/assets/allPic/public/tech.mp4')" type="video/mp4">
+      </video>
+      
       <!-- Animated Grid Background -->
       <div class="grid-background"></div>
-      
-      <!-- Sakura Petals -->
-      <div class="sakura-container">
-        <div class="sakura" v-for="i in 30" :key="i" :style="getSakuraStyle()"></div>
-      </div>
       
       <!-- Glowing Orbs -->
       <div class="orb orb-1"></div>
@@ -360,26 +360,6 @@ export default defineComponent({
       };
     };
 
-    // 樱花样式生成
-    const getSakuraStyle = () => {
-      const size = Math.random() * 15 + 10; // 10-25px
-      const duration = Math.random() * 10 + 8; // 8-18s
-      const delay = Math.random() * 8;
-      const x = Math.random() * 100;
-      const rotation = Math.random() * 360;
-      const swayDuration = Math.random() * 3 + 2;
-      
-      return {
-        width: `${size}px`,
-        height: `${size}px`,
-        left: `${x}%`,
-        top: `-${size}px`,
-        animationDuration: `${duration}s`,
-        animationDelay: `${delay}s`,
-        '--rotation': `${rotation}deg`,
-        '--sway-duration': `${swayDuration}s`
-      };
-    };
 
     // 初始化Three.js场景
     const initThree = () => {
@@ -507,14 +487,6 @@ export default defineComponent({
       window.removeEventListener('scroll', handleScroll);
     });
 
-    const backgroundStyle = {
-      backgroundImage: "linear-gradient(rgba(10, 14, 39, 0.7), rgba(20, 30, 80, 0.85)), url(" + require('@/assets/allPic/public/gebac.jpg') + ")",
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      minHeight: '100vh'
-    };
-
     // 帮助中心暂未开放
     const handleHelpClick = () => {
       ElMessage.info('帮助中心文档正在完善中，敬请期待...');
@@ -523,8 +495,6 @@ export default defineComponent({
     return {
       threeCanvas,
       getParticleStyle,
-      getSakuraStyle,
-      backgroundStyle,
       handleHelpClick
     };
   }
@@ -562,6 +532,18 @@ export default defineComponent({
   height: 100%;
   z-index: 0;
   opacity: 0.6;
+}
+
+/* Video Background */
+.video-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0.4;
 }
 
 /* Animated Grid Background - 科幻网格 */
@@ -624,71 +606,6 @@ export default defineComponent({
   }
 }
 
-/* Sakura Petals - 樱花飘落效果 */
-.sakura-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.sakura {
-  position: absolute;
-  background: linear-gradient(135deg, #ffb7c5 0%, #ffc0cb 50%, #fff0f5 100%);
-  border-radius: 150% 0 150% 0;
-  opacity: 0.8;
-  animation: sakuraFall linear infinite, sakuraSway ease-in-out infinite;
-  box-shadow: 0 0 10px rgba(255, 183, 197, 0.5);
-  transform-origin: center center;
-}
-
-.sakura::before {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.6) 50%, transparent 60%);
-  border-radius: inherit;
-}
-
-@keyframes sakuraFall {
-  0% {
-    top: -30px;
-    opacity: 0;
-    transform: rotate(var(--rotation, 0deg)) translateX(0);
-  }
-  10% {
-    opacity: 0.9;
-  }
-  90% {
-    opacity: 0.9;
-  }
-  100% {
-    top: 110vh;
-    opacity: 0;
-    transform: rotate(calc(var(--rotation, 0deg) + 720deg)) translateX(100px);
-  }
-}
-
-@keyframes sakuraSway {
-  0%, 100% {
-    margin-left: 0;
-  }
-  25% {
-    margin-left: 30px;
-  }
-  50% {
-    margin-left: -20px;
-  }
-  75% {
-    margin-left: 40px;
-  }
-}
-
 /* Glowing Orbs - 科幻风格 */
 .orb {
   position: absolute;
@@ -738,7 +655,7 @@ export default defineComponent({
 }
 
 .hero-content {
-  max-width: 700px;
+  max-width: 1200px;
   text-align: center;
   position: relative;
   z-index: 2;
@@ -795,7 +712,7 @@ export default defineComponent({
 }
 
 .hero-title {
-  font-size: 130px;
+  font-size: 150px;
   font-weight: 900;
   color: white;
   margin: 0 0 1.5rem 0;
@@ -829,73 +746,16 @@ export default defineComponent({
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: linear-gradient(180deg, #ffffff 0%, #c0c0c0 30%, #8a8a8a 50%, #c0c0c0 70%, #ffffff 100%);
   background-clip: text;
-  animation: gradientShift 5s ease infinite;
-  background-size: 200% 200%;
-  position: relative;
-  text-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
-}
-
-.gradient-text::before,
-.gradient-text::after {
-  content: '皖美智脑';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  opacity: 0.8;
-}
-
-.gradient-text::before {
-  animation: glitch-1 2.5s infinite;
-  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
-  transform: translate(-0.025em, -0.0125em);
-  opacity: 0.75;
-}
-
-.gradient-text::after {
-  animation: glitch-2 2.5s infinite;
-  clip-path: polygon(0 80%, 100% 20%, 100% 100%, 0 100%);
-  transform: translate(0.025em, 0.0125em);
-  opacity: 0.75;
-}
-
-@keyframes glitch-1 {
-  0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); }
-  20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
-  40% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); }
-  60% { clip-path: inset(80% 0 5% 0); transform: translate(2px, -2px); }
-  80% { clip-path: inset(10% 0 70% 0); transform: translate(-1px, 1px); }
-  100% { clip-path: inset(30% 0 50% 0); transform: translate(1px, -1px); }
-}
-
-@keyframes glitch-2 {
-  0% { clip-path: inset(10% 0 60% 0); transform: translate(2px, -1px); }
-  20% { clip-path: inset(80% 0 5% 0); transform: translate(-2px, 2px); }
-  40% { clip-path: inset(30% 0 20% 0); transform: translate(2px, -2px); }
-  60% { clip-path: inset(10% 0 80% 0); transform: translate(-1px, 1px); }
-  80% { clip-path: inset(50% 0 30% 0); transform: translate(1px, -1px); }
-  100% { clip-path: inset(70% 0 10% 0); transform: translate(-2px, 2px); }
-}
-
-@keyframes gradientShift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+  text-shadow: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 20px rgba(200, 200, 255, 0.3));
 }
 
 .hero-subtitle {
-  font-size: 22px;
+  font-size: 26px;
   color: rgba(255, 255, 255, 0.8);
   margin: 0 0 2rem 0;
   line-height: 1.8;
@@ -909,8 +769,7 @@ export default defineComponent({
   overflow: hidden;
   border-right: 3px solid #60a5fa;
   white-space: nowrap;
-  animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
-  max-width: 100%;
+  animation: typing 5s steps(60, end), blink-caret 0.75s step-end infinite;
 }
 
 @keyframes typing {
@@ -1223,11 +1082,15 @@ export default defineComponent({
 
 /* 增强按钮样式 */
 .btn-module {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(59, 130, 246, 0.1);
   backdrop-filter: blur(20px);
   color: white;
   border: 1px solid rgba(96, 165, 250, 0.3);
   padding: 0.75rem 1.5rem;
+  font-size: 20px;
   font-family: 'ZhaoPai', sans-serif;
   position: relative;
   overflow: hidden;
@@ -1264,7 +1127,7 @@ export default defineComponent({
 }
 
 .module-icon {
-  font-size: 20px;
+  font-size: 24px;
   color: #60a5fa;
 }
 
@@ -1723,9 +1586,9 @@ export default defineComponent({
   font-size: 24px;
   font-weight: 800;
   background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .stat-label {
@@ -1807,9 +1670,9 @@ export default defineComponent({
   font-size: 48px;
   font-weight: 800;
   background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   margin: 0 0 1rem 0;
 }
 

@@ -689,7 +689,8 @@ export default defineComponent({
             model_id: modelId.value,
             rerank_top_n: rerankTopN.value,
             use_insert_block: insertBlock.value,
-            insert_block_llm_id: modelId.value
+            insert_block_llm_id: modelId.value,
+            user_id: store.state.user.id || null
           },
           currentToken,
           (message: StreamMessage) => {

@@ -727,7 +727,8 @@ export default defineComponent({
                 rerank_top_n: rerankTopN.value,
                 model_id: modelId.value,
                 use_insert_block: insertBlock.value,
-                insert_block_llm_id: modelId.value
+                insert_block_llm_id: modelId.value,
+                user_id: store.state.user.id || null
               },
               store.state.user.token,
               ((currentIndex) => (message: StreamMessage) => {
@@ -791,7 +792,8 @@ export default defineComponent({
             rerank_top_n: rerankTopN.value,
             model_id: modelId.value,
             use_insert_block: insertBlock.value,
-            insert_block_llm_id: modelId.value
+            insert_block_llm_id: modelId.value,
+            user_id: store.state.user.id || null
           },
           store.state.user.token,
           (message: StreamMessage) => {
@@ -864,7 +866,8 @@ export default defineComponent({
             rerank_top_n: rerankTopN.value,
             model_id: modelId.value,
             use_insert_block: insertBlock.value,
-            insert_block_llm_id: modelId.value
+            insert_block_llm_id: modelId.value,
+            user_id: store.state.user.id || null
           },
           store.state.user.token,
           (message: StreamMessage) => {

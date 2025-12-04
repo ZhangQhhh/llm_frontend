@@ -114,6 +114,7 @@ export interface ChatRequest {
   rerank_top_n?: number;
   use_insert_block?: boolean;
   insert_block_llm_id?: string;
+  user_id?: string | number | null;  // 可选，请求用户ID
 }
 
 /**
@@ -416,4 +417,132 @@ export async function submitDislikeFeedback(
   } catch (error: any) {
     throw new Error(error.response?.data?.message || `提交失败: ${error.response?.status || 'unknown'}`);
   }
+}
+
+// ==================== 问答日志相关 API ====================
+
+/**
+ * 日志记录项
+ */
+export interface QALogItem {
+  id: string;
+  timestamp: string;
+  type: string;
+  question: string;
+  answer_preview: string;
+  metadata: {
+    ip?: string;
+    user_id?: string;
+    answer_type?: string;
+    chat_mode?: boolean;
+    insert_block_mode?: boolean;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * 日志详情
+ */
+export interface QALogDetail {
+  id: string;
+  timestamp: string;
+  type: string;
+  question: string;
+  answer: string;
+  metadata: {
+    ip?: string;
+    user_id?: string;
+    answer_type?: string;
+    chat_mode?: boolean;
+    insert_block_mode?: boolean;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * 日志列表查询参数
+ */
+export interface QALogListParams {
+  date?: string;       // 日期，格式 YYYY-MM-DD，默认今天
+  user_id?: string;    // 按用户ID筛选
+  page?: number;       // 页码，默认1
+  page_size?: number;  // 每页数量，默认20，最大100
+}
+
+/**
+ * 日志列表响应
+ */
+export interface QALogListResponse {
+  date: string;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  logs: QALogItem[];
+}
+
+/**
+ * 日期列表响应
+ */
+export interface QALogDatesResponse {
+  dates: string[];
+  total: number;
+}
+
+/**
+ * 获取某天的所有日志记录
+ */
+export async function getQALogsByDate(
+  token: string,
+  params: QALogListParams = {}
+): Promise<QALogListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params.date) queryParams.append('date', params.date);
+  if (params.user_id) queryParams.append('user_id', params.user_id);
+  if (params.page) queryParams.append('page', String(params.page));
+  if (params.page_size) queryParams.append('page_size', String(params.page_size));
+
+  const queryString = queryParams.toString();
+  const url = `${API_ENDPOINTS.QA_LOGS.DAILY}${queryString ? '?' + queryString : ''}`;
+
+  const response = await llmHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+/**
+ * 获取单条日志详情
+ */
+export async function getQALogDetail(
+  token: string,
+  id: string,
+  date?: string
+): Promise<QALogDetail> {
+  const queryParams = new URLSearchParams();
+  queryParams.append('id', id);
+  if (date) queryParams.append('date', date);
+
+  const url = `${API_ENDPOINTS.QA_LOGS.DETAIL}?${queryParams.toString()}`;
+
+  const response = await llmHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+/**
+ * 获取有日志的日期列表
+ */
+export async function getQALogDates(token: string): Promise<QALogDatesResponse> {
+  const response = await llmHttp.get(API_ENDPOINTS.QA_LOGS.DATES, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
 }

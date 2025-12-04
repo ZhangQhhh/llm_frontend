@@ -103,6 +103,12 @@ export const API_ENDPOINTS = {
   LLM_SUMMARY:{
     DOX_SUMMARY:`/entry-exit/generate-full-report`,
     MAX_SUMMARY:`/entryExit/summary-entrance`
+  },
+  // 问答日志相关API（使用llmHttp，baseURL已包含/api前缀）
+  QA_LOGS: {
+    DAILY: `/qa_logs/daily`,           // GET 获取某天的所有日志记录
+    DETAIL: `/qa_logs/detail`,         // GET 获取单条日志详情
+    DATES: `/qa_logs/dates`,           // GET 获取有日志的日期列表
   }
 };
 
