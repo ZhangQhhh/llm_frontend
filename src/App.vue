@@ -42,10 +42,10 @@ export default defineComponent({
 <style>
 @import '@/styles/driver.css';
 
-/* 也字工厂招牌体 */
+/* 新字体 */
 @font-face {
   font-family: 'ZhaoPai';
-  src: url('@/assets/fonts/也字工厂招牌体.ttf') format('truetype');
+  src: url('@/assets/fonts/667adcb33129c733bceaf9a00286e3a1.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

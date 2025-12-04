@@ -795,7 +795,7 @@ export default defineComponent({
 }
 
 .hero-title {
-  font-size: 96px;
+  font-size: 130px;
   font-weight: 900;
   color: white;
   margin: 0 0 1.5rem 0;
