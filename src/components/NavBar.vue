@@ -51,6 +51,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>超管中心</span>
               </el-dropdown-item>
+              <el-dropdown-item v-if="isSuperAdmin" command="qa-logs">
+                <el-icon><Document /></el-icon>
+                <span>问答日志</span>
+              </el-dropdown-item>
               <el-dropdown-item v-if="isAdmin" command="feedback">
                 <el-icon><ChatLineSquare /></el-icon>
                 <span>反馈管理</span>
@@ -67,10 +71,10 @@
                 <el-icon><Document /></el-icon>
                 <span>数据分析</span>
               </el-dropdown-item> -->
-              <el-dropdown-item command="data-analysis">
+              <!-- <el-dropdown-item command="data-analysis">
                 <el-icon><DataAnalysis /></el-icon>
                 <span>报告生成</span>
-              </el-dropdown-item>
+              </el-dropdown-item> -->
               <el-dropdown-item command="docx-tool">
                 <el-icon><Document /></el-icon>
                 <span>DOCX 工具</span>
@@ -105,8 +109,7 @@ import {
   SwitchButton,
   ChatLineSquare,
   DocumentCopy,
-  Document,
-  DataAnalysis
+  Document
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -119,8 +122,7 @@ export default defineComponent({
     SwitchButton,
     ChatLineSquare,
     DocumentCopy,
-    Document,
-    DataAnalysis
+    Document
   },
   setup() {
     const store = useStore()
@@ -173,6 +175,8 @@ export default defineComponent({
         router.push('/super-admin')
       } else if (command === 'feedback') {
         router.push('/feedback')
+      } else if (command === 'qa-logs') {
+        router.push('/qa-logs')
       }
     }
 
