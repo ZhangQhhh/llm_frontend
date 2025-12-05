@@ -9,12 +9,13 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue';
+import { defineComponent, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import NavBar from './components/NavBar.vue';
 import TourGuideButton from './components/TourGuideButton.vue';
 import FirstTimeGuide from './components/FirstTimeGuide.vue';
 import ChangeNameDialog from './components/ChangeNameDialog.vue';
+import { startVersionCheck } from './utils/versionCheck';
 
 export default defineComponent({
   name: "App",
@@ -30,6 +31,11 @@ export default defineComponent({
     // 在登录页面隐藏导航栏
     const showNavBar = computed(() => {
       return route.name !== 'login';
+    });
+
+    // 启动版本检查
+    onMounted(() => {
+      startVersionCheck();
     });
 
     return {

@@ -191,7 +191,7 @@
                 size="small" 
                 text 
                 type="primary" 
-                @click="loadUserActivity" 
+                @click="loadUserActivity(true)" 
                 :loading="loadingIP"
               >
                 <el-icon v-if="!loadingIP"><Refresh /></el-icon>
@@ -373,10 +373,10 @@ import {
   ArrowDown,
   DataBoard
 } from '@element-plus/icons-vue'
-import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api'
+import { API_ENDPOINTS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
-import { getQALogsByDate } from '@/utils/chatApi'
 import { refreshUserCache, getUserById } from '@/utils/userCache'
+import { getUserActivityMap, getQARanking, refreshActivityCache } from '@/utils/userActivityCache'
 
 // 用户接口定义
 interface DashboardUser {
@@ -400,8 +400,6 @@ const showIP = ref(true)  // 默认显示IP
 const detailDialogVisible = ref(false)
 const currentUser = ref<DashboardUser | null>(null)
 const tableRef = ref()
-// 用户ID -> { ip, lastLogin } 映射（从问答日志提取）
-const userActivityMap = ref<Map<string, { ip: string; lastLogin: string }>>(new Map())
 
 // 问答排行榜数据
 interface QaRankItem {
@@ -410,10 +408,6 @@ interface QaRankItem {
   count: number
 }
 const qaRanking = ref<QaRankItem[]>([])
-const maxQaCount = computed(() => {
-  if (qaRanking.value.length === 0) return 1
-  return qaRanking.value[0]?.count || 1
-})
 
 // 筛选条件
 const filters = reactive({
@@ -620,65 +614,16 @@ const toggleIPColumn = async () => {
   // IP列显示/隐藏由 v-if 控制
 }
 
-// 从问答日志加载用户活动数据（IP、最近登录时间、问答次数排行）
-const loadUserActivity = async () => {
+// 从问答日志加载用户活动数据（使用缓存服务）
+const loadUserActivity = async (forceRefresh = false) => {
   loadingIP.value = true
   try {
-    const token = localStorage.getItem(STORAGE_KEYS.TOKEN)
-    if (!token) {
-      ElMessage.warning('请先登录')
-      return
-    }
-    
-    // 获取最近7天的日志来提取IP、最近活动时间和问答次数
-    const today = new Date()
-    const activityMap = new Map<string, { ip: string; lastLogin: string }>()
-    const qaCountMap = new Map<string, number>() // 用户问答次数统计
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().slice(0, 10)
-      
-      try {
-        const response = await getQALogsByDate(token, { 
-          date: dateStr, 
-          page_size: 100 
-        })
-        
-        if (response?.logs) {
-          for (const log of response.logs) {
-            const userId = log.metadata?.user_id
-            const ip = log.metadata?.ip
-            const timestamp = log.timestamp
-            
-            if (userId) {
-              // 统计问答次数
-              qaCountMap.set(userId, (qaCountMap.get(userId) || 0) + 1)
-              
-              // 记录最新的IP和时间
-              if (ip || timestamp) {
-                const existing = activityMap.get(userId)
-                if (!existing || new Date(timestamp) > new Date(existing.lastLogin)) {
-                  activityMap.set(userId, { 
-                    ip: ip || existing?.ip || '', 
-                    lastLogin: timestamp 
-                  })
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // 某天没有日志，继续
-        console.log(`No logs for ${dateStr}`)
-      }
-    }
-    
-    userActivityMap.value = activityMap
+    // 使用缓存服务获取活动数据
+    const activityMap = forceRefresh 
+      ? await refreshActivityCache() 
+      : await getUserActivityMap()
     
     // 更新用户列表中的IP和最近登录时间
-    // 注意：日志中的 user_id 是字符串，需要转换比较
     users.value = users.value.map(user => {
       const odUserId = String(user.id)
       const activity = activityMap.get(odUserId)
@@ -689,22 +634,18 @@ const loadUserActivity = async () => {
       }
     })
     
-    // 生成问答排行榜（取前10名）
-    const ranking: QaRankItem[] = []
-    qaCountMap.forEach((count, odUserId) => {
-      // 优先从缓存获取用户名，其次从当前用户列表查找
-      const cachedUser = getUserById(odUserId)
-      const localUser = users.value.find(u => String(u.id) === odUserId)
-      const username = cachedUser?.username || localUser?.username || `用户${odUserId}`
-      ranking.push({
-        userId: odUserId,
-        username,
-        count
-      })
+    // 获取问答排行榜
+    const rankingData = await getQARanking(10)
+    qaRanking.value = rankingData.map(item => {
+      // 优先从缓存获取用户名
+      const cachedUser = getUserById(item.userId)
+      const localUser = users.value.find(u => String(u.id) === item.userId)
+      return {
+        userId: item.userId,
+        username: cachedUser?.username || localUser?.username || `用户${item.userId}`,
+        count: item.qaCount
+      }
     })
-    // 按问答次数降序排列，取前10
-    ranking.sort((a, b) => b.count - a.count)
-    qaRanking.value = ranking.slice(0, 10)
     
     ElMessage.success(`已加载 ${activityMap.size} 个用户的活动记录`)
   } catch (error: any) {
