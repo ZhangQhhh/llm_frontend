@@ -64,7 +64,8 @@ export const API_ENDPOINTS = {
     CHANGE_PASSWORD: `/auth/change_password`,
     RESET_PASSWORD: `/auth/reset_password`,
     CHANGE_NAME: `/auth/change_username`,
-    USER_INFO: `/auth/user-info`
+    USER_INFO: `/auth/user-info`,
+    FORGET_PASSWORD:'/auth/forget'
   },
   // 题库管理API
   QUESTIONS: {

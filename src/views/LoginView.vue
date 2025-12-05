@@ -87,7 +87,7 @@
                 <input type="checkbox" v-model="rememberMe" />
                 <span>记住我</span>
               </label>
-              <a href="#" class="link">忘记密码？</a>
+              <a href="#" class="link" @click.prevent="showForgetPassword = true">忘记密码？</a>
             </div>
 
             <button type="submit" class="submit-btn" :disabled="loginLoading">
@@ -172,6 +172,64 @@
         </div>
       </div>
     </div>
+
+    <!-- 忘记密码弹窗 -->
+    <el-dialog
+      v-model="showForgetPassword"
+      title="忘记密码"
+      width="420px"
+      :close-on-click-modal="false"
+      class="forget-password-dialog"
+    >
+      <div class="forget-form">
+        <p class="forget-tip">请输入您的警号和身份证号，系统将为您重置密码</p>
+        
+        <div class="form-group">
+          <label>警号</label>
+          <input
+            type="text"
+            v-model="forgetForm.policeId"
+            placeholder="请输入警号"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>身份证号</label>
+          <input
+            type="text"
+            v-model="forgetForm.idCardNumber"
+            placeholder="请输入身份证号"
+            maxlength="18"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>新密码</label>
+          <input
+            type="password"
+            v-model="forgetForm.newPassword"
+            placeholder="请输入新密码（至少6位）"
+            minlength="6"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>确认新密码</label>
+          <input
+            type="password"
+            v-model="forgetForm.confirmPassword"
+            placeholder="请再次输入新密码"
+          />
+        </div>
+      </div>
+      
+      <template #footer>
+        <el-button @click="showForgetPassword = false">取消</el-button>
+        <el-button type="primary" @click="handleForgetPassword" :loading="forgetLoading">
+          重置密码
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -220,6 +278,16 @@ export default defineComponent({
     });
     const registerLoading = ref(false);
     const registerError = ref('');
+
+    // 忘记密码
+    const showForgetPassword = ref(false);
+    const forgetForm = ref({
+      policeId: '',
+      idCardNumber: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+    const forgetLoading = ref(false);
 
     // 处理登录
     const handleLogin = () => {
@@ -303,6 +371,46 @@ export default defineComponent({
         });
     };
 
+    // 处理忘记密码
+    const handleForgetPassword = async () => {
+      if (!forgetForm.value.policeId || !forgetForm.value.idCardNumber || !forgetForm.value.newPassword) {
+        ElMessage.warning('请填写完整信息');
+        return;
+      }
+
+      if (forgetForm.value.newPassword.length < 6) {
+        ElMessage.warning('密码长度至少6位');
+        return;
+      }
+
+      if (forgetForm.value.newPassword !== forgetForm.value.confirmPassword) {
+        ElMessage.warning('两次输入的密码不一致');
+        return;
+      }
+
+      forgetLoading.value = true;
+      try {
+        const response = await http.post(API_ENDPOINTS.AUTH.FORGET_PASSWORD, {
+          policeId: forgetForm.value.policeId,
+          idCardNumber: forgetForm.value.idCardNumber,
+          newPassword: forgetForm.value.newPassword
+        });
+        
+        const data = response.data;
+        if (data.success && data.code === 200) {
+          ElMessage.success(data.message || '密码重置成功，请使用新密码登录');
+          showForgetPassword.value = false;
+          forgetForm.value = { policeId: '', idCardNumber: '', newPassword: '', confirmPassword: '' };
+        } else {
+          ElMessage.error(data.message || '密码重置失败');
+        }
+      } catch (error: any) {
+        ElMessage.error(error.response?.data?.message || '密码重置失败，请稍后重试');
+      } finally {
+        forgetLoading.value = false;
+      }
+    };
+
     return {
       isLogin,
       rememberMe,
@@ -313,7 +421,11 @@ export default defineComponent({
       registerLoading,
       registerError,
       handleLogin,
-      handleRegister
+      handleRegister,
+      showForgetPassword,
+      forgetForm,
+      forgetLoading,
+      handleForgetPassword
     };
   }
 });
@@ -631,5 +743,42 @@ export default defineComponent({
   .form-title {
     font-size: 24px;
   }
+}
+
+/* 忘记密码弹窗样式 */
+.forget-form {
+  padding: 0 10px;
+}
+
+.forget-tip {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.forget-form .form-group {
+  margin-bottom: 16px;
+}
+
+.forget-form .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+}
+
+.forget-form .form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.forget-form .form-group input:focus {
+  outline: none;
+  border-color: #2563eb;
 }
 </style>

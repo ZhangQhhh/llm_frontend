@@ -37,7 +37,7 @@
           <span class="badge-pulse"></span>
         </div> -->
         <h1 class="hero-title">
-          <span class="title-line gradient-text">皖美智脑</span>
+          <span class="cyber-glitch" data-text="皖美智脑">皖美智脑</span>
         </h1>
         <p class="hero-subtitle">
           <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供智能问答服务</span>
@@ -718,47 +718,135 @@ export default defineComponent({
 }
 
 .hero-title {
-  font-size: 200px;
+  font-size: 180px;
   font-weight: 900;
-  color: white;
   margin: 0 0 1.5rem 0;
   line-height: 1.1;
-  text-shadow: 0 0 40px rgba(96, 165, 250, 0.5);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  letter-spacing: 8px;
+  letter-spacing: 15px;
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
 }
 
-.title-line {
-  display: block;
-  animation: titleSlideIn 0.8s ease-out;
+/* 赛博朋克故障风格 */
+.cyber-glitch {
+  position: relative;
+  color: #f0f8ff; /* 冷白色 (AliceBlue) */
+  
+  /* 强立体凹凸感 + 科技冷光 */
+  text-shadow: 
+    /* 强高光层 - 顶部左侧 */
+    -2px -2px 1px rgba(255, 255, 255, 0.9),
+    /* 深阴影层 - 底部右侧 */
+    3px 3px 5px rgba(0, 0, 0, 0.9),
+    /* 中间过渡层 */
+    1px 1px 2px rgba(0, 0, 0, 0.5),
+    /* 外发光 - 冷蓝色 */
+    0 0 20px rgba(64, 158, 255, 0.6),
+    0 0 40px rgba(64, 158, 255, 0.3);
+  
+  /* 全息扫描线效果 - 调整为冷蓝色 */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(64, 158, 255, 0.1) 2px,
+    rgba(64, 158, 255, 0.1) 4px
+  );
+  
+  /* 电磁干扰动画 */
+  animation: holographic-flicker 4s infinite alternate;
 }
 
-.title-line:nth-child(2) {
-  animation-delay: 0.2s;
+@keyframes holographic-flicker {
+  0%, 100% { opacity: 1; filter: brightness(1); letter-spacing: 15px; }
+  3% { opacity: 0.9; filter: brightness(1.1); letter-spacing: 15px; }
+  6% { opacity: 1; filter: brightness(1); letter-spacing: 15px; }
+  7% { opacity: 0.7; filter: brightness(0.9); letter-spacing: 14px; } /* 微微缩放 */
+  8% { opacity: 1; filter: brightness(1); letter-spacing: 15px; }
+  70% { opacity: 1; filter: brightness(1); letter-spacing: 15px; }
+  72% { opacity: 0.8; filter: brightness(1.2); letter-spacing: 16px; } /* 微微扩张 */
+  74% { opacity: 1; filter: brightness(1); letter-spacing: 15px; }
 }
 
-@keyframes titleSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.cyber-glitch::before,
+.cyber-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  opacity: 0.7; /* 降低故障层不透明度，让主体更清晰 */
 }
 
-.gradient-text {
-  background: linear-gradient(180deg, #ffffff 0%, #c0c0c0 30%, #8a8a8a 50%, #c0c0c0 70%, #ffffff 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 20px rgba(200, 200, 255, 0.3));
+/* 青色偏移层 */
+.cyber-glitch::before {
+  left: 2px;
+  text-shadow: -2px 0 #00ffff;
+  clip: rect(24px, 550px, 90px, 0);
+  animation: glitch-anim-1 2.5s infinite linear alternate-reverse;
+}
+
+/* 品红偏移层 */
+.cyber-glitch::after {
+  left: -2px;
+  text-shadow: -2px 0 #ff00ff;
+  clip: rect(85px, 550px, 140px, 0);
+  animation: glitch-anim-2 3s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim-1 {
+  0% { clip: rect(20px, 9999px, 80px, 0); transform: skew(0.5deg); }
+  5% { clip: rect(90px, 9999px, 100px, 0); transform: skew(0.5deg); }
+  10% { clip: rect(10px, 9999px, 85px, 0); transform: skew(0.5deg); }
+  15% { clip: rect(60px, 9999px, 120px, 0); transform: skew(0.5deg); }
+  20% { clip: rect(20px, 9999px, 50px, 0); transform: skew(0); }
+  25% { clip: rect(100px, 9999px, 140px, 0); transform: skew(0.5deg); }
+  30% { clip: rect(40px, 9999px, 90px, 0); transform: skew(0.5deg); }
+  35% { clip: rect(120px, 9999px, 160px, 0); transform: skew(0); }
+  40% { clip: rect(10px, 9999px, 60px, 0); transform: skew(0.5deg); }
+  45% { clip: rect(80px, 9999px, 130px, 0); transform: skew(0.5deg); }
+  50% { clip: rect(30px, 9999px, 70px, 0); transform: skew(0); }
+  55% { clip: rect(110px, 9999px, 150px, 0); transform: skew(0.5deg); }
+  60% { clip: rect(5px, 9999px, 40px, 0); transform: skew(0.5deg); }
+  65% { clip: rect(70px, 9999px, 110px, 0); transform: skew(0); }
+  70% { clip: rect(25px, 9999px, 95px, 0); transform: skew(0.5deg); }
+  75% { clip: rect(130px, 9999px, 170px, 0); transform: skew(0.5deg); }
+  80% { clip: rect(50px, 9999px, 100px, 0); transform: skew(0); }
+  85% { clip: rect(15px, 9999px, 55px, 0); transform: skew(0.5deg); }
+  90% { clip: rect(95px, 9999px, 125px, 0); transform: skew(0.5deg); }
+  95% { clip: rect(35px, 9999px, 75px, 0); transform: skew(0); }
+  100% { clip: rect(65px, 9999px, 115px, 0); transform: skew(0.5deg); }
+}
+
+@keyframes glitch-anim-2 {
+  0% { clip: rect(90px, 9999px, 150px, 0); transform: skew(-0.5deg); }
+  5% { clip: rect(10px, 9999px, 50px, 0); transform: skew(-0.5deg); }
+  10% { clip: rect(120px, 9999px, 160px, 0); transform: skew(-0.5deg); }
+  15% { clip: rect(30px, 9999px, 70px, 0); transform: skew(-0.5deg); }
+  20% { clip: rect(80px, 9999px, 110px, 0); transform: skew(0); }
+  25% { clip: rect(40px, 9999px, 90px, 0); transform: skew(-0.5deg); }
+  30% { clip: rect(130px, 9999px, 170px, 0); transform: skew(-0.5deg); }
+  35% { clip: rect(20px, 9999px, 60px, 0); transform: skew(0); }
+  40% { clip: rect(100px, 9999px, 140px, 0); transform: skew(-0.5deg); }
+  45% { clip: rect(50px, 9999px, 80px, 0); transform: skew(-0.5deg); }
+  50% { clip: rect(140px, 9999px, 180px, 0); transform: skew(0); }
+  55% { clip: rect(10px, 9999px, 40px, 0); transform: skew(-0.5deg); }
+  60% { clip: rect(110px, 9999px, 150px, 0); transform: skew(-0.5deg); }
+  65% { clip: rect(60px, 9999px, 100px, 0); transform: skew(0); }
+  70% { clip: rect(25px, 9999px, 65px, 0); transform: skew(-0.5deg); }
+  75% { clip: rect(95px, 9999px, 135px, 0); transform: skew(-0.5deg); }
+  80% { clip: rect(45px, 9999px, 85px, 0); transform: skew(0); }
+  85% { clip: rect(125px, 9999px, 165px, 0); transform: skew(-0.5deg); }
+  90% { clip: rect(15px, 9999px, 55px, 0); transform: skew(-0.5deg); }
+  95% { clip: rect(85px, 9999px, 125px, 0); transform: skew(0); }
+  100% { clip: rect(35px, 9999px, 75px, 0); transform: skew(-0.5deg); }
 }
 
 .hero-subtitle {
