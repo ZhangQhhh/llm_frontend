@@ -224,7 +224,7 @@ export default defineComponent({
   min-width: 100%;
   display: flex;
   align-items: center;
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 /* 穿透 Element Plus 默认样式 */
@@ -262,7 +262,7 @@ export default defineComponent({
   font-weight: 700;
   color: rgba(255, 255, 255, 0.95);
   transition: all 0.3s;
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .brand-link:hover {
@@ -279,7 +279,7 @@ export default defineComponent({
 .logo-text {
   font-size: 32px;
   white-space: nowrap;
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: 4px;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
@@ -363,7 +363,7 @@ export default defineComponent({
   font-size: 14px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.9);
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .role-tag {
@@ -377,7 +377,7 @@ export default defineComponent({
 
 /* 登录按钮样式 */
 .navbar-right :deep(.el-button) {
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 /* 移动端菜单按钮 */
