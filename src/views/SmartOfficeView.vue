@@ -602,8 +602,8 @@ export default defineComponent({
     const ocrUploading = ref<boolean>(false);
     const ocrResults = ref<Array<{ filename: string; text: string; success: boolean }>>([]);
     const ocrType = ref<string>('universal');  // OCR识别类型
-    // OCR服务地址
-    const ocrBase = OCR_BASE_URL || 'http://53.3.1.2:9000';
+    // OCR服务地址（配置在 api.ts 中）
+    const ocrBase = OCR_BASE_URL;
 
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
