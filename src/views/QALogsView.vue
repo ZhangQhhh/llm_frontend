@@ -105,7 +105,7 @@
           <div class="log-meta">
             <span v-if="log.metadata.user_id" class="meta-item">
               <el-icon><User /></el-icon>
-              {{ log.metadata.user_id }}
+              {{ getUserName(log.metadata.user_id) }}
             </span>
             <span v-if="log.metadata.ip" class="meta-item">
               <el-icon><Location /></el-icon>
@@ -161,8 +161,9 @@
               <span class="log-type" :class="getTypeClass(logDetail.type)">{{ getTypeLabel(logDetail.type) }}</span>
             </div>
             <div class="detail-item" v-if="logDetail.metadata.user_id">
-              <label>用户ID:</label>
-              <span>{{ logDetail.metadata.user_id }}</span>
+              <label>用户:</label>
+              <span>{{ getUserName(logDetail.metadata.user_id) }}</span>
+              <span class="user-id-hint">(ID: {{ logDetail.metadata.user_id }})</span>
             </div>
             <div class="detail-item" v-if="logDetail.metadata.ip">
               <label>IP地址:</label>
@@ -222,6 +223,7 @@ import {
   type QALogListResponse
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
+import { ensureUserCacheLoaded, getUserNameById } from '@/utils/userCache';
 
 const store = useStore();
 
@@ -312,6 +314,11 @@ async function loadAvailableDates() {
   }
 }
 
+// 获取用户名（使用缓存服务）
+function getUserName(userId?: string): string {
+  return getUserNameById(userId);
+}
+
 // 加载日志列表
 async function loadLogs() {
   loading.value = true;
@@ -387,7 +394,8 @@ function handlePageChange(page: number) {
   loadLogs();
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await ensureUserCacheLoaded();  // 确保用户缓存已加载
   loadAvailableDates();
   loadLogs();
 });
@@ -684,6 +692,13 @@ onMounted(() => {
 .detail-item .mono {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85rem;
+}
+
+.user-id-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: normal;
+  margin-left: 0.5rem;
 }
 
 .detail-content {

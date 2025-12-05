@@ -70,6 +70,16 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/user-dashboard',
+    name: 'user-dashboard',
+    component: () => import('../views/UserDashboardView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSuperAdmin: true,
+      title: '用户仪表盘'
+    }
+  },
+  {
     path: '/profile',
     name: 'profile',
     component: () => import('../views/ProfileView.vue'),

@@ -51,6 +51,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>超管中心</span>
               </el-dropdown-item>
+              <el-dropdown-item v-if="isSuperAdmin" command="user-dashboard">
+                <el-icon><DataBoard /></el-icon>
+                <span>用户仪表盘</span>
+              </el-dropdown-item>
               <el-dropdown-item v-if="isSuperAdmin" command="qa-logs">
                 <el-icon><Document /></el-icon>
                 <span>问答日志</span>
@@ -109,7 +113,8 @@ import {
   SwitchButton,
   ChatLineSquare,
   DocumentCopy,
-  Document
+  Document,
+  DataBoard
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -122,7 +127,8 @@ export default defineComponent({
     SwitchButton,
     ChatLineSquare,
     DocumentCopy,
-    Document
+    Document,
+    DataBoard
   },
   setup() {
     const store = useStore()
@@ -173,6 +179,8 @@ export default defineComponent({
         router.push('/admin')
       } else if (command === 'super-admin') {
         router.push('/super-admin')
+      } else if (command === 'user-dashboard') {
+        router.push('/user-dashboard')
       } else if (command === 'feedback') {
         router.push('/feedback')
       } else if (command === 'qa-logs') {
