@@ -1762,27 +1762,27 @@ export default defineComponent({
 
 .toggles {
   display: flex;
-  gap: 0.5rem;  /* 减小间距避免遮挡 */
+  gap: 0.5rem;
   align-items: center;
-  flex-wrap: nowrap;  /* 保持在一行 */
-  flex: 0 0 auto;  /* 不压缩不拉伸 */
-  margin-right: 1rem;  /* 与策略选择器保持间距 */
+  flex-wrap: wrap;  /* 允许换行 */
+  flex: 1 1 auto;
+  margin-right: 1rem;
 }
 
 /* MCQ Strategy Selector */
 .mcq-strategy-select {
-  min-width: 150px;
-  max-width: 180px;
+  min-width: 160px;
+  max-width: 200px;
   flex-shrink: 0;
   transition: opacity 0.3s ease, transform 0.3s ease;
   transform-origin: left center;
-  margin-left: 0;  /* 移除左边距 */
+  margin-left: 0;
 }
 
 .mcq-strategy-select :deep(.el-input__wrapper) {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border: 1px solid #dee2e6;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid var(--ai-border);
+  box-shadow: none;
 }
 
 .mcq-strategy-select :deep(.el-input__wrapper:hover) {

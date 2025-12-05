@@ -45,7 +45,7 @@ export class TourGuide {
     const steps: TourStep[] = [
       {
         element: '.navbar-brand',
-        title: '欢迎来到皖美边检-智慧大脑',
+        title: '欢迎来到皖美智脑',
         description: '这是您的智能工作助手平台，集成了多种AI服务功能，让您的工作更加高效便捷。接下来我将为您详细介绍各项功能。'
       },
       {
@@ -55,28 +55,33 @@ export class TourGuide {
       },
       {
         element: '.nav-knowledge-qa',
-        title: '知识问答 - 核心功能',
+        title: '业务问答 - 核心功能',
         description: '智能问答系统，可以回答边检相关的各种问题。支持复杂查询，提供准确答案和参考来源。适合快速获取专业知识。'
       },
       {
         element: '.nav-conversation',
-        title: '多轮对话 - 深度交流',
+        title: '智能对话 - 深度交流',
         description: '支持连续对话的AI助手，能理解上下文，记住对话历史。适合深入探讨复杂问题或进行长时间的专业咨询。'
       },
       {
         element: '.nav-exam',
-        title: '边检智能家教 - 学习助手',
+        title: '边检智学 - 学习助手',
         description: 'AI驱动的个性化学习系统，提供题目练习、详细解析和知识点梳理。帮助您系统性地学习边检业务知识。'
       },
       {
         element: '.nav-smart-office',
-        title: '智慧办公 - 效率工具',
+        title: '公文助手 - 效率工具',
         description: '集成多种办公工具，包括文档处理、数据分析、报告生成等功能，大幅提升日常工作效率。'
       },
       {
         element: '.nav-immigration',
-        title: '移民局12367 - 专业咨询',
+        title: '12367 助手 - 专业咨询',
         description: '专门针对移民局12367咨询热线的智能助手，提供准确的政策解读和业务指导。'
+      },
+      {
+        element: '.nav-data-analysis',
+        title: '数研报告 - 数据分析',
+        description: '专业的数据分析工具，提供数据可视化、趋势分析和智能报告生成功能，帮助您深入理解业务数据。'
       },
       {
         element: '.navbar-right',
@@ -86,7 +91,7 @@ export class TourGuide {
       {
         element: 'body',
         title: '开始您的智能工作之旅',
-        description: '导览完成！建议您从"知识问答"开始体验，然后根据需要探索其他功能。如有疑问，随时可以访问帮助中心或重新启动导览。'
+        description: '导览完成！建议您从"业务问答"开始体验，然后根据需要探索其他功能。如有疑问，随时可以访问帮助中心或重新启动导览。'
       }
     ];
 

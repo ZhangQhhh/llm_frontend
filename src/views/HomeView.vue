@@ -13,9 +13,14 @@
       <canvas ref="threeCanvas" class="three-canvas"></canvas>
       
       <!-- Video Background -->
-      <video class="video-background" autoplay loop muted playsinline>
-        <source :src="require('@/assets/allPic/public/tech.mp4')" type="video/mp4">
-      </video>
+      <video 
+        class="video-background" 
+        :src="require('@/assets/allPic/public/tech.mp4')"
+        autoplay 
+        loop 
+        muted 
+        playsinline
+      ></video>
       
       <!-- Animated Grid Background -->
       <div class="grid-background"></div>
