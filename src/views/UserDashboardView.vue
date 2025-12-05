@@ -114,7 +114,7 @@
       <el-card shadow="never">
         <template #header>
           <div class="chart-header">
-            <span class="chart-title">🏆 问答次数排行榜</span>
+            <span class="chart-title">问答次数排行榜</span>
             <span class="chart-subtitle">基于最近7天问答日志统计</span>
           </div>
         </template>
@@ -122,28 +122,54 @@
           <div v-if="qaRanking.length === 0" class="no-data">
             暂无问答数据
           </div>
-          <div v-else class="ranking-chart">
-            <div 
-              v-for="(item, index) in qaRanking" 
-              :key="item.userId" 
-              class="ranking-item"
-              :class="{ 'top-1': index === 0, 'top-2': index === 1, 'top-3': index === 2 }"
-            >
-              <div class="rank-badge">
-                <span v-if="index === 0">🥇</span>
-                <span v-else-if="index === 1">🥈</span>
-                <span v-else-if="index === 2">🥉</span>
-                <span v-else>{{ index + 1 }}</span>
+          <div v-else class="podium-wrapper">
+            <!-- 颁奖台 - 前三名 -->
+            <div class="podium" v-if="qaRanking.length >= 1">
+              <!-- 第二名 -->
+              <div class="podium-item second" v-if="qaRanking[1]">
+                <div class="podium-avatar">
+                  <el-avatar :size="50" :icon="UserFilled" />
+                </div>
+                <div class="podium-name">{{ qaRanking[1].username }}</div>
+                <div class="podium-count">{{ qaRanking[1].count }} 次</div>
+                <div class="podium-stand second-stand">
+                  <span class="podium-rank">2</span>
+                </div>
               </div>
-              <div class="rank-info">
-                <span class="rank-name">{{ item.username }}</span>
-                <span class="rank-count">{{ item.count }} 次问答</span>
+              <!-- 第一名 -->
+              <div class="podium-item first" v-if="qaRanking[0]">
+                <div class="podium-crown">👑</div>
+                <div class="podium-avatar gold">
+                  <el-avatar :size="60" :icon="UserFilled" />
+                </div>
+                <div class="podium-name">{{ qaRanking[0].username }}</div>
+                <div class="podium-count">{{ qaRanking[0].count }} 次</div>
+                <div class="podium-stand first-stand">
+                  <span class="podium-rank">1</span>
+                </div>
               </div>
-              <div class="rank-bar-container">
-                <div 
-                  class="rank-bar" 
-                  :style="{ width: (item.count / maxQaCount * 100) + '%' }"
-                ></div>
+              <!-- 第三名 -->
+              <div class="podium-item third" v-if="qaRanking[2]">
+                <div class="podium-avatar">
+                  <el-avatar :size="50" :icon="UserFilled" />
+                </div>
+                <div class="podium-name">{{ qaRanking[2].username }}</div>
+                <div class="podium-count">{{ qaRanking[2].count }} 次</div>
+                <div class="podium-stand third-stand">
+                  <span class="podium-rank">3</span>
+                </div>
+              </div>
+            </div>
+            <!-- 其他排名 -->
+            <div class="other-ranks" v-if="qaRanking.length > 3">
+              <div 
+                v-for="(item, index) in qaRanking.slice(3)" 
+                :key="item.userId" 
+                class="other-rank-item"
+              >
+                <span class="other-rank-num">{{ index + 4 }}</span>
+                <span class="other-rank-name">{{ item.username }}</span>
+                <span class="other-rank-count">{{ item.count }} 次问答</span>
               </div>
             </div>
           </div>
@@ -350,7 +376,7 @@ import {
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
 import { getQALogsByDate } from '@/utils/chatApi'
-import { refreshUserCache } from '@/utils/userCache'
+import { refreshUserCache, getUserById } from '@/utils/userCache'
 
 // 用户接口定义
 interface DashboardUser {
@@ -652,8 +678,10 @@ const loadUserActivity = async () => {
     userActivityMap.value = activityMap
     
     // 更新用户列表中的IP和最近登录时间
+    // 注意：日志中的 user_id 是字符串，需要转换比较
     users.value = users.value.map(user => {
-      const activity = user.id ? activityMap.get(user.id) : null
+      const odUserId = String(user.id)
+      const activity = activityMap.get(odUserId)
       return {
         ...user,
         last_login_ip: activity?.ip || user.last_login_ip,
@@ -664,11 +692,13 @@ const loadUserActivity = async () => {
     // 生成问答排行榜（取前10名）
     const ranking: QaRankItem[] = []
     qaCountMap.forEach((count, odUserId) => {
-      // 查找用户名
-      const user = users.value.find(u => u.id === odUserId)
+      // 优先从缓存获取用户名，其次从当前用户列表查找
+      const cachedUser = getUserById(odUserId)
+      const localUser = users.value.find(u => String(u.id) === odUserId)
+      const username = cachedUser?.username || localUser?.username || `用户${odUserId}`
       ranking.push({
         userId: odUserId,
-        username: user?.username || odUserId,
+        username,
         count
       })
     })
@@ -1060,99 +1090,148 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.ranking-chart {
+/* 颁奖台样式 */
+.podium-wrapper {
+  padding: 20px;
+}
+
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.podium-item {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.ranking-item {
-  display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  transition: all 0.2s;
+  text-align: center;
 }
 
-.ranking-item:hover {
-  background: #f0f2f5;
+.podium-crown {
+  font-size: 32px;
+  margin-bottom: 8px;
+  animation: bounce 1s ease infinite;
 }
 
-.ranking-item.top-1 {
-  background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%);
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 
-.ranking-item.top-2 {
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+.podium-avatar {
+  margin-bottom: 8px;
 }
 
-.ranking-item.top-3 {
-  background: linear-gradient(135deg, #fff1e6 0%, #ffd8bf 100%);
+.podium-avatar.gold :deep(.el-avatar) {
+  border: 3px solid #f5a623;
+  box-shadow: 0 4px 12px rgba(245, 166, 35, 0.4);
 }
 
-.rank-badge {
-  width: 36px;
-  height: 36px;
+.podium-item.second .podium-avatar :deep(.el-avatar) {
+  border: 3px solid #a0a0a0;
+  box-shadow: 0 4px 12px rgba(160, 160, 160, 0.4);
+}
+
+.podium-item.third .podium-avatar :deep(.el-avatar) {
+  border: 3px solid #cd7f32;
+  box-shadow: 0 4px 12px rgba(205, 127, 50, 0.4);
+}
+
+.podium-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-count {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 12px;
+}
+
+.podium-stand {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  border-radius: 8px 8px 0 0;
+  color: white;
   font-weight: 700;
-  color: #909399;
-}
-
-.ranking-item.top-1 .rank-badge,
-.ranking-item.top-2 .rank-badge,
-.ranking-item.top-3 .rank-badge {
   font-size: 24px;
 }
 
-.rank-info {
+.first-stand {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(180deg, #f5a623 0%, #d4920a 100%);
+}
+
+.second-stand {
+  width: 90px;
+  height: 70px;
+  background: linear-gradient(180deg, #a0a0a0 0%, #787878 100%);
+}
+
+.third-stand {
+  width: 90px;
+  height: 50px;
+  background: linear-gradient(180deg, #cd7f32 0%, #a66628 100%);
+}
+
+.podium-rank {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 其他排名 */
+.other-ranks {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 120px;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 
-.rank-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.rank-count {
-  font-size: 12px;
-  color: #909399;
-}
-
-.rank-bar-container {
+.other-rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
   flex: 1;
-  height: 24px;
+  min-width: 200px;
+}
+
+.other-rank-num {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #e9ecef;
-  border-radius: 12px;
-  overflow: hidden;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  color: #606266;
 }
 
-.rank-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #409eff 0%, #67c23a 100%);
-  border-radius: 12px;
-  transition: width 0.5s ease;
-  min-width: 20px;
+.other-rank-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  flex: 1;
 }
 
-.ranking-item.top-1 .rank-bar {
-  background: linear-gradient(90deg, #f5a623 0%, #f7c873 100%);
-}
-
-.ranking-item.top-2 .rank-bar {
-  background: linear-gradient(90deg, #a0a0a0 0%, #c8c8c8 100%);
-}
-
-.ranking-item.top-3 .rank-bar {
-  background: linear-gradient(90deg, #cd7f32 0%, #daa06d 100%);
+.other-rank-count {
+  font-size: 13px;
+  color: #909399;
 }
 
 /* 筛选区域 */
