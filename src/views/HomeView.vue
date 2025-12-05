@@ -34,9 +34,6 @@
         <h1 class="hero-title">
           <span class="title-line gradient-text">皖美智脑</span>
         </h1>
-        <p class="hero-subtitle">
-          <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供精准、高效的智能问答服务</span>
-        </p>
         <!-- <div class="hero-decorations">
           <div class="decoration-item">
             <div class="decoration-icon">
@@ -713,7 +710,7 @@ export default defineComponent({
 }
 
 .hero-title {
-  font-size: 150px;
+  font-size: 200px;
   font-weight: 900;
   color: white;
   margin: 0 0 1.5rem 0;
@@ -756,13 +753,16 @@ export default defineComponent({
 }
 
 .hero-subtitle {
-  font-size: 26px;
+  font-size: 36px;
   color: rgba(255, 255, 255, 0.8);
-  margin: 0 0 2rem 0;
+  margin: 1.5rem 0 2.5rem 0;
   line-height: 1.8;
   font-family: 'ZhaoPai', sans-serif;
   letter-spacing: 2px;
   position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .typing-text {
@@ -770,12 +770,13 @@ export default defineComponent({
   overflow: hidden;
   border-right: 3px solid #60a5fa;
   white-space: nowrap;
-  animation: typing 5s steps(60, end), blink-caret 0.75s step-end infinite;
+  animation: typing 5s steps(35, end) forwards, blink-caret 0.75s step-end infinite;
+  width: 0;
 }
 
 @keyframes typing {
   from { width: 0; }
-  to { width: 100%; }
+  to { width: 2000px; }
 }
 
 @keyframes blink-caret {
@@ -1090,8 +1091,8 @@ export default defineComponent({
   backdrop-filter: blur(20px);
   color: white;
   border: 1px solid rgba(96, 165, 250, 0.3);
-  padding: 1rem 2rem;
-  font-size: 24px;
+  padding: 1.5rem 3rem;
+  font-size: 32px;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   position: relative;
   overflow: hidden;
@@ -1099,8 +1100,8 @@ export default defineComponent({
   transition: all 0.3s ease;
   white-space: nowrap;
   text-align: center;
-  min-width: 180px;
-  max-width: 240px;
+  min-width: 220px;
+  max-width: 300px;
 }
 
 .btn-module::before {
