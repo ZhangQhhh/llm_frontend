@@ -504,8 +504,8 @@ chore: 构建工具或辅助工具的变动
 
 如有问题或建议，请通过以下方式联系：
 
-- **项目维护者**：开发团队
-- **邮箱**：dev@example.com
+- **项目维护者**：zqsee
+- **邮箱**：zq@zqsee.com
 - **问题反馈**：[GitHub Issues](https://github.com/your-repo/issues)
 
 ---
