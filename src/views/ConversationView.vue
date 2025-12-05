@@ -19,7 +19,7 @@
         <div class="brand">
           <div class="logo">💬</div>
           <div>
-            <h1>边检智能对话</h1>
+            <h1>智能对话</h1>
             <p class="subtitle">支持上下文理解 · 思考过程可视化 · 参考来源追溯</p>
           </div>
         </div>
