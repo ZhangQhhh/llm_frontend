@@ -876,7 +876,7 @@ export default defineComponent({
               } else if (typeof data.result === 'object') {
                 // 身份证识别返回对象
                 resultText = Object.entries(data.result)
-                  .filter(([_, v]) => v !== null)
+                  .filter((entry) => entry[1] !== null)
                   .map(([k, v]) => `${k}: ${v}`)
                   .join('\n');
               }
