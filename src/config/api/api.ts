@@ -3,6 +3,8 @@ export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const SHOW_HIDDEN_NODES = process.env.VUE_APP_SHOW_HIDDEN_NODES === 'true';
 export const MCQ_BASE_URL = process.env.VUE_APP_MCQ_BASE_URL;
 export const WRITER_BASE_URL = process.env.VUE_APP_WRITER_URL || LLM_BASE_URL;
+// OCR服务URL - 默认为本地部署的OCR服务（Docker部署默认端口9000）
+export const OCR_BASE_URL = process.env.VUE_APP_OCR_BASE_URL || 'http://localhost:9000';
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {

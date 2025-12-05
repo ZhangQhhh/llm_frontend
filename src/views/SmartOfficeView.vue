@@ -256,30 +256,47 @@
                 </div>
               </div>
             </div>
-            <!-- OCR 按钮暂时隐藏 -->
-            <div class="col-lg-4 col-12" v-if="false">
+            <!-- OCR 图片识别 -->
+            <div class="col-lg-6 col-12">
               <div class="config-section">
                 <label class="config-label">
                   <el-icon><Picture /></el-icon>
-                  <span>图片识别</span>
+                  <span>图片识别 (OCR)</span>
                 </label>
-                <input
-                  ref="ocrFileInputRef"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style="display: none"
-                  @change="uploadOcrImages"
-                />
-                <el-button
-                  type="warning"
-                  :loading="ocrUploading"
-                  @click="ocrFileInputRef?.click()"
-                  class="ocr-btn w-100"
-                >
-                  <el-icon class="me-1"><Picture /></el-icon>
-                  图片OCR识别
-                </el-button>
+                <div class="ocr-group">
+                  <el-select
+                    v-model="ocrType"
+                    placeholder="识别类型"
+                    class="ocr-type-select"
+                    style="width: 140px;"
+                  >
+                    <el-option label="通用识别" value="universal" />
+                    <el-option label="文档识别" value="document" />
+                    <el-option label="手写识别" value="handwritten" />
+                    <el-option label="身份证" value="idcard" />
+                  </el-select>
+                  <input
+                    ref="ocrFileInputRef"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style="display: none"
+                    @change="uploadOcrImages"
+                  />
+                  <el-button
+                    type="warning"
+                    :loading="ocrUploading"
+                    @click="ocrFileInputRef?.click()"
+                    class="ocr-btn"
+                  >
+                    <el-icon class="me-1"><Picture /></el-icon>
+                    选择图片识别
+                  </el-button>
+                </div>
+                <div class="config-hint">
+                  <el-icon><Warning /></el-icon>
+                  <span>支持 JPG/PNG/BMP 等格式</span>
+                </div>
               </div>
             </div>
           </div>
@@ -398,9 +415,9 @@
               </el-button>
             </div>
             <div class="ocr-results">
-              <div 
-                v-for="(result, idx) in ocrResults" 
-                :key="idx" 
+              <div
+                v-for="(result, idx) in ocrResults"
+                :key="idx"
                 :class="['ocr-result-item', { 'success': result.success, 'failed': !result.success }]"
               >
                 <div class="result-header">
@@ -491,10 +508,10 @@
           <el-button size="large" @click="templateDialogVisible = false">
             取消
           </el-button>
-          <el-button 
-            type="primary" 
+          <el-button
+            type="primary"
             size="large"
-            :disabled="!templateContent" 
+            :disabled="!templateContent"
             @click="applyTemplate"
           >
             <el-icon class="me-2"><Promotion /></el-icon>
@@ -528,7 +545,7 @@ import {
 } from '@element-plus/icons-vue';
 import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
-import { LLM_BASE_URL, WRITER_BASE_URL } from '@/config/api/api';
+import { LLM_BASE_URL, WRITER_BASE_URL, OCR_BASE_URL } from '@/config/api/api';
 import ThreeBackground from '@/components/ThreeBackground.vue';
 
 interface ChatMessage {
@@ -586,6 +603,8 @@ export default defineComponent({
 
     const ocrUploading = ref<boolean>(false);
     const ocrResults = ref<Array<{ filename: string; text: string; success: boolean }>>([]);
+    const ocrType = ref<string>('universal');  // OCR识别类型
+    const ocrBase = OCR_BASE_URL || 'http://localhost:8080';  // OCR服务地址
 
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
@@ -821,7 +840,7 @@ export default defineComponent({
       }
     };
 
-    // OCR 图片识别上传
+    // OCR 图片识别上传 - 调用独立部署的OCR服务
     const uploadOcrImages = async () => {
       const input = ocrFileInputRef.value;
       if (!input || !input.files || input.files.length === 0) {
@@ -829,44 +848,69 @@ export default defineComponent({
         return;
       }
 
-      const fd = new FormData();
-      Array.from(input.files).forEach((f) => fd.append('files', f));
-
       ocrUploading.value = true;
+      const results: Array<{ filename: string; text: string; success: boolean }> = [];
+
       try {
-        const resp = await fetch(`${writerBase}/writer/ocr`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: fd,
-        });
-        const data = await resp.json();
-        if (!data.ok) {
-          throw new Error(data.error || 'OCR 识别失败');
+        // 逐个调用OCR服务识别每张图片
+        const files = Array.from(input.files);
+        for (const file of files) {
+          try {
+            // 创建FormData，OCR服务需要 image_bytes 参数
+            const fd = new FormData();
+            fd.append('image_bytes', file);
+
+            // 调用OCR服务的 /online/ 接口
+            const resp = await fetch(`${ocrBase}/online/?ocr_type=${ocrType.value}`, {
+              method: 'POST',
+              body: fd,
+            });
+
+            const data = await resp.json();
+
+            if (data.status === 200 && data.result) {
+              // 识别成功
+              let resultText = '';
+              if (typeof data.result === 'string') {
+                resultText = data.result;
+              } else if (typeof data.result === 'object') {
+                // 身份证识别返回对象
+                resultText = Object.entries(data.result)
+                  .filter(([_, v]) => v !== null)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join('\n');
+              }
+              results.push({
+                filename: file.name,
+                text: resultText,
+                success: true,
+              });
+            } else {
+              // 识别失败
+              results.push({
+                filename: file.name,
+                text: data.detail || '识别失败',
+                success: false,
+              });
+            }
+          } catch (fileErr: any) {
+            results.push({
+              filename: file.name,
+              text: fileErr?.message || '请求失败',
+              success: false,
+            });
+          }
         }
-        
+
         // 保存识别结果
-        const results = data.results || [];
         ocrResults.value = results;
-        
-        // 检查是否有OCR服务错误
-        const failedResults = results.filter((r: any) => !r.success);
-        const serviceErrors = failedResults
-          .filter((r: any) => r.error && (r.error.includes('服务') || r.error.includes('超时')))
-          .map((r: any) => r.error);
-        
-        // 如果有服务层错误，优先显示
-        if (serviceErrors.length > 0) {
-          ElMessage.error(serviceErrors[0]);
-          if (input) input.value = '';
-          return;
-        }
-        
+
         // 成功识别的文本合并到提示框
-        const successTexts = results
-          .filter((r: any) => r.success && r.text)
-          .map((r: any) => `【${r.filename}】\n${r.text}`)
+        const successResults = results.filter((r) => r.success && r.text);
+        const successTexts = successResults
+          .map((r) => `【${r.filename}】\n${r.text}`)
           .join('\n\n');
-        
+
         if (successTexts) {
           // 将 OCR 结果追加到输入框
           if (prompt.value) {
@@ -874,17 +918,16 @@ export default defineComponent({
           } else {
             prompt.value = '--- OCR 识别内容 ---\n' + successTexts;
           }
-          ElMessage.success(`成功识别 ${data.success_count || 0} 张图片`);
+          ElMessage.success(`成功识别 ${successResults.length} 张图片`);
         } else {
-          // 检查是否有其他错误
-          const otherErrors = failedResults.map((r: any) => r.error).filter(Boolean);
-          if (otherErrors.length > 0) {
-            ElMessage.warning(`识别失败：${otherErrors[0]}`);
+          const failedResults = results.filter((r) => !r.success);
+          if (failedResults.length > 0) {
+            ElMessage.warning(`识别失败：${failedResults[0].text}`);
           } else {
             ElMessage.warning('未能从图片中识别出文字');
           }
         }
-        
+
         if (input) input.value = '';
       } catch (e: any) {
         ElMessage.error(`OCR 识别失败：${e?.message || String(e)}`);
@@ -965,8 +1008,8 @@ export default defineComponent({
     const sendMessage = async () => {
       const text = prompt.value.trim();
       if (!text) {
-        const warningMsg = writeMode.value === 'complete' 
-          ? '请输入需要补全的文本内容' 
+        const warningMsg = writeMode.value === 'complete'
+          ? '请输入需要补全的文本内容'
           : '请输入写作意图 / 主题 / 大纲';
         ElMessage.warning(warningMsg);
         return;
@@ -1041,9 +1084,9 @@ export default defineComponent({
           }
           const decoder = new TextDecoder('utf-8');
           let sources: any[] = [];
-          
+
           const aiMsgIndex = messages.value.length - 1;
-          
+
           // eslint-disable-next-line no-constant-condition
           while (true) {
             const { done, value } = await reader.read();
@@ -1055,7 +1098,7 @@ export default defineComponent({
               .forEach((ln) => {
                 const s = ln.replace(/^data:\s?/, '').trim();
                 if (!s) return;
-                
+
                 if (s.startsWith('SOURCE:')) {
                   // 处理来源映射
                   try {
@@ -1084,7 +1127,7 @@ export default defineComponent({
               });
             scrollToBottom();
           }
-          
+
           // 流式传输完成后，保存来源信息到消息对象
           if (sources.length > 0) {
             aiMsg.sources = sources;
@@ -1114,15 +1157,15 @@ export default defineComponent({
 
     const formatMessage = (text: string): string => {
       if (!text) return '';
-      
+
       // 1. 先将 <NEWLINE> 标记转换为真实换行符（兜底处理）
       let processed = text.replace(/<NEWLINE>/g, '\n');
-      
+
       // 2. 移除 <think>...</think> 标签（思考过程不显示在正文中）
       processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
       // 移除可能残留的单独标签
       processed = processed.replace(/<\/?think>/gi, '');
-      
+
       // 3. 转义 HTML 特殊字符，防止 XSS
       const escaped = processed
         .replace(/&/g, '&amp;')
@@ -1130,13 +1173,13 @@ export default defineComponent({
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-      
+
       // 4. 按行处理，渲染 Markdown 标题和加粗/斜体
       const lines = escaped.split('\n');
       const formattedLines = lines.map((line) => {
         // 跳过空行
         if (!line.trim()) return '';
-        
+
         // 匹配标题：# ~ ######（允许 # 后有或无空格）
         const headingMatch = line.match(/^(#{1,6})\s*(.+)$/);
         if (headingMatch) {
@@ -1144,18 +1187,18 @@ export default defineComponent({
           const content = headingMatch[2];
           return `<h${level} class="md-heading md-h${level}">${content}</h${level}>`;
         }
-        
+
         // 处理加粗：**text** 或 __text__
         let result = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         result = result.replace(/__(.+?)__/g, '<strong>$1</strong>');
-        
+
         // 处理斜体：*text* 或 _text_（注意避免与加粗冲突）
         result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
         result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-        
+
         return result;
       });
-      
+
       // 5. 过滤空行并用 <br> 连接
       return formattedLines.filter(line => line !== '').join('<br>');
     };
@@ -1369,6 +1412,7 @@ export default defineComponent({
       ocrFileInputRef,
       ocrUploading,
       ocrResults,
+      ocrType,
       uploadOcrImages,
       clearOcrResults,
       thinkingMode,
@@ -2322,7 +2366,7 @@ export default defineComponent({
   left: 0;
   right: 0;
   bottom: 0;
-  background: 
+  background:
     repeating-linear-gradient(
       0deg,
       rgba(102, 126, 234, 0.03) 0px,
@@ -2434,6 +2478,22 @@ export default defineComponent({
 
 .config-section:hover::after {
   opacity: 0.5;
+}
+
+/* ========== OCR 样式 ========== */
+.ocr-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.ocr-type-select {
+  flex-shrink: 0;
+}
+
+.ocr-btn {
+  flex: 1;
+  min-width: 120px;
 }
 
 /* ========== 响应式设计 ========== */
