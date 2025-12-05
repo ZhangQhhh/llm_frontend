@@ -1092,15 +1092,15 @@ export default defineComponent({
   border: 1px solid rgba(96, 165, 250, 0.3);
   padding: 1rem 2rem;
   font-size: 24px;
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   position: relative;
   overflow: hidden;
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
   transition: all 0.3s ease;
   white-space: nowrap;
   text-align: center;
-  min-width: 160px;
-  max-width: 200px;
+  min-width: 180px;
+  max-width: 240px;
 }
 
 .btn-module::before {
