@@ -34,6 +34,9 @@
         <h1 class="hero-title">
           <span class="title-line gradient-text">皖美智脑</span>
         </h1>
+        <p class="hero-subtitle">
+          <span class="typing-text">基于大语言模型的专业知识库，为边防检查工作提供智能问答服务</span>
+        </p>
         <!-- <div class="hero-decorations">
           <div class="decoration-item">
             <div class="decoration-icon">
@@ -653,10 +656,10 @@ export default defineComponent({
 }
 
 .hero-content {
-  max-width: 1200px;
+  max-width: 100%;
   text-align: center;
   position: relative;
-  z-index: 2;
+  z-index: 10;
   transition: all 0.3s ease-out;
 }
 
@@ -719,8 +722,9 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  font-family: 'ZhaoPai', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: 8px;
+  white-space: nowrap;
 }
 
 .title-line {
@@ -753,12 +757,12 @@ export default defineComponent({
 }
 
 .hero-subtitle {
-  font-size: 36px;
+  font-size: 30px;
   color: rgba(255, 255, 255, 0.8);
   margin: 1.5rem 0 2.5rem 0;
   line-height: 1.8;
-  font-family: 'ZhaoPai', sans-serif;
-  letter-spacing: 2px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  letter-spacing: 0px;
   position: relative;
   display: flex;
   justify-content: center;
@@ -772,11 +776,12 @@ export default defineComponent({
   white-space: nowrap;
   animation: typing 5s steps(35, end) forwards, blink-caret 0.75s step-end infinite;
   width: 0;
+  max-width: fit-content;
 }
 
 @keyframes typing {
   from { width: 0; }
-  to { width: 2000px; }
+  to { width: 100%; }
 }
 
 @keyframes blink-caret {
