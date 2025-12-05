@@ -282,13 +282,13 @@
     </section> -->
 
     <!-- Footer -->
-    <footer class="footer">
+    <!-- <footer class="footer">
       <div class="container">
         <div class="footer-content">
           <div class="footer-section">
             <h4>皖美智脑</h4>
             <p>为边防检查工作提供专业智能支持</p>
-          </div>
+          </div> -->
           <!-- <div class="footer-section"> -->
             <!-- <h4>快速链接</h4> -->
             <!-- <ul>
@@ -299,13 +299,13 @@
               <li><router-link to="/login">登录</router-link></li> -->
             <!-- </ul> -->
           <!-- </div> -->
-          <div class="footer-section">
+          <!-- <div class="footer-section">
             <h4>关于</h4>
             <p>© 2025 边检知识问答系统<br>保留所有权利</p>
           </div>
         </div>
       </div>
-    </footer>
+    </footer> -->
   </div>
 </template>
 
@@ -519,6 +519,7 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
+  padding-bottom: 12rem;
   position: relative;
   overflow: hidden;
 }
@@ -1089,8 +1090,8 @@ export default defineComponent({
   backdrop-filter: blur(20px);
   color: white;
   border: 1px solid rgba(96, 165, 250, 0.3);
-  padding: 0.75rem 1.5rem;
-  font-size: 20px;
+  padding: 1rem 2rem;
+  font-size: 24px;
   font-family: 'ZhaoPai', sans-serif;
   position: relative;
   overflow: hidden;
@@ -1098,8 +1099,8 @@ export default defineComponent({
   transition: all 0.3s ease;
   white-space: nowrap;
   text-align: center;
-  min-width: 120px;
-  max-width: 160px;
+  min-width: 160px;
+  max-width: 200px;
 }
 
 .btn-module::before {
@@ -1127,7 +1128,7 @@ export default defineComponent({
 }
 
 .module-icon {
-  font-size: 24px;
+  font-size: 40px;
   color: #60a5fa;
 }
 
