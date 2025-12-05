@@ -208,22 +208,18 @@
             <div class="col-lg-6 col-12">
               <div class="config-section">
                 <label class="config-label">
-                  <el-icon><ChatDotRound /></el-icon>
+                  <el-icon><Cpu /></el-icon>
                   <span>AI 模型</span>
                 </label>
                 <el-select
                   v-model="selectedModel"
-                  filterable
-                  clearable
-                  placeholder="自动选择最优模型"
+                  placeholder="选择模型"
                   class="w-100 config-select"
                 >
-                  <el-option
-                    v-for="m in modelOptions"
-                    :key="m"
-                    :label="m"
-                    :value="m"
-                  />
+                  <template #prefix><el-icon><Cpu /></el-icon></template>
+                  <el-option label="Qwen (通用)" value="qwen3-32b" />
+                  <el-option label="Qwen (增强)" value="qwen2025" />
+                  <el-option label="DeepSeek-R1" value="deepseek" />
                 </el-select>
               </div>
             </div>
@@ -542,6 +538,7 @@ import {
   MagicStick,
   Download,
   Picture,
+  Cpu,
 } from '@element-plus/icons-vue';
 import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -580,6 +577,7 @@ export default defineComponent({
     MagicStick,
     Download,
     Picture,
+    Cpu,
     ThreeBackground,
   },
   setup() {
@@ -604,12 +602,11 @@ export default defineComponent({
     const ocrUploading = ref<boolean>(false);
     const ocrResults = ref<Array<{ filename: string; text: string; success: boolean }>>([]);
     const ocrType = ref<string>('universal');  // OCR识别类型
-    const ocrBase = OCR_BASE_URL || 'http://localhost:8080';  // OCR服务地址
+    const ocrBase = OCR_BASE_URL || 'http://localhost:9000';  // OCR服务地址
 
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
-    const modelOptions = ref<string[]>([]);
-    const selectedModel = ref<string>('');
+    const selectedModel = ref<string>('qwen3-32b');
 
     const templateFile = ref<string>('');
     const templateDialogVisible = ref<boolean>(false);
@@ -687,27 +684,6 @@ export default defineComponent({
         }
       } catch {
         // 静默
-      }
-    };
-
-    const loadModels = async () => {
-      try {
-        const resp = await fetch(`${writerBase}/writer/models`, {
-          method: 'GET',
-          headers: getAuthHeaders(),
-        });
-        const data = await resp.json();
-        if (data.ok) {
-          const models: string[] = data.models || [];
-          modelOptions.value = models;
-          if (data.default && models.includes(data.default)) {
-            selectedModel.value = data.default;
-          } else if (models.length) {
-            selectedModel.value = models[0];
-          }
-        }
-      } catch {
-        // 模型列表失败不阻塞主流程
       }
     };
 
@@ -1394,7 +1370,6 @@ export default defineComponent({
     onMounted(async () => {
       await ensureSession();
       await refreshKbList();
-      await loadModels();
     });
 
     return {
@@ -1419,7 +1394,6 @@ export default defineComponent({
       writeMode,
       inputPlaceholder,
       sendButtonText,
-      modelOptions,
       selectedModel,
       templateFile,
       templateDialogVisible,
