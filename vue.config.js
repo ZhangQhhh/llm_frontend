@@ -22,6 +22,17 @@ module.exports = defineConfig({
         target: 'http://127.0.0.1:3000',
         changeOrigin: true
       }
+    },
+    client: {
+      overlay: {
+        // 忽略 ResizeObserver 错误，这是浏览器的无害警告
+        runtimeErrors: (error) => {
+          if (error.message.includes('ResizeObserver')) {
+            return false
+          }
+          return true
+        }
+      }
     }
   }
 })

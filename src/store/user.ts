@@ -1,6 +1,7 @@
 import router from "@/router";
 import { API_ENDPOINTS } from "@/config/api/api";
 import http from "@/config/api/http";
+import { stopSessionWatch } from "@/utils/sessionWatcher";
 import { Module, ActionContext } from "vuex"; // [1] 导入 Vuex 类型
 import { UserRole, hasPermission, isAdmin, isSuperAdmin } from "@/config/permissions";
 
@@ -188,6 +189,8 @@ export default {
       // 🔥 修复：清除LLM服务的token和会话数据
       localStorage.removeItem("multi_turn_chat_jwt");
       localStorage.removeItem("multi_turn_chat_session_id");
+      
+      stopSessionWatch();
       
       context.commit("logout");
       router.push({ name: 'home' });

@@ -240,7 +240,8 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Search, ChatDotRound, Reading, Document, Phone, DataLine } from '@element-plus/icons-vue';
 import http from '@/config/api/http';
-import { API_ENDPOINTS } from '@/config/api/api';
+import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
+import { initSessionWatch } from '@/utils/userStatusChecker';
 
 export default defineComponent({
   name: 'LoginView',
@@ -302,6 +303,10 @@ export default defineComponent({
           // 获取用户信息
           store.dispatch('getinfo', {
             success: () => {
+              const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+              if (token) {
+                initSessionWatch(token, (store.state as any).user?.id);
+              }
               // 登录成功后重定向
               const redirect = router.currentRoute.value.query.redirect as string;
               router.push(redirect || { name: 'home' });

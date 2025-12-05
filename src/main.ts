@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import store from './store'
+import { initSessionWatch } from './utils/userStatusChecker'
 
 // 1. 导入 Element Plus 库
 import ElementPlus from 'element-plus'
@@ -25,6 +26,7 @@ if (token) {
   store.dispatch('getinfo', {
     success: () => {
       console.log('用户信息已恢复')
+      initSessionWatch(token, (store.state as any).user?.id)
     },
     error: () => {
       // token 可能已过期，清除它
