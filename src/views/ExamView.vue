@@ -1079,7 +1079,7 @@ export default defineComponent({
   --card: #ffffff;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --ink: #111827;
+  --ink: #e5e7eb;
   --pri: #2b7cff;
   --ok: #10b981;
   --warn: #f59e0b;
@@ -1184,7 +1184,7 @@ export default defineComponent({
 
 .user-name {
   font-size: 14px;
-  color: #4b5563;
+  color: #e5e7eb;
 }
 
 /* 布局 */
@@ -1335,7 +1335,7 @@ export default defineComponent({
   align-items: center;
   gap: 6px;
   font-size: 14px;
-  color: #6b7280;
+  color: #cbd5e1;
 }
 
 .empty-hint {
@@ -1481,7 +1481,7 @@ export default defineComponent({
   margin: 0 0 20px;
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1616,13 +1616,13 @@ export default defineComponent({
 
 .analysis {
   white-space: pre-wrap;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-  border: 2px dashed rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border: 2px dashed rgba(102, 126, 234, 0.4);
   padding: 16px;
   border-radius: 12px;
   margin-top: 12px;
   font-size: 14px;
-  color: #4b5563;
+  color: #cbd5e1;
   line-height: 1.8;
   position: relative;
 }
@@ -1647,7 +1647,7 @@ export default defineComponent({
   margin: 0 0 20px;
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1717,7 +1717,7 @@ export default defineComponent({
 .review-suggestion h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   margin: 0 0 16px;
 }
 
@@ -1749,7 +1749,7 @@ export default defineComponent({
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   font-weight: 600;
   font-size: 14px;
-  color: #4b5563;
+  color: #e5e7eb;
 }
 
 .kp-row.kp-danger {
@@ -1762,7 +1762,7 @@ export default defineComponent({
 
 .kp-name {
   font-size: 14px;
-  color: #1f2937;
+  color: #e5e7eb;
   font-weight: 500;
 }
 
@@ -1808,7 +1808,7 @@ export default defineComponent({
 .review-suggestion p {
   margin: 0 0 16px;
   font-size: 14px;
-  color: #4b5563;
+  color: #cbd5e1;
 }
 
 .suggestion-tags {

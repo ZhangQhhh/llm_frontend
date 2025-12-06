@@ -252,6 +252,12 @@
                   <div class="title">
                     <el-icon><Document /></el-icon> 选项验证结果
                   </div>
+                  <!-- 归纳中状态提示 -->
+                  <div class="actions" v-if="summarizing">
+                    <el-tag type="info" effect="plain">
+                      <el-icon class="is-loading"><Loading /></el-icon> 正在归纳答案...
+                    </el-tag>
+                  </div>
                 </div>
                 <el-tabs v-model="activeTab" type="card" class="mcq-tabs">
                   <el-tab-pane v-for="(result, index) in mcqResults" :key="index" :label="result.optionLabel" :name="String(index)">
@@ -279,6 +285,25 @@
                     </div>
                   </el-tab-pane>
                 </el-tabs>
+
+                <!-- 答案总结结果显示区域 -->
+                <transition name="el-fade-in">
+                  <div v-if="summaryResult" class="summary-result-section">
+                    <el-divider content-position="left">
+                      <el-icon><TrophyBase /></el-icon> 答案汇总
+                    </el-divider>
+                    <div class="summary-content">
+                      <div class="summary-answer">
+                        <span class="label">抽取的最终答案：</span>
+                        <span class="answer-text">{{ summaryResult.final_answer || '无法确定' }}</span>
+                      </div>
+                      <div v-if="summaryResult.justification" class="summary-justification">
+                        <span class="label">依据：</span>
+                        <span class="justification-text">{{ summaryResult.justification }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </transition>
               </el-card>
             </transition>
 
@@ -470,7 +495,7 @@ import { ElMessage } from 'element-plus';
 import {
    Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-    Sunny, Setting
+    Sunny, Setting, TrophyBase
   } from '@element-plus/icons-vue';
 import {
   sendStreamChatRequest,
@@ -504,7 +529,7 @@ export default defineComponent({
   components: {
      Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-    Sunny, Setting
+    Sunny, Setting, TrophyBase
   },
   setup() {
     const store = useStore();
@@ -543,6 +568,25 @@ export default defineComponent({
     const mcqStrategy = ref('auto');  // 策略选择：auto(自动判断)、SIMPLE_LOOKUP、COMPLEX_VALIDATION
     const mcqResults = ref<any[]>([]);  // 存储每个选项的结果
     const activeTab = ref('0');  // 当前激活的标签页
+    const summarizing = ref(false);  // 答案归纳中的loading状态
+    const summaryResult = ref<{ final_answer: string; justification: string; summary_block: string } | null>(null);  // 答案归纳结果
+    const lastMcqData = ref<{ stem: string; options: { [key: string]: string } } | null>(null);  // 保存最后一次的选择题数据
+
+    // 计算属性：判断所有选项是否都已完成验证
+    const allOptionsCompleted = computed(() => {
+      if (mcqResults.value.length === 0) return false;
+      return mcqResults.value.every((result: any) => !result.loading && result.answer);
+    });
+
+    // 监听所有选项完成后自动执行答案归纳
+    watch(allOptionsCompleted, (completed) => {
+      if (completed && !summarizing.value && !summaryResult.value) {
+        // 延迟执行，确保 UI 更新完成
+        setTimeout(() => {
+          handleSummarizeAnswerAuto();
+        }, 500);
+      }
+    });
 
     // 监听选择题模式切换
     const handleMcqModeChange = (val: boolean) => {
@@ -551,6 +595,8 @@ export default defineComponent({
         mcqResults.value = [];
         activeTab.value = '0';
         mcqStrategy.value = 'auto';  // 重置策略为自动判断
+        summaryResult.value = null;  // 清空答案归纳结果
+        lastMcqData.value = null;  // 清空保存的选择题数据
       }
     };
 
@@ -614,25 +660,6 @@ export default defineComponent({
         }
     };
 
-    // 解析选择题格式
-    const parseMCQ = (text: string): { stem: string; options: { [key: string]: string } } | null => {
-      const lines = text.trim().split('\n').filter(line => line.trim());
-      if (lines.length < 2) return null;
-
-      const stem = lines[0].trim();
-      const options: { [key: string]: string } = {};
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        const match = line.match(/^([A-D])[.\uff0e、\s]+(.+)$/);
-        if (match) {
-          options[match[1]] = match[2].trim();
-        }
-      }
-
-      return Object.keys(options).length > 0 ? { stem, options } : null;
-    };
-
     // 调用策略判断API
     const callStrategyAPI = async (stem: string, options: { [key: string]: string }): Promise<string> => {
       try {
@@ -691,6 +718,8 @@ export default defineComponent({
       } else if (strategy === 'COMPLEX_VALIDATION') {
         // COMPLEX_VALIDATION策略: 分别处理每个选项
         mcqResults.value = [];
+        summaryResult.value = null;  // 清空之前的答案归纳结果
+        lastMcqData.value = mcqData;  // 保存当前选择题数据，供答案归纳使用
         
         // 设置全局loading状态以显示结果区域
         loading.value = true;
@@ -815,14 +844,60 @@ export default defineComponent({
 
     // 发送问题
     const handleSubmit = async () => {
-      // 如果开启了选择题模式，尝试解析选择题
+      // 如果开启了选择题模式，直接调用大模型格式化
       if (mcqMode.value) {
-        const mcqData = parseMCQ(question.value);
+        if (!question.value.trim()) {
+          ElMessage.warning('请输入选择题内容');
+          return;
+        }
+        
+        loading.value = true;
+        answer.value = '';
+        thinking.value = '正在识别并格式化选择题内容...';
+        
+        let mcqData = null;
+        
+        try {
+          const formatResponse = await fetch(API_ENDPOINTS.KNOWLEDGE.MCQ_FORMAT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${store.state.user.token}`
+            },
+            body: JSON.stringify({
+              raw_input: question.value,
+              model_id: modelId.value
+            })
+          });
+          
+          const formatResult = await formatResponse.json();
+          
+          if (formatResult.ok && formatResult.data) {
+            // 格式化成功，使用格式化后的数据
+            mcqData = {
+              stem: formatResult.data.stem,
+              options: formatResult.data.options
+            };
+            // 更新输入框为格式化后的内容
+            question.value = formatResult.data.formatted_text;
+            thinking.value = '';
+          } else {
+            // 格式化失败
+            thinking.value = '';
+            loading.value = false;
+            ElMessage.warning(formatResult.msg || '输入内容不是有效的选择题，请检查输入');
+            return;
+          }
+        } catch (error: any) {
+          console.error('格式化选择题失败:', error);
+          thinking.value = '';
+          loading.value = false;
+          ElMessage.error('格式化选择题失败，请检查输入格式');
+          return;
+        }
+        
         if (mcqData) {
           await handleMCQSubmit(mcqData);
-          return;
-        } else {
-          ElMessage.warning('输入格式不符合选择题格式，请按照标准格式输入');
           return;
         }
       }
@@ -1054,11 +1129,69 @@ export default defineComponent({
       window.removeEventListener('touchmove', handleUserScroll);
     });
 
+    // 答案归纳函数（自动执行版本，不显示提示）
+    const handleSummarizeAnswerAuto = async () => {
+      if (!lastMcqData.value || mcqResults.value.length === 0) {
+        return;
+      }
+
+      summarizing.value = true;
+      summaryResult.value = null;
+
+      try {
+        // 构建 per_option 数据
+        const perOption = mcqResults.value.map((result: any) => {
+          // 从 optionLabel 提取选项字母 (e.g., "选项 A" -> "A")
+          const labelMatch = result.optionLabel.match(/选项\s*([A-D])/);
+          const label = labelMatch ? labelMatch[1] : result.optionLabel;
+          return {
+            label: label,
+            explain: result.answer || ''
+          };
+        });
+
+        const response = await fetch(API_ENDPOINTS.KNOWLEDGE.MCQ_SUMMARIZE, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${store.state.user.token}`
+          },
+          body: JSON.stringify({
+            stem: lastMcqData.value.stem,
+            options: lastMcqData.value.options,
+            per_option: perOption,
+            model_id: modelId.value
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('答案归纳请求失败');
+        }
+
+        const data = await response.json();
+        if (data.ok) {
+          summaryResult.value = {
+            final_answer: data.data.final_answer || '',
+            justification: data.data.justification || '',
+            summary_block: data.data.summary_block || ''
+          };
+        } else {
+          throw new Error(data.msg || '答案归纳失败');
+        }
+      } catch (error: any) {
+        console.error('答案归纳失败:', error);
+      } finally {
+        summarizing.value = false;
+      }
+    };
+
     return {
       question, answer, thinking, references, filteredReferences, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
+      // 答案归纳相关
+      summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
       renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange
     };
@@ -2744,5 +2877,89 @@ export default defineComponent({
 
 .brand-text h1 {
   animation: aiBreath 3s ease-in-out infinite;
+}
+
+/* ========== 答案归纳结果样式 ========== */
+.summary-result-section {
+  padding: 1rem 1.5rem 1.5rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(0, 180, 255, 0.03) 100%);
+  border-top: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.summary-result-section :deep(.el-divider) {
+  margin: 0 0 1rem 0;
+}
+
+.summary-result-section :deep(.el-divider__text) {
+  background: transparent;
+  color: var(--ai-success);
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-content {
+  padding: 1rem;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.summary-answer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.summary-answer .label {
+  color: var(--ai-text-dim);
+  font-size: 0.95rem;
+}
+
+.summary-answer .answer-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ai-success);
+  background: linear-gradient(135deg, #10b981 0%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.summary-justification {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.summary-justification .label {
+  color: var(--ai-text-dim);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.summary-justification .justification-text {
+  color: var(--ai-text);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* 选项验证结果卡片头部样式调整 */
+.mcq-results-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mcq-results-card .card-header .actions {
+  display: flex;
+  gap: 0.5rem;
 }
 </style>
