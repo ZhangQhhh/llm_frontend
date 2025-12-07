@@ -2143,9 +2143,10 @@ export default defineComponent({
   margin-top: 2rem;
   margin-bottom: 2rem;
   width: 100%;
-  min-width: 100%;
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .mcq-results-card .card-header {
@@ -2199,6 +2200,19 @@ export default defineComponent({
   width: 100%;
   box-sizing: border-box;
   overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* 确保代码块也能换行而非撑宽 */
+.tab-content pre,
+.tab-content code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tab-content table {
+  table-layout: fixed;
+  width: 100%;
   word-break: break-word;
 }
 

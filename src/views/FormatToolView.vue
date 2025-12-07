@@ -269,9 +269,27 @@ const handleFormat = async () => {
   try {
     const fd = new FormData();
     fd.append('file', selectedFile.value);
+    fd.append('model_id', 'qwen3-32b');  // 使用 qwen3-32b 模型进行格式化
     
     const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
-    const j = await r.json();
+    
+    // 检查网关超时等HTTP错误
+    if (!r.ok) {
+      if (r.status === 504 || r.status === 502) {
+        throw new Error('LLM处理超时，请尝试上传较小的文件或稍后重试');
+      } else if (r.status === 500) {
+        throw new Error('服务器内部错误，请稍后重试');
+      }
+      throw new Error(`服务器错误（HTTP ${r.status}）`);
+    }
+    
+    // 尝试解析JSON，捕获HTML响应的情况
+    let j;
+    try {
+      j = await r.json();
+    } catch (parseErr) {
+      throw new Error('LLM服务响应异常，可能正在处理中或已超时，请稍后重试');
+    }
     
     if (!j || j.ok === false) {
       throw new Error(j?.msg || `格式化失败（HTTP ${r.status})`);

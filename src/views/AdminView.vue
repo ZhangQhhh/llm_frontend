@@ -170,6 +170,24 @@
                   <el-input-number v-model="topN" :min="1" :step="1" size="default" style="width:90px" controls-position="right" />
                   <el-checkbox v-model="thinking" size="default">思考模式</el-checkbox>
                   <el-checkbox v-model="insertBlock" size="default">精准检索</el-checkbox>
+                  <el-divider direction="vertical" />
+                  <el-popover placement="bottom" :width="200" trigger="click">
+                    <template #reference>
+                      <el-button size="default" plain>
+                        解析目标 ({{ parseTargetStatuses.length }})
+                        <el-icon class="el-icon--right"><Filter /></el-icon>
+                      </el-button>
+                    </template>
+                    <div style="padding: 8px 0;">
+                      <div style="font-size: 12px; color: #909399; margin-bottom: 8px;">选择要解析的题目状态：</div>
+                      <el-checkbox-group v-model="parseTargetStatuses" style="display: flex; flex-direction: column; gap: 8px;">
+                        <el-checkbox label="none">无解析</el-checkbox>
+                        <el-checkbox label="rejected">已驳回</el-checkbox>
+                        <el-checkbox label="abnormal">异常</el-checkbox>
+                        <el-checkbox label="draft">草稿</el-checkbox>
+                      </el-checkbox-group>
+                    </div>
+                  </el-popover>
                 </div>
                 <div v-if="generateMessage || asyncMsg" class="toolbar-message">
                   <el-icon class="message-icon"><InfoFilled /></el-icon>
@@ -951,6 +969,8 @@ export default defineComponent({
     const uploadMessage = ref('')
     const generating = ref(false)
     const generateMessage = ref('')
+    // 解析目标状态选择（默认选中：无解析、已驳回、异常）
+    const parseTargetStatuses = ref<string[]>(['none', 'rejected', 'abnormal'])
 
     const pollingInterval = ref<number | null>(null)
     const questions = ref<Question[]>([])
@@ -1441,9 +1461,20 @@ export default defineComponent({
 
 
     const explainBatchAsync = async () => {
+      // 检查是否选择了解析目标
+      if (parseTargetStatuses.value.length === 0) {
+        asyncMsg.value = '请至少选择一个解析目标状态'
+        return
+      }
       asyncExplaining.value = true; asyncMsg.value = '创建任务中…'
       try{
-        const req:any = { model_id: llmModelId.value, thinking: thinking.value, rerank_top_n: topN.value, use_insert_block: insertBlock.value }
+        const req:any = { 
+          model_id: llmModelId.value, 
+          thinking: thinking.value, 
+          rerank_top_n: topN.value, 
+          use_insert_block: insertBlock.value,
+          target_statuses: parseTargetStatuses.value  // 传递选中的目标状态
+        }
         const r = await fetch(`${MCQ_BASE_URL}/explain_batch_async`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req) })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '创建任务失败')
         currentTaskId.value = String(j.task_id)
@@ -1591,11 +1622,18 @@ export default defineComponent({
       generateMessage.value = '正在生成解析...'
 
       try {
+        // 根据选中的目标状态筛选题目
+        const selectedStatuses = parseTargetStatuses.value
+        if (selectedStatuses.length === 0) {
+          generateMessage.value = '请至少选择一个解析目标状态'
+          generating.value = false
+          return
+        }
         const targets = (questions.value || []).filter(
-          q => (q.status || 'none') !== 'approved'
+          q => selectedStatuses.includes(q.status || 'none')
         )
         if (targets.length === 0) {
-          generateMessage.value = '无可解析题目'
+          generateMessage.value = `无符合条件的题目（目标状态：${selectedStatuses.join(', ')}）`
           generating.value = false
           return
         }
@@ -1621,10 +1659,6 @@ export default defineComponent({
               ),
             })),
             thinking: false,
-            // 不写也可以，用默认模型；写上更显式
-            // model_id: llmModelId.value,
-            // rerank_top_n: topN.value,
-            // use_insert_block: insertBlock.value,
           }
 
           const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
@@ -1633,7 +1667,6 @@ export default defineComponent({
             body: JSON.stringify(payload),
           })
 
-          // 先拿原始文本，再尝试 JSON.parse，这样 HTML 错误页不会触发 "Unexpected token <" 这种糊涂报错
           const raw = await resp.text()
           let data: any
           try {
@@ -2854,7 +2887,7 @@ export default defineComponent({
 
     return {
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
-      changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage,
+      changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
       questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage,
       // 试卷题目选择相关
