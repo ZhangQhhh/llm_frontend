@@ -667,6 +667,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-weight: 600;">已生成试卷</span>
                   <div>
+                    <input ref="paperUploadRef" type="file" accept=".docx,.txt" style="display:none" @change="onPickPaperFile" />
+                    <el-button size="small" type="success" @click="triggerPickPaperFile" :icon="Upload">上传试卷</el-button>
                     <el-button size="small" @click="loadPaperList" :loading="loadingPaperList" :icon="Refresh">刷新</el-button>
                     <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份</span>
                   </div>
@@ -683,6 +685,94 @@
                 </el-table-column>
               </el-table>
             </el-card>
+            
+            <!-- 上传试卷预览编辑对话框 -->
+            <el-dialog
+              v-model="paperPreviewVisible"
+              title="上传试卷预览"
+              width="900px"
+              :close-on-click-modal="false"
+            >
+              <div style="margin-bottom: 16px;">
+                <el-form :inline="true">
+                  <el-form-item label="试卷标题">
+                    <el-input v-model="uploadedPaperTitle" placeholder="请输入试卷标题" style="width: 300px" />
+                  </el-form-item>
+                  <el-form-item>
+                    <el-tag type="info">共 {{ uploadedPaperItems.length }} 题</el-tag>
+                    <el-tag v-if="paperParseIssueCount > 0" type="danger" style="margin-left: 8px;">
+                      {{ paperParseIssueCount }} 题存在问题
+                    </el-tag>
+                  </el-form-item>
+                </el-form>
+              </div>
+              
+              <div style="max-height: 500px; overflow-y: auto;">
+                <div
+                  v-for="(item, idx) in uploadedPaperItems"
+                  :key="idx"
+                  class="paper-preview-item"
+                  :class="{ 'has-issue': hasParseIssue(item) }"
+                >
+                  <div class="preview-header">
+                    <span class="preview-num">{{ idx + 1 }}.</span>
+                    <el-tag v-if="hasParseIssue(item)" type="danger" size="small">需检查</el-tag>
+                    <el-tag v-if="!item.answer" type="warning" size="small">缺少答案</el-tag>
+                    <el-tag v-if="getOptionsCount(item) < 2" type="warning" size="small">选项不足</el-tag>
+                    <el-button
+                      size="small"
+                      type="primary"
+                      link
+                      @click="toggleEditPaperItem(idx)"
+                      style="margin-left: auto;"
+                    >
+                      {{ editingPaperItemIdx === idx ? '收起' : '编辑' }}
+                    </el-button>
+                  </div>
+                  
+                  <!-- 预览模式 -->
+                  <div v-if="editingPaperItemIdx !== idx" class="preview-content">
+                    <div class="preview-stem">{{ item.stem || '（题干为空）' }}</div>
+                    <div class="preview-options">
+                      <!-- eslint-disable-next-line vue/no-use-v-if-with-v-for -->
+                      <span v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" v-if="item.options && item.options[k]" class="preview-opt">
+                        {{ k }}. {{ item.options[k] }}
+                      </span>
+                    </div>
+                    <div class="preview-answer" :class="{ 'no-answer': !item.answer }">
+                      {{ item.answer ? `答案：${item.answer}` : '⚠️ 缺少答案' }}
+                    </div>
+                  </div>
+                  
+                  <!-- 编辑模式 -->
+                  <div v-else class="preview-edit">
+                    <el-form label-width="60px" size="small">
+                      <el-form-item label="题干">
+                        <el-input v-model="item.stem" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
+                      </el-form-item>
+                      <el-form-item label="选项">
+                        <div style="width: 100%;">
+                          <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
+                            <el-input v-model="item.options[k]" placeholder="留空则不显示此选项" style="flex: 1;" />
+                          </div>
+                        </div>
+                      </el-form-item>
+                      <el-form-item label="答案">
+                        <el-input v-model="item.answer" placeholder="如 A 或 ABC" style="width: 200px;" />
+                      </el-form-item>
+                    </el-form>
+                  </div>
+                </div>
+              </div>
+              
+              <template #footer>
+                <el-button @click="paperPreviewVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveUploadedPaper" :loading="savingUploadedPaper">
+                  保存试卷
+                </el-button>
+              </template>
+            </el-dialog>
           </div>
         </el-tab-pane>
 
@@ -861,6 +951,7 @@ export default defineComponent({
     const uploadMessage = ref('')
     const generating = ref(false)
     const generateMessage = ref('')
+
     const pollingInterval = ref<number | null>(null)
     const questions = ref<Question[]>([])
     const statusFilter = ref<'all'|'none'|'draft'|'approved'|'rejected'|'abnormal'|'processing'>('all')
@@ -1028,6 +1119,14 @@ export default defineComponent({
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
 
+    // 上传试卷相关
+    const paperUploadRef = ref<HTMLInputElement | null>(null)
+    const paperPreviewVisible = ref(false)
+    const uploadedPaperTitle = ref('')
+    const uploadedPaperItems = ref<any[]>([])
+    const editingPaperItemIdx = ref<number | null>(null)
+    const savingUploadedPaper = ref(false)
+
     // 判断题目是否为多选题（答案包含多个字母）
     const isMultiChoice = (q: Question) => {
       const answer = (q.answer || '').toUpperCase().replace(/[^A-H]/g, '')
@@ -1169,6 +1268,7 @@ export default defineComponent({
         ElMessage.warning('请选择 .docx / .txt 文件')
         return
       }
+      
       uploading.value = true
       uploadMessage.value = '识别中…'
 
@@ -1189,14 +1289,109 @@ export default defineComponent({
         const upsertPayload = items.map((x: any) => ({
           stem: x.stem || '',
           options: x.options || {},
-          answer: (x.answer || '').toString().toUpperCase(),  // ← 关键：传 answer
+          answer: (x.answer || '').toString().toUpperCase(),
           explain: x.explain_original || '',
         }))
 
-        const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
+        // 3）检查重复题目
+        uploadMessage.value = '检查重复题目中…'
+        const checkRes = await fetch(`${MCQ_BASE_URL}/bank/check_duplicates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: upsertPayload }),
+        })
+        const checkData = await checkRes.json()
+        
+        if (!checkData || checkData.ok === false) {
+          throw new Error(checkData?.msg || '检查重复失败')
+        }
+
+        let finalPayload = upsertPayload
+        let skippedCount = 0
+
+        // 4）如果有重复题目，弹窗提示用户（自动跳过重复，提供预览）
+        if (checkData.has_duplicates && checkData.dup_count > 0) {
+          const dupCount = checkData.dup_count
+          const newCount = checkData.new_count
+          
+          // 构建重复题目的 HTML 预览列表
+          const dupListHtml = (checkData.duplicates || [])
+            .map((d: any, i: number) => {
+              const stem = (d.new_item?.stem || '').substring(0, 80)
+              const answer = d.new_item?.answer || ''
+              return `<div style="padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px;">
+                <span style="color: #909399;">${i + 1}.</span> 
+                <span>${stem}${stem.length >= 80 ? '...' : ''}</span>
+                <span style="color: #E6A23C; margin-left: 8px;">答案: ${answer}</span>
+              </div>`
+            })
+            .join('')
+          
+          // 构建完整的 HTML 消息
+          const messageHtml = `
+            <div style="margin-bottom: 12px;">
+              检测到 <strong style="color: #E6A23C;">${dupCount}</strong> 道题目已存在于题库中（题干、选项、答案相同），将自动跳过。
+              ${newCount > 0 ? `<br/>本次将保存 <strong style="color: #67C23A;">${newCount}</strong> 道新题目。` : ''}
+            </div>
+            <details style="margin-top: 8px; cursor: pointer;">
+              <summary style="color: #409EFF; font-size: 13px; outline: none;">
+                点击查看重复题目列表
+              </summary>
+              <div style="max-height: 300px; overflow-y: auto; margin-top: 8px; padding: 8px; background: #f5f7fa; border-radius: 4px;">
+                ${dupListHtml}
+              </div>
+            </details>
+          `
+
+          // 如果全部都是重复题目
+          if (newCount === 0) {
+            await ElMessageBox.alert(
+              messageHtml,
+              '全部题目已存在',
+              {
+                dangerouslyUseHTMLString: true,
+                confirmButtonText: '知道了',
+                type: 'info',
+              }
+            )
+            uploadMessage.value = `全部 ${dupCount} 道题目已存在于题库中，无需保存`
+            uploading.value = false
+            return
+          }
+
+          try {
+            // 弹出确认对话框
+            await ElMessageBox.confirm(
+              messageHtml,
+              '发现重复题目',
+              {
+                dangerouslyUseHTMLString: true,
+                distinguishCancelAndClose: true,
+                confirmButtonText: '确定保存新题目',
+                cancelButtonText: '取消上传',
+                type: 'warning',
+              }
+            )
+            
+            // 用户确认，自动跳过重复项
+            const dupIndexSet = new Set((checkData.duplicates || []).map((d: any) => d.index))
+            finalPayload = upsertPayload.filter((_: any, idx: number) => !dupIndexSet.has(idx))
+            skippedCount = dupCount
+            
+          } catch (dialogAction) {
+            // 用户取消上传
+            uploadMessage.value = '已取消上传'
+            uploading.value = false
+            return
+          }
+        }
+
+        // 5）执行保存
+        uploadMessage.value = '保存中…'
+        const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: finalPayload }),
         })
         const saved = await rs.json()
         if (!saved || saved.ok === false) {
@@ -1205,14 +1400,14 @@ export default defineComponent({
 
         const bankItems = Array.isArray(saved.items) ? saved.items : []
 
-        // 3）映射成前端 Question 时，记得带上 answer
+        // 6）映射成前端 Question 时，记得带上 answer
         questions.value = bankItems.map((it: any): Question => {
           const status = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
             options: normalizeOptions(it.options),
-            answer: (it.answer || '').toString().toUpperCase(),      // ← 新增
+            answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
           }
@@ -1221,7 +1416,19 @@ export default defineComponent({
         const parsedExplainCount = questions.value.filter(
           q => (q.analysis || '').trim().length > 0
         ).length
-        uploadMessage.value = `识别成功并已保存：${questions.value.length} 题；识别解析：${parsedExplainCount} 条`
+        
+        // 7）构建消息，包含格式化和去重信息
+        let msg = `识别成功并已保存：${questions.value.length} 题；识别解析：${parsedExplainCount} 条`
+        if (skippedCount > 0) {
+          msg += `；跳过重复：${skippedCount} 题`
+        }
+        if (j.llm_formatted) {
+          msg += '（已使用LLM格式化）'
+        }
+        if (j.format_msg) {
+          msg += ` [${j.format_msg}]`
+        }
+        uploadMessage.value = msg
         ElMessage.success('上传成功')
       } catch (e: any) {
         const msg = e?.message || String(e) || '未知错误'
@@ -2264,6 +2471,141 @@ export default defineComponent({
       }
     }
 
+    // ========== 上传试卷相关函数 ==========
+
+    // 计算有问题的题目数量
+    const paperParseIssueCount = computed(() => {
+      return uploadedPaperItems.value.filter(item => hasParseIssue(item)).length
+    })
+
+    // 判断题目是否有解析问题
+    const hasParseIssue = (item: any): boolean => {
+      if (!item.stem || item.stem.trim().length === 0) return true
+      if (getOptionsCount(item) < 2) return true
+      return false
+    }
+
+    // 获取有效选项数量
+    const getOptionsCount = (item: any): number => {
+      if (!item.options) return 0
+      let count = 0
+      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+        if (item.options[k] && item.options[k].trim()) count++
+      }
+      return count
+    }
+
+    // 触发选择试卷文件
+    const triggerPickPaperFile = () => { paperUploadRef.value?.click() }
+
+    // 选择试卷文件后处理
+    const onPickPaperFile = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const f = input?.files?.[0]
+      if (!f) return
+      
+      try {
+        ElMessage.info('正在解析试卷文件...')
+        
+        const fd = new FormData()
+        fd.append('file', f)
+        
+        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', body: fd })
+        const j = await r.json()
+        
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || '解析失败')
+        }
+        
+        const items = Array.isArray(j.items) ? j.items : []
+        
+        if (items.length === 0) {
+          ElMessage.warning('未识别到任何题目，请检查文件格式')
+          return
+        }
+        
+        // 确保每个item的options是对象格式
+        uploadedPaperItems.value = items.map((x: any) => ({
+          stem: x.stem || '',
+          options: x.options || {},
+          answer: (x.answer || '').toString().toUpperCase(),
+          explain: x.explain_original || '',
+        }))
+        
+        // 从文件名提取标题
+        const fileName = f.name.replace(/\.(docx|txt)$/i, '')
+        uploadedPaperTitle.value = fileName
+        
+        editingPaperItemIdx.value = null
+        paperPreviewVisible.value = true
+        
+        const issueCount = uploadedPaperItems.value.filter(item => hasParseIssue(item)).length
+        if (issueCount > 0) {
+          ElMessage.warning(`识别到 ${items.length} 道题目，其中 ${issueCount} 道可能存在问题，请检查`)
+        } else {
+          ElMessage.success(`成功识别 ${items.length} 道题目`)
+        }
+        
+      } catch (e: any) {
+        ElMessage.error(`解析失败：${e?.message || e}`)
+      } finally {
+        if (paperUploadRef.value) paperUploadRef.value.value = ''
+      }
+    }
+
+    // 切换编辑某题
+    const toggleEditPaperItem = (idx: number) => {
+      if (editingPaperItemIdx.value === idx) {
+        editingPaperItemIdx.value = null
+      } else {
+        editingPaperItemIdx.value = idx
+      }
+    }
+
+    // 保存上传的试卷
+    const saveUploadedPaper = async () => {
+      if (!uploadedPaperTitle.value.trim()) {
+        ElMessage.warning('请输入试卷标题')
+        return
+      }
+      
+      const validItems = uploadedPaperItems.value.filter(item => item.stem && item.stem.trim())
+      if (validItems.length === 0) {
+        ElMessage.warning('没有有效的题目可保存')
+        return
+      }
+      
+      savingUploadedPaper.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/save_paper`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: uploadedPaperTitle.value.trim(),
+            items: validItems
+          })
+        })
+        const j = await r.json()
+        
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || '保存失败')
+        }
+        
+        ElMessage.success(j.msg || '试卷保存成功')
+        paperPreviewVisible.value = false
+        uploadedPaperItems.value = []
+        uploadedPaperTitle.value = ''
+        
+        // 刷新试卷列表
+        await loadPaperList()
+        
+      } catch (e: any) {
+        ElMessage.error(`保存失败：${e?.message || e}`)
+      } finally {
+        savingUploadedPaper.value = false
+      }
+    }
+
     const loadExportPapers = async () => {
       loadingExportPapers.value = true
       try {
@@ -2542,7 +2884,12 @@ export default defineComponent({
       deletedQuestions, selectedDeleted, selectAllDeleted, toggleSelectAllDeleted, loadingDeleted, recycleMessage,
       restoringQuestion, permanentDeleting,
       loadDeletedQuestions, restoreQuestion, batchRestore,
-      permanentDelete, batchPermanentDelete, clearRecycleBin
+      permanentDelete, batchPermanentDelete, clearRecycleBin,
+      // 上传试卷相关
+      paperUploadRef, paperPreviewVisible, uploadedPaperTitle, uploadedPaperItems,
+      editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
+      hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
+      toggleEditPaperItem, saveUploadedPaper
     }
   }
 })
@@ -2955,6 +3302,72 @@ export default defineComponent({
 .paper-question-answer.no-answer {
   color: #ef4444;
   font-weight: 600;
+}
+
+/* 上传试卷预览样式 */
+.paper-preview-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.paper-preview-item.has-issue {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.preview-num {
+  font-weight: 600;
+  color: #374151;
+}
+
+.preview-content {
+  padding-left: 20px;
+}
+
+.preview-stem {
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.preview-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.preview-opt {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.preview-answer {
+  font-size: 13px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.preview-answer.no-answer {
+  color: #ef4444;
+}
+
+.preview-edit {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  margin-top: 8px;
 }
 
 </style>

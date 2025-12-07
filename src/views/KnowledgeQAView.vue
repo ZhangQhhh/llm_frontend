@@ -289,9 +289,9 @@
                 <!-- 答案总结结果显示区域 -->
                 <transition name="el-fade-in">
                   <div v-if="summaryResult" class="summary-result-section">
-                    <el-divider content-position="left">
+                    <div class="summary-title">
                       <el-icon><TrophyBase /></el-icon> 答案汇总
-                    </el-divider>
+                    </div>
                     <div class="summary-content">
                       <div class="summary-answer">
                         <span class="label">抽取的最终答案：</span>
@@ -857,7 +857,42 @@ export default defineComponent({
         
         let mcqData = null;
         
+        // 前端本地正则解析函数（降级策略）
+        const parseLocalMcq = (text: string) => {
+          const options: Record<string, string> = {};
+          let stem = '';
+          
+          // 查找第一个选项位置
+          const firstOptMatch = text.match(/[（(]?\s*[Aa]\s*[.、):：]/);
+          if (firstOptMatch && firstOptMatch.index !== undefined) {
+            stem = text.slice(0, firstOptMatch.index).trim();
+            const optionsText = text.slice(firstOptMatch.index);
+            
+            // 提取选项：支持 A.xxx B.xxx 或分行格式
+            const optPattern = /[（(]?\s*([A-Ha-h])\s*[.、):：]?\s*([^A-Ha-h（(]+?)(?=\s*[（(]?\s*[A-Ha-h]\s*[.、):：]|\s*$)/g;
+            let match;
+            while ((match = optPattern.exec(optionsText)) !== null) {
+              const label = match[1].toUpperCase();
+              const content = match[2].trim();
+              if (content) {
+                options[label] = content;
+              }
+            }
+          }
+          
+          if (Object.keys(options).length > 0) {
+            return { stem, options };
+          }
+          return null;
+        };
+        
+        const FRONTEND_TIMEOUT_MS = 65000; // 前端超时65秒（略大于后端60秒）
+        
         try {
+          // 使用AbortController实现超时控制
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), FRONTEND_TIMEOUT_MS);
+          
           const formatResponse = await fetch(API_ENDPOINTS.KNOWLEDGE.MCQ_FORMAT, {
             method: 'POST',
             headers: {
@@ -867,33 +902,103 @@ export default defineComponent({
             body: JSON.stringify({
               raw_input: question.value,
               model_id: modelId.value
-            })
+            }),
+            signal: controller.signal
           });
           
-          const formatResult = await formatResponse.json();
+          clearTimeout(timeoutId);
           
-          if (formatResult.ok && formatResult.data) {
-            // 格式化成功，使用格式化后的数据
-            mcqData = {
-              stem: formatResult.data.stem,
-              options: formatResult.data.options
-            };
-            // 更新输入框为格式化后的内容
-            question.value = formatResult.data.formatted_text;
-            thinking.value = '';
+          // 先检查HTTP状态码
+          if (!formatResponse.ok) {
+            // 服务器错误时尝试本地解析
+            if (formatResponse.status === 504 || formatResponse.status === 502 || formatResponse.status >= 500) {
+              console.warn(`服务器错误 (${formatResponse.status})，尝试本地解析`);
+              const localResult = parseLocalMcq(question.value);
+              if (localResult) {
+                mcqData = localResult;
+                const formattedLines = [localResult.stem];
+                for (const label of Object.keys(localResult.options).sort()) {
+                  formattedLines.push(`${label}.${localResult.options[label]}`);
+                }
+                question.value = formattedLines.join('\n');
+                thinking.value = '';
+                ElMessage.info('使用本地快速解析模式');
+              } else {
+                thinking.value = '';
+                loading.value = false;
+                ElMessage.error('服务器超时且本地解析失败，请检查输入格式');
+                return;
+              }
+            } else {
+              thinking.value = '';
+              loading.value = false;
+              ElMessage.error(`请求失败 (${formatResponse.status})`);
+              return;
+            }
           } else {
-            // 格式化失败
-            thinking.value = '';
-            loading.value = false;
-            ElMessage.warning(formatResult.msg || '输入内容不是有效的选择题，请检查输入');
-            return;
+            const formatResult = await formatResponse.json();
+            
+            if (formatResult.ok && formatResult.data) {
+              // 格式化成功，使用格式化后的数据
+              mcqData = {
+                stem: formatResult.data.stem,
+                options: formatResult.data.options
+              };
+              // 更新输入框为格式化后的内容
+              question.value = formatResult.data.formatted_text;
+              thinking.value = '';
+              // 如果是降级结果，给用户提示
+              if (formatResult.data.fallback) {
+                ElMessage.info('使用快速解析模式');
+              }
+            } else {
+              // 格式化失败，尝试本地解析
+              const localResult = parseLocalMcq(question.value);
+              if (localResult) {
+                mcqData = localResult;
+                const formattedLines = [localResult.stem];
+                for (const label of Object.keys(localResult.options).sort()) {
+                  formattedLines.push(`${label}.${localResult.options[label]}`);
+                }
+                question.value = formattedLines.join('\n');
+                thinking.value = '';
+                ElMessage.info('使用本地快速解析模式');
+              } else {
+                thinking.value = '';
+                loading.value = false;
+                ElMessage.warning(formatResult.msg || '输入内容不是有效的选择题，请检查输入');
+                return;
+              }
+            }
           }
         } catch (error: any) {
           console.error('格式化选择题失败:', error);
-          thinking.value = '';
-          loading.value = false;
-          ElMessage.error('格式化选择题失败，请检查输入格式');
-          return;
+          
+          // 超时或网络错误时尝试本地解析
+          if (error.name === 'AbortError') {
+            console.warn('请求超时，尝试本地解析');
+          }
+          
+          const localResult = parseLocalMcq(question.value);
+          if (localResult) {
+            mcqData = localResult;
+            const formattedLines = [localResult.stem];
+            for (const label of Object.keys(localResult.options).sort()) {
+              formattedLines.push(`${label}.${localResult.options[label]}`);
+            }
+            question.value = formattedLines.join('\n');
+            thinking.value = '';
+            ElMessage.info('使用本地快速解析模式');
+          } else {
+            thinking.value = '';
+            loading.value = false;
+            if (error.name === 'AbortError') {
+              ElMessage.error('请求超时且本地解析失败，请检查输入格式');
+            } else {
+              ElMessage.error('网络错误且本地解析失败，请检查输入格式');
+            }
+            return;
+          }
         }
         
         if (mcqData) {
@@ -2037,6 +2142,10 @@ export default defineComponent({
 .mcq-results-card {
   margin-top: 2rem;
   margin-bottom: 2rem;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .mcq-results-card .card-header {
@@ -2087,12 +2196,18 @@ export default defineComponent({
   padding: 1.5rem;
   min-height: 300px;
   background: rgba(22, 27, 34, 0.6);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .option-question {
   font-size: 16px;
   margin-bottom: 1rem;
   color: var(--ai-text);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .option-answer {
@@ -2103,16 +2218,22 @@ export default defineComponent({
   padding: 0.75rem;
   border-radius: 4px;
   border-left: 3px solid var(--ai-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .option-result {
   margin-top: 1.5rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .option-result .markdown-body {
   font-size: 15px;
   line-height: 1.8;
   color: var(--ai-text);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .streaming-indicator {
@@ -2886,18 +3007,14 @@ export default defineComponent({
   border-top: 1px solid rgba(16, 185, 129, 0.2);
 }
 
-.summary-result-section :deep(.el-divider) {
-  margin: 0 0 1rem 0;
-}
-
-.summary-result-section :deep(.el-divider__text) {
-  background: transparent;
+.summary-title {
   color: var(--ai-success);
   font-weight: 600;
   font-size: 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .summary-content {
