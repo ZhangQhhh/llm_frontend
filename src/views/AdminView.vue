@@ -2667,7 +2667,20 @@ export default defineComponent({
       exportMessage.value = '正在生成ZIP压缩包...'
       try {
         const url = `${MCQ_BASE_URL}/grades/export_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-        openInNewTab(url)
+        const response = await fetch(url)
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ msg: '导出失败' }))
+          throw new Error(error.msg || '导出失败')
+        }
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `成绩报告_${Date.now()}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
         exportMessage.value = '导出成功！'
         setTimeout(() => { exportMessage.value = '' }, 3000)
       } catch (error: any) {
@@ -2686,7 +2699,20 @@ export default defineComponent({
       exportMessage.value = '正在生成成绩汇总表...'
       try {
         const url = `${MCQ_BASE_URL}/grades/export_summary_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-        openInNewTab(url)
+        const response = await fetch(url)
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ msg: '导出失败' }))
+          throw new Error(error.msg || '导出失败')
+        }
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `成绩汇总_${Date.now()}.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
         exportMessage.value = '导出成功！'
         setTimeout(() => { exportMessage.value = '' }, 3000)
       } catch (error: any) {
