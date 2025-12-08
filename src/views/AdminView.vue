@@ -250,6 +250,9 @@
                     <el-checkbox v-model="selectedQuestions" :value="q.qid" />
                     <span><strong>{{ (idx + 1) + (page-1)*pageSize }}.</strong> {{ q.stem }}</span>
                   </div>
+                  <el-tag v-if="q.ai_generated_answer" type="warning" size="small" style="margin-right: 6px;" effect="plain">
+                    🤖 AI答案待校对
+                  </el-tag>
                   <el-tag :type="getStatusTagType(q.status)" size="small">{{ getStatusText(q.status) }}</el-tag>
                 </div>
                 <div class="q-options">
@@ -664,6 +667,9 @@
                       <el-tag v-if="!q.answer || !q.answer.trim()" type="danger" size="small" style="margin-right: 8px;">
                         无答案
                       </el-tag>
+                      <el-tag v-if="q.ai_generated_answer" type="warning" size="small" style="margin-right: 8px;" effect="plain">
+                        🤖 AI答案待校对
+                      </el-tag>
                       <span>{{ idx + 1 }}. {{ q.stem }}</span>
                     </div>
                     <div class="paper-question-options">
@@ -924,6 +930,7 @@ interface Question {
   answer: string
   analysis: string
   status: string
+  ai_generated_answer?: boolean  // 标记答案是否由 AI 生成（需人工校对）
   deleted_at?: string
   deleted_by?: string
 }
@@ -1681,10 +1688,26 @@ export default defineComponent({
             throw new Error(data?.msg || '生成失败')
           }
 
-          const updates = (data.results || []).map((r: any) => ({
-            id: String(r.qid),
-            explain: r.explain || '',
-          }))
+          // 处理结果，检查无答案的题目
+          const updates = (data.results || []).map((r: any) => {
+            const qid = String(r.qid)
+            const originalQuestion = batch.find(q => q.qid === qid)
+            const originalAnswer = (originalQuestion?.answer || '').trim()
+            const aiFinalAnswer = (r.final_answer || '').trim()
+            
+            const updateItem: any = {
+              id: qid,
+              explain: r.explain || '',
+            }
+            
+            // 如果原题无答案且 AI 给出了答案，自动填充并标记
+            if (!originalAnswer && aiFinalAnswer) {
+              updateItem.answer = aiFinalAnswer.toUpperCase()
+              updateItem.ai_generated_answer = true
+            }
+            
+            return updateItem
+          })
 
           allUpdates.push(...updates)
         }
@@ -1742,9 +1765,10 @@ export default defineComponent({
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
             options: normalizeOptions(it.options),
-            answer: (it.answer || '').toString().toUpperCase(),   // ← 这里也要带
+            answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
+            ai_generated_answer: Boolean(it.ai_generated_answer),  // AI 生成的答案标记
           }
         })
       } catch (error: any) {

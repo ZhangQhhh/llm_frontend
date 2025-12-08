@@ -716,7 +716,7 @@ export default defineComponent({
         await originalHandleSubmit();
 
       } else if (strategy === 'COMPLEX_VALIDATION') {
-        // COMPLEX_VALIDATION策略: 分别处理每个选项
+        // COMPLEX_VALIDATION策略: 并发处理每个选项（失败时回退到串行）
         mcqResults.value = [];
         summaryResult.value = null;  // 清空之前的答案归纳结果
         lastMcqData.value = mcqData;  // 保存当前选择题数据，供答案归纳使用
@@ -726,8 +726,10 @@ export default defineComponent({
         answer.value = ''; // 清空旧答案
         references.value = []; // 清空旧引用
 
+        const optionEntries = Object.entries(mcqData.options);
+        
         // 为每个选项创建一个结果对象
-        for (const [key, value] of Object.entries(mcqData.options)) {
+        for (const [key, value] of optionEntries) {
           mcqResults.value.push({
             optionLabel: `选项 ${key}`,
             question: mcqData.stem,
@@ -737,18 +739,12 @@ export default defineComponent({
           });
         }
 
-        // 逐个处理每个选项
-        const optionEntries = Object.entries(mcqData.options);
-        for (let index = 0; index < optionEntries.length; index++) {
-          const [key, value] = optionEntries[index];
+        // 单个选项的处理函数
+        const processOption = async (index: number, key: string, value: string): Promise<boolean> => {
           const formattedQuestion = `问题：${mcqData.stem}\n候选答案：\n${key}. ${value}`;
-
-          // 修改当前标签页
-          activeTab.value = String(index);
-
-          // 发送请求
-          try {
-            await sendStreamChatRequest(
+          
+          return new Promise((resolve) => {
+            sendStreamChatRequest(
               API_ENDPOINTS.KNOWLEDGE.CHAT,
               {
                 question: formattedQuestion,
@@ -760,21 +756,94 @@ export default defineComponent({
                 user_id: store.state.user.id || null
               },
               store.state.user.token,
-              ((currentIndex) => (message: StreamMessage) => {
-                // 处理流式消息，使用闭包确保index正确
+              (message: StreamMessage) => {
                 if (message.type === 'CONTENT' && !isStatusMessage(message.data)) {
-                  mcqResults.value[currentIndex].answer += message.data;
+                  mcqResults.value[index].answer += message.data;
                 } else if (message.type === 'DONE') {
-                  mcqResults.value[currentIndex].loading = false;
+                  mcqResults.value[index].loading = false;
+                  resolve(true);  // 成功
                 } else if (message.type === 'ERROR') {
-                  mcqResults.value[currentIndex].answer = `错误: ${message.data}`;
-                  mcqResults.value[currentIndex].loading = false;
+                  mcqResults.value[index].answer = `错误: ${message.data}`;
+                  mcqResults.value[index].loading = false;
+                  resolve(false);  // 失败
                 }
-              })(index)
-            );
-          } catch (error: any) {
-            mcqResults.value[index].answer = `请求失败: ${error.message}`;
-            mcqResults.value[index].loading = false;
+              }
+            ).catch((error: any) => {
+              mcqResults.value[index].answer = `请求失败: ${error.message}`;
+              mcqResults.value[index].loading = false;
+              resolve(false);  // 失败
+            });
+          });
+        };
+
+        // 尝试并发处理
+        let parallelFailed = false;
+        const maxRetries = 2;  // 单选项最大重试次数
+        
+        if (optionEntries.length > 1) {
+          console.log(`[MCQ] 启用并发验证，选项数=${optionEntries.length}`);
+          
+          // 并发处理所有选项
+          const results = await Promise.all(
+            optionEntries.map(([key, value], index) => 
+              processOption(index, key, value)
+            )
+          );
+          
+          // 收集失败的选项
+          const failedIndices = results
+            .map((success, idx) => success ? -1 : idx)
+            .filter(idx => idx !== -1);
+          
+          if (failedIndices.length > 0) {
+            console.log(`[MCQ] ${failedIndices.length} 个选项失败，尝试重试`);
+            
+            // 重试失败的选项
+            for (const failedIdx of failedIndices) {
+              const [key, value] = optionEntries[failedIdx];
+              let retrySuccess = false;
+              
+              for (let retry = 1; retry <= maxRetries; retry++) {
+                console.log(`[MCQ] 重试选项 ${key}（第 ${retry} 次）`);
+                // 清空之前的错误信息
+                mcqResults.value[failedIdx].answer = '';
+                mcqResults.value[failedIdx].loading = true;
+                
+                const success = await processOption(failedIdx, key, value);
+                if (success) {
+                  console.log(`[MCQ] 选项 ${key} 重试成功`);
+                  retrySuccess = true;
+                  break;
+                }
+              }
+              
+              if (!retrySuccess) {
+                console.log(`[MCQ] 选项 ${key} 重试 ${maxRetries} 次后仍失败，回退到串行处理`);
+                parallelFailed = true;
+                break;
+              }
+            }
+          }
+        } else {
+          // 只有1个选项，直接处理
+          parallelFailed = true;
+        }
+        
+        // 并发失败，回退到串行处理
+        if (parallelFailed && optionEntries.length > 1) {
+          console.log('[MCQ] 开始串行处理（并发失败回退）');
+          
+          // 清空并发的部分结果，重新串行处理
+          for (let i = 0; i < mcqResults.value.length; i++) {
+            mcqResults.value[i].answer = '';
+            mcqResults.value[i].loading = true;
+          }
+          
+          // 串行处理每个选项
+          for (let index = 0; index < optionEntries.length; index++) {
+            const [key, value] = optionEntries[index];
+            activeTab.value = String(index);
+            await processOption(index, key, value);
           }
         }
         
