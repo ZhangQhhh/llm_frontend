@@ -369,6 +369,24 @@ const previewResult = () => {
     return;
   }
   
+  // 获取题目类型标签
+  const getTypeTag = (item: any) => {
+    const qtype = item.qtype || '';
+    if (qtype === 'single') {
+      return '<span style="background: #409eff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">单选</span>';
+    } else if (qtype === 'multi') {
+      return '<span style="background: #e6a23c; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">多选</span>';
+    } else if (qtype === 'indeterminate') {
+      return '<span style="background: #67c23a; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">不定项</span>';
+    }
+    // 没有类型信息，根据答案长度判断
+    const answer = (item.answer || '').toUpperCase();
+    if (answer.length > 1) {
+      return '<span style="background: #e6a23c; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">多选</span>';
+    }
+    return '<span style="background: #409eff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">单选</span>';
+  };
+  
   // 构建预览内容
   const previewHtml = formatResult.items.map((item: any, idx: number) => {
     const optionsHtml = Object.entries(item.options || {})
@@ -378,7 +396,9 @@ const previewResult = () => {
     
     return `
       <div style="margin-bottom: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px;">
-        <div style="font-weight: 600; margin-bottom: 8px;">${idx + 1}. ${item.stem || '（题干为空）'}</div>
+        <div style="font-weight: 600; margin-bottom: 8px;">
+          ${getTypeTag(item)}${idx + 1}. ${item.stem || '（题干为空）'}
+        </div>
         <div style="color: #4b5563;">${optionsHtml || '（无选项）'}</div>
         <div style="margin-top: 8px; color: ${item.answer ? '#10b981' : '#ef4444'};">
           答案：${item.answer || '（无）'}

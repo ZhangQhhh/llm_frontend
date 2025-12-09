@@ -52,20 +52,59 @@
       <!-- 左侧导航 -->
       <div class="side card" v-if="examStarted && questions.length > 0">
         <h3>题目导航</h3>
-        <div class="navgrid">
-          <button
-            v-for="(q, idx) in questions"
-            :key="q.qid"
-            :class="['navbtn', { answered: isAnswered(q.qid), current: isCurrentPage(idx) }]"
-            @click="jumpToQuestion(idx)"
-          >
-            {{ idx + 1 }}
-          </button>
+        <!-- 单选题导航 -->
+        <div v-if="singleQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag single">单选</span>
+            <span class="nav-count">{{ singleQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in singleQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
         </div>
-        <div class="pager" style="margin-top: 10px">
-          <el-button size="small" @click="prevPage" :disabled="currentPage === 1">上一页</el-button>
-          <span class="muted">第 {{ currentPage }} / {{ totalPages }} 页</span>
-          <el-button size="small" @click="nextPage" :disabled="currentPage === totalPages">下一页</el-button>
+        <!-- 多选题导航 -->
+        <div v-if="multiQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag multi">多选</span>
+            <span class="nav-count">{{ multiQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in multiQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
+        </div>
+        <!-- 不定项选择题导航 -->
+        <div v-if="indeterminateQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag indeterminate">不定项</span>
+            <span class="nav-count">{{ indeterminateQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in indeterminateQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
+        </div>
+        <div class="nav-summary" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(96, 165, 250, 0.2);">
+          <span class="muted">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
         </div>
       </div>
 
@@ -75,14 +114,26 @@
         <!-- 头部信息 -->
         <div class="card head">
           <h2>{{ paperTitle }}</h2>
-          <div class="sub">
-            <span class="muted">每页显示</span>
-            <el-select v-model="pageSize" size="small" style="width: 80px; margin: 0 8px" @change="handlePageSizeChange">
-              <el-option :value="3" label="3" />
-              <el-option :value="5" label="5" />
-              <el-option :value="10" label="10" />
-            </el-select>
-            <span class="muted">题</span>
+          <div class="sub" v-if="examStarted && questions.length > 0">
+            <span class="head-stat" v-if="singleQuestions.length > 0">
+              <span class="stat-label">单选</span>
+              <span class="stat-value">{{ singleQuestions.length }}题</span>
+            </span>
+            <span class="head-divider" v-if="singleQuestions.length > 0 && (multiQuestions.length > 0 || indeterminateQuestions.length > 0)">|</span>
+            <span class="head-stat" v-if="multiQuestions.length > 0">
+              <span class="stat-label">多选</span>
+              <span class="stat-value">{{ multiQuestions.length }}题</span>
+            </span>
+            <span class="head-divider" v-if="multiQuestions.length > 0 && indeterminateQuestions.length > 0">|</span>
+            <span class="head-stat" v-if="indeterminateQuestions.length > 0">
+              <span class="stat-label">不定项</span>
+              <span class="stat-value">{{ indeterminateQuestions.length }}题</span>
+            </span>
+            <span class="head-divider">|</span>
+            <span class="head-stat">
+              <span class="stat-label">共</span>
+              <span class="stat-value">{{ questions.length }}题</span>
+            </span>
           </div>
         </div>
 
@@ -96,28 +147,18 @@
         </div>
 
         <div v-else class="qlist">
-          <div v-for="(q, idx) in currentPageQuestions" :key="q.qid" class="q">
-            <div class="qheader">
-              <b><span>{{ getQuestionNumber(idx) }}. </span><span v-html="formatText(q.stem)"></span></b>
-              <span :class="['tag', q.qtype === 'multi' ? 'multi' : 'single']">
-                {{ q.qtype === 'multi' ? '多选' : '单选' }}
-              </span>
+          <!-- 单选题区域 -->
+          <div v-if="singleQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag single">一、单选题</span>
+              <span class="section-count">共 {{ singleQuestions.length }} 题</span>
             </div>
-            <div class="opts">
-              <!-- 多选题 -->
-              <template v-if="q.qtype === 'multi'">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
-                  @click="toggleMultiOption(q.qid, opt.label)"
-                  :disabled="submitted"
-                >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                </button>
-              </template>
-              <!-- 单选题 -->
-              <template v-else>
+            <div v-for="(q, idx) in singleQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag single">单选</span>
+              </div>
+              <div class="opts">
                 <button
                   v-for="opt in q.options"
                   :key="opt.label"
@@ -127,7 +168,57 @@
                 >
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
-              </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- 多选题区域 -->
+          <div v-if="multiQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag multi">{{ singleQuestions.length > 0 ? '二' : '一' }}、多选题</span>
+              <span class="section-count">共 {{ multiQuestions.length }} 题</span>
+            </div>
+            <div v-for="(q, idx) in multiQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag multi">多选</span>
+              </div>
+              <div class="opts">
+                <button
+                  v-for="opt in q.options"
+                  :key="opt.label"
+                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                  @click="toggleMultiOption(q.qid, opt.label)"
+                  :disabled="submitted"
+                >
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 不定项选择题区域 -->
+          <div v-if="indeterminateQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag indeterminate">{{ (singleQuestions.length > 0 ? 1 : 0) + (multiQuestions.length > 0 ? 1 : 0) === 2 ? '三' : ((singleQuestions.length > 0 || multiQuestions.length > 0) ? '二' : '一') }}、不定项选择题</span>
+              <span class="section-count">共 {{ indeterminateQuestions.length }} 题</span>
+            </div>
+            <div v-for="(q, idx) in indeterminateQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag indeterminate">不定项</span>
+              </div>
+              <div class="opts">
+                <button
+                  v-for="opt in q.options"
+                  :key="opt.label"
+                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                  @click="toggleMultiOption(q.qid, opt.label)"
+                  :disabled="submitted"
+                >
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -451,6 +542,47 @@ export default defineComponent({
       return reviewData.value.items.filter(item => !item.is_correct)
     })
 
+    // 单选题列表
+    const singleQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'single')
+    })
+
+    // 多选题列表
+    const multiQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'multi')
+    })
+
+    // 不定项选择题列表
+    const indeterminateQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'indeterminate')
+    })
+
+    // 已答题目数
+    const answeredCount = computed(() => {
+      let count = 0
+      questions.value.forEach(q => {
+        if (isAnswered(q.qid)) count++
+      })
+      return count
+    })
+
+    // 当前高亮的题目ID
+    const currentQid = ref('')
+
+    // 滚动到指定题目
+    const scrollToQuestion = (qid: string) => {
+      currentQid.value = qid
+      const element = document.getElementById('q-' + qid)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // 添加高亮效果
+        element.classList.add('highlight-question')
+        setTimeout(() => {
+          element.classList.remove('highlight-question')
+        }, 1500)
+      }
+    }
+
     // 从解析文本中提取知识点
     const extractKnowledgePoints = (analysis: string): string[] => {
       if (!analysis) return []
@@ -708,22 +840,15 @@ export default defineComponent({
         attemptId.value = startData.attempt_id
         leftSeconds.value = startData.left_sec || durationMin.value * 60
 
-        // 获取题目
-        const questionsData = await mcqFetch(
-          `${API_ENDPOINTS.PAPERS.VIEW}?paper_id=${encodeURIComponent(selectedPaperId.value)}`
-        )
-        
-        if (!questionsData.ok) {
-          throw new Error(questionsData.detail || '获取题目失败')
-        }
-        
-        questions.value = questionsData.items || []
-        paperTitle.value = questionsData.title || '试卷'
+        // 直接使用 exam_start 返回的题目（已根据学生ID随机打乱顺序）
+        questions.value = startData.items || []
+        paperTitle.value = startData.title || '试卷'
 
         // 初始化答案状态
         const newAnswersState: Record<string, any> = {}
         questions.value.forEach(q => {
-          newAnswersState[q.qid] = q.qtype === 'multi' ? [] : ''
+          // 多选题和不定项题目使用数组，单选题使用字符串
+          newAnswersState[q.qid] = (q.qtype === 'multi' || q.qtype === 'indeterminate') ? [] : ''
         })
         answersState.value = newAnswersState
 
@@ -1039,6 +1164,12 @@ export default defineComponent({
       correctRate,
       reviewData,
       wrongQuestions,
+      singleQuestions,
+      multiQuestions,
+      indeterminateQuestions,
+      answeredCount,
+      currentQid,
+      scrollToQuestion,
       knowledgePointStats,
       scrollToWrongByKp,
       exporting,
@@ -1398,6 +1529,11 @@ export default defineComponent({
 
 .tag.multi {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: #fff;
+}
+
+.tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
   color: #fff;
 }
 
@@ -1929,5 +2065,112 @@ export default defineComponent({
     padding: 6px 12px;
     font-size: 13px;
   }
+}
+
+/* 题目分类导航样式 */
+.nav-section {
+  margin-bottom: 16px;
+}
+
+.nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.nav-type-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.nav-type-tag.single {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.nav-type-tag.multi {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.nav-type-tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.nav-count {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.nav-summary {
+  text-align: center;
+}
+
+/* 题目分类区域样式 */
+.question-section {
+  margin-bottom: 24px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.section-tag {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.section-tag.single {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.section-tag.multi {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.section-tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.section-count {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* 头部统计样式 */
+.head-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.head-stat .stat-label {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.head-stat .stat-value {
+  color: #e5e7eb;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.head-divider {
+  color: rgba(96, 165, 250, 0.3);
+  margin: 0 8px;
 }
 </style>

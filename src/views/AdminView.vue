@@ -596,12 +596,73 @@
                 <span style="font-weight: 600;">生成试卷</span>
               </template>
               
-              <!-- 试卷标题 -->
+              <!-- 试卷标题和生成模式 -->
               <el-form label-width="100px" style="margin-bottom: 16px;">
-                <el-form-item label="试卷标题" style="margin-bottom: 0;">
+                <el-form-item label="试卷标题" style="margin-bottom: 12px;">
                   <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
-                  <el-button type="primary" @click="createPaper" :loading="creatingPaper" style="margin-left: 10px">
-                    生成试卷 {{ selectedPaperQuestions.length > 0 ? `(${selectedPaperQuestions.length}题)` : '(全部)' }}
+                </el-form-item>
+                
+                <!-- 生成模式选择 -->
+                <el-form-item label="生成模式" style="margin-bottom: 12px;">
+                  <el-radio-group v-model="paperGenerateMode">
+                    <el-radio value="manual">手动选择题目</el-radio>
+                    <el-radio value="random">随机抽取题目</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                
+                <!-- 随机抽取配置 -->
+                <el-form-item v-if="paperGenerateMode === 'random'" label="题目数量" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <span>
+                      <span style="margin-right: 4px;">单选</span>
+                      <el-input-number v-model="randomSingleCount" :min="0" :max="singleApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ singleApprovedCount }}</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">多选</span>
+                      <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ multiApprovedCount }}</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">不定项</span>
+                      <el-input-number v-model="randomIndeterminateCount" :min="0" :max="singleApprovedCount + multiApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
+                    </span>
+                  </div>
+                </el-form-item>
+                
+                <!-- 手动模式下的不定项配置 -->
+                <el-form-item v-if="paperGenerateMode === 'manual'" label="不定项题" style="margin-bottom: 12px;">
+                  <el-checkbox v-model="enableIndeterminate" style="margin-right: 16px;">启用不定项选择题</el-checkbox>
+                  <template v-if="enableIndeterminate">
+                    <el-radio-group v-model="indeterminateMode" style="margin-right: 16px;">
+                      <el-radio value="select">手动选择题目</el-radio>
+                      <el-radio value="count">按数量抽取</el-radio>
+                    </el-radio-group>
+                    
+                    <template v-if="indeterminateMode === 'select'">
+                      <span style="color: #67c23a; font-size: 13px;">
+                        已选 {{ selectedIndeterminateQuestions.length }} 题为不定项
+                        <span v-if="selectedIndeterminateQuestions.length > 0">（点击下方题目的"不定项"按钮可取消）</span>
+                      </span>
+                    </template>
+                    
+                    <template v-else>
+                      <span style="margin-right: 8px;">单选</span>
+                      <el-input-number v-model="indeterminateSingleCount" :min="0" :max="99" size="small" style="width: 80px;" />
+                      <span style="margin: 0 8px;">题，多选</span>
+                      <el-input-number v-model="indeterminateMultiCount" :min="0" :max="99" size="small" style="width: 80px;" />
+                      <span style="margin-left: 8px;">题（随机抽取）</span>
+                    </template>
+                  </template>
+                </el-form-item>
+                
+                <!-- 生成按钮 -->
+                <el-form-item label="" style="margin-bottom: 0;">
+                  <el-button type="primary" @click="createPaper" :loading="creatingPaper">
+                    {{ paperGenerateMode === 'random' 
+                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomIndeterminateCount}题)` 
+                      : `生成试卷 ${selectedPaperQuestions.length > 0 ? '(' + selectedPaperQuestions.length + '题)' : '(全部)'}` }}
                   </el-button>
                   <span class="status-msg">{{ paperMessage }}</span>
                 </el-form-item>
@@ -663,6 +724,16 @@
                     <div class="paper-question-stem">
                       <el-tag :type="isMultiChoice(q) ? 'warning' : 'info'" size="small" style="margin-right: 8px;">
                         {{ isMultiChoice(q) ? '多选' : '单选' }}
+                      </el-tag>
+                      <el-tag 
+                        v-if="enableIndeterminate && indeterminateMode === 'select'" 
+                        :type="selectedIndeterminateQuestions.includes(q.qid) ? 'success' : 'info'"
+                        size="small" 
+                        style="margin-right: 8px; cursor: pointer;"
+                        :effect="selectedIndeterminateQuestions.includes(q.qid) ? 'dark' : 'plain'"
+                        @click="toggleIndeterminate(q.qid)"
+                      >
+                        {{ selectedIndeterminateQuestions.includes(q.qid) ? '✓ 不定项' : '+ 不定项' }}
                       </el-tag>
                       <el-tag v-if="!q.answer || !q.answer.trim()" type="danger" size="small" style="margin-right: 8px;">
                         无答案
@@ -740,6 +811,9 @@
                 >
                   <div class="preview-header">
                     <span class="preview-num">{{ idx + 1 }}.</span>
+                    <el-tag v-if="item.qtype === 'single'" type="info" size="small">单选</el-tag>
+                    <el-tag v-else-if="item.qtype === 'multi'" type="warning" size="small">多选</el-tag>
+                    <el-tag v-else-if="item.qtype === 'indeterminate'" type="success" size="small">不定项</el-tag>
                     <el-tag v-if="hasParseIssue(item)" type="danger" size="small">需检查</el-tag>
                     <el-tag v-if="!item.answer" type="warning" size="small">缺少答案</el-tag>
                     <el-tag v-if="getOptionsCount(item) < 2" type="warning" size="small">选项不足</el-tag>
@@ -751,6 +825,14 @@
                       style="margin-left: auto;"
                     >
                       {{ editingPaperItemIdx === idx ? '收起' : '编辑' }}
+                    </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      link
+                      @click="deletePaperItem(idx)"
+                    >
+                      删除
                     </el-button>
                   </div>
                   
@@ -784,6 +866,9 @@
                       </el-form-item>
                       <el-form-item label="答案">
                         <el-input v-model="item.answer" placeholder="如 A 或 ABC" style="width: 200px;" />
+                      </el-form-item>
+                      <el-form-item label="解析">
+                        <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
                       </el-form-item>
                     </el-form>
                   </div>
@@ -1145,6 +1230,40 @@ export default defineComponent({
     const paperQuestionSearch = ref('')
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
+
+    // 试卷生成模式
+    const paperGenerateMode = ref<'manual' | 'random'>('manual')
+    
+    // 随机抽取配置
+    const randomSingleCount = ref(5)
+    const randomMultiCount = ref(5)
+    const randomIndeterminateCount = ref(0)
+    
+    // 计算题库中各类型的题目数量
+    const singleApprovedCount = computed(() => {
+      return approvedQuestions.value.filter(q => !isMultiChoice(q)).length
+    })
+    const multiApprovedCount = computed(() => {
+      return approvedQuestions.value.filter(q => isMultiChoice(q)).length
+    })
+    
+    // 不定项配置（手动模式下使用）
+    const enableIndeterminate = ref(false)
+    const indeterminateMode = ref<'select' | 'count'>('select')
+    const indeterminateSingleCount = ref(5)
+    const indeterminateMultiCount = ref(5)
+    const indeterminateTotalCount = ref(10)
+    const selectedIndeterminateQuestions = ref<string[]>([])
+
+    // 切换题目的不定项状态
+    const toggleIndeterminate = (qid: string) => {
+      const idx = selectedIndeterminateQuestions.value.indexOf(qid)
+      if (idx > -1) {
+        selectedIndeterminateQuestions.value.splice(idx, 1)
+      } else {
+        selectedIndeterminateQuestions.value.push(qid)
+      }
+    }
 
     // 上传试卷相关
     const paperUploadRef = ref<HTMLInputElement | null>(null)
@@ -2422,20 +2541,53 @@ export default defineComponent({
       // 仍然要求填写标题，和原行为保持一致
       if (!paperTitle.value) return ElMessage.warning('请输入试卷标题')
       
-      // 如果选择了题目，则使用选中的题目；否则使用全部已通过题目
-      const questionIds = selectedPaperQuestions.value.length > 0 
-        ? selectedPaperQuestions.value 
-        : null
-
       const name = (paperTitle.value || '').trim() || '试卷'
       creatingPaper.value = true
       paperMessage.value = '生成中…'
+      
+      let requestBody: any = { name }
+      
+      if (paperGenerateMode.value === 'random') {
+        // 随机抽取模式
+        requestBody.random_mode = {
+          single_count: randomSingleCount.value,
+          multi_count: randomMultiCount.value,
+          indeterminate_count: randomIndeterminateCount.value
+        }
+      } else {
+        // 手动选择模式
+        // 如果选择了题目，则使用选中的题目；否则使用全部已通过题目
+        const questionIds = selectedPaperQuestions.value.length > 0 
+          ? selectedPaperQuestions.value 
+          : null
+        requestBody.question_ids = questionIds
+        
+        // 构建不定项配置
+        if (enableIndeterminate.value) {
+          if (indeterminateMode.value === 'select') {
+            // 手动选择模式：传递选中的不定项题目ID
+            if (selectedIndeterminateQuestions.value.length > 0) {
+              requestBody.indeterminate = {
+                mode: 'select',
+                question_ids: selectedIndeterminateQuestions.value
+              }
+            }
+          } else {
+            // 按数量抽取模式
+            requestBody.indeterminate = {
+              mode: 'count',
+              single_count: indeterminateSingleCount.value,
+              multi_count: indeterminateMultiCount.value
+            }
+          }
+        }
+      }
 
       try {
         const r = await fetch(`${MCQ_BASE_URL}/bank/generate_paper`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, question_ids: questionIds })
+          body: JSON.stringify(requestBody)
         })
 
         const ct = (r.headers && r.headers.get)
@@ -2581,12 +2733,13 @@ export default defineComponent({
           return
         }
         
-        // 确保每个item的options是对象格式
+        // 确保每个item的options是对象格式，保留qtype
         uploadedPaperItems.value = items.map((x: any) => ({
           stem: x.stem || '',
           options: x.options || {},
           answer: (x.answer || '').toString().toUpperCase(),
           explain: x.explain_original || '',
+          qtype: x.qtype || '',  // 保留题目类型（single/multi/indeterminate）
         }))
         
         // 从文件名提取标题
@@ -2617,6 +2770,25 @@ export default defineComponent({
       } else {
         editingPaperItemIdx.value = idx
       }
+    }
+
+    // 删除某题
+    const deletePaperItem = (idx: number) => {
+      ElMessageBox.confirm(
+        `确定要删除第 ${idx + 1} 题吗？`,
+        '删除确认',
+        { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      ).then(() => {
+        uploadedPaperItems.value.splice(idx, 1)
+        // 如果正在编辑的题目被删除，重置编辑状态
+        if (editingPaperItemIdx.value === idx) {
+          editingPaperItemIdx.value = null
+        } else if (editingPaperItemIdx.value !== null && editingPaperItemIdx.value > idx) {
+          // 如果删除的是编辑题目之前的题，索引需要减1
+          editingPaperItemIdx.value--
+        }
+        ElMessage.success('已删除')
+      }).catch(() => {})
     }
 
     // 保存上传的试卷
@@ -2938,16 +3110,6 @@ export default defineComponent({
     return {
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
-      questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
-      paperTitle, creatingPaper, paperMessage,
-      // 试卷题目选择相关
-      paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
-      approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
-      // 试卷列表管理
-      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
-      exportPapers, selectedExportPaper,
-      loadingExportPapers, exportingZip, exportingDocx, exportMessage,
-      userSearch, users, loadingUsers, actionLoadingId,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
@@ -2968,11 +3130,25 @@ export default defineComponent({
       restoringQuestion, permanentDeleting,
       loadDeletedQuestions, restoreQuestion, batchRestore,
       permanentDelete, batchPermanentDelete, clearRecycleBin,
+      // 试卷生成相关
+      questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
+      paperTitle, creatingPaper, paperMessage,
+      paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
+      approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
+      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
+      exportPapers, selectedExportPaper, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
+      userSearch, users, loadingUsers, actionLoadingId,
+      // 试卷生成模式
+      paperGenerateMode, randomSingleCount, randomMultiCount, randomIndeterminateCount,
+      singleApprovedCount, multiApprovedCount,
+      // 不定项配置
+      enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,
+      selectedIndeterminateQuestions, toggleIndeterminate,
       // 上传试卷相关
       paperUploadRef, paperPreviewVisible, uploadedPaperTitle, uploadedPaperItems,
       editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
       hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
-      toggleEditPaperItem, saveUploadedPaper
+      toggleEditPaperItem, deletePaperItem, saveUploadedPaper
     }
   }
 })
