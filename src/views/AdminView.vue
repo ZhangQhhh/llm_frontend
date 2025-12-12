@@ -3381,7 +3381,7 @@ export default defineComponent({
       publishing.value = true
       publishMessage.value = '发布中...'
       try {
-        const response = await fetch(`${MCQ_BASE_URL}/exam/publish`, {
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/publish`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3393,7 +3393,7 @@ export default defineComponent({
             description: publishForm.description
           })
         })
-        const data = await response.json()
+        const data = response.data
         if (data?.ok) {
           ElMessage.success('考试发布成功')
           publishMessage.value = '发布成功！'
@@ -3418,8 +3418,8 @@ export default defineComponent({
     const loadPublishedExams = async () => {
       loadingPublished.value = true
       try {
-        const response = await fetch(`${MCQ_BASE_URL}/exam/published`, { method: 'GET', cache: 'no-store' })
-        const data = await response.json()
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/published`, { method: 'GET', cache: 'no-store' })
+        const data = response.data
         if (data?.ok !== false) {
           publishedExams.value = Array.isArray(data.exams) ? data.exams : []
         }
@@ -3438,12 +3438,12 @@ export default defineComponent({
           { confirmButtonText: '确定取消', cancelButtonText: '返回', type: 'warning' }
         )
         cancelingExam[exam.exam_id] = true
-        const response = await fetch(`${MCQ_BASE_URL}/exam/cancel`, {
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/cancel`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ exam_id: exam.exam_id })
         })
-        const data = await response.json()
+        const data = response.data
         if (data?.ok) {
           ElMessage.success('已取消考试')
           loadPublishedExams()
