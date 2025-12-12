@@ -1214,7 +1214,9 @@ export default defineComponent({
           body: JSON.stringify({
             paper_id: selectedPaperId.value,
             duration_sec: durationMin.value * 60,
-            student_id: store.state.user.username || 'anonymous'
+            student_id: store.state.user.username || 'anonymous',
+            student_name: store.state.user.username || 'anonymous',
+            police_id: store.state.user.policeId || ''
           })
         })
 
