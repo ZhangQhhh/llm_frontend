@@ -630,7 +630,7 @@ export default defineComponent({
       const afterMarker = analysis.substring(markerIdx + marker.length)
       
       // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
-      const optionPattern = /([A-H])[\.\、]\s*([\s\S]*?)(?=(?:\n[A-H][\.\、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      const optionPattern = /([A-H])[.、]\s*([\s\S]*?)(?=(?:\n[A-H][.、])|(?:\n\n说明：)|(?:\n【)|$)/g
       let match
       while ((match = optionPattern.exec(afterMarker)) !== null) {
         const label = match[1].toUpperCase()
