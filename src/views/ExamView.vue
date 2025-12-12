@@ -1207,7 +1207,7 @@ export default defineComponent({
       }
       starting.value = true
       try {
-        // 开始考试
+        // 开始考试 - username 就是登录时输入的警号
         const startData = await mcqFetch(API_ENDPOINTS.EXAM.START, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1216,7 +1216,7 @@ export default defineComponent({
             duration_sec: durationMin.value * 60,
             student_id: store.state.user.username || 'anonymous',
             student_name: store.state.user.username || 'anonymous',
-            police_id: store.state.user.policeId || ''
+            police_id: store.state.user.username || ''  // username 就是警号
           })
         })
 
