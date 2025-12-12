@@ -187,6 +187,16 @@ const routes: Array<RouteRecordRaw> = [
       requiresSuperAdmin: true,
       title: '问答日志管理'
     }
+  },
+  {
+    path: '/knowledge-base',
+    name: 'knowledge-base',
+    component: () => import('../views/KnowledgeBaseManageView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSuperAdmin: true,
+      title: '知识库管理'
+    }
   }
 ]
 

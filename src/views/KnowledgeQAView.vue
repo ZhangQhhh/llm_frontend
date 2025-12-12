@@ -1,7 +1,7 @@
 <template>
-  <div class="qa-page ai-tech-theme">
-    <!-- 科技感AI背景效果 -->
-    <div class="ai-bg">
+  <div class="qa-page ai-tech-theme" :class="{ 'lite-mode': liteMode }">
+    <!-- 科技感AI背景效果 (简洁模式下隐藏) -->
+    <div v-if="!liteMode" class="ai-bg">
       <!-- 星空粒子背景 -->
       <div class="stars-layer"></div>
       <!-- 科技网格 -->
@@ -28,6 +28,8 @@
         <div class="robot-scan-line"></div>
       </div>
     </div>
+    <!-- 简洁模式背景 -->
+    <div v-else class="lite-bg"></div>
     <el-container class="main-container">
       <!-- 头部区域 -->
       <el-header class="page-header">
@@ -427,6 +429,22 @@
       </el-main>
     </el-container>
 
+    <!-- 简洁模式切换按钮 -->
+    <div class="lite-mode-toggle">
+      <el-tooltip :content="liteMode ? '切换到炫酷模式' : '切换到简洁模式（低配电脑推荐）'" placement="right">
+        <el-button
+          :type="liteMode ? 'primary' : 'default'"
+          circle
+          size="small"
+          @click="toggleLiteMode"
+          class="lite-toggle-btn"
+        >
+          <el-icon><Monitor /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <span v-if="liteMode" class="lite-mode-label">简洁模式</span>
+    </div>
+
     <!-- 反馈模态框 -->
     <el-dialog
       v-model="showFeedbackModal"
@@ -470,7 +488,7 @@ import { ElMessage } from 'element-plus';
 import {
    Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-    Sunny, Setting
+    Sunny, Setting, Monitor
   } from '@element-plus/icons-vue';
 import {
   sendStreamChatRequest,
@@ -504,7 +522,7 @@ export default defineComponent({
   components: {
      Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-    Sunny, Setting
+    Sunny, Setting, Monitor
   },
   setup() {
     const store = useStore();
@@ -543,6 +561,14 @@ export default defineComponent({
     const mcqStrategy = ref('auto');  // 策略选择：auto(自动判断)、SIMPLE_LOOKUP、COMPLEX_VALIDATION
     const mcqResults = ref<any[]>([]);  // 存储每个选项的结果
     const activeTab = ref('0');  // 当前激活的标签页
+    
+    // 简洁模式（低配电脑推荐）
+    const liteMode = ref(localStorage.getItem('qa-lite-mode') === 'true');
+    
+    const toggleLiteMode = () => {
+      liteMode.value = !liteMode.value;
+      localStorage.setItem('qa-lite-mode', String(liteMode.value));
+    };
 
     // 监听选择题模式切换
     const handleMcqModeChange = (val: boolean) => {
@@ -1060,7 +1086,8 @@ export default defineComponent({
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
-      renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange
+      renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange,
+      liteMode, toggleLiteMode
     };
   }
 });
@@ -1379,8 +1406,8 @@ export default defineComponent({
 
 /* Header */
 .page-header {
-  margin-bottom: 2rem;
-  padding-top: 0;
+  margin-bottom: 4rem;
+  padding-top: 2rem;
   width: 100%;
 }
 
@@ -1614,6 +1641,7 @@ export default defineComponent({
 
 /* ========== AI科技感搜索卡片 ========== */
 .search-card {
+  margin-top: 1rem;
   margin-bottom: 2rem;
   overflow: visible;
   max-width: 1100px;
@@ -2744,5 +2772,426 @@ export default defineComponent({
 
 .brand-text h1 {
   animation: aiBreath 3s ease-in-out infinite;
+}
+
+/* ========== 简洁模式切换按钮 ========== */
+.lite-mode-toggle {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite-toggle-btn {
+  background: rgba(10, 25, 50, 0.9) !important;
+  border: 1px solid var(--ai-border) !important;
+  color: var(--ai-text) !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s;
+}
+
+.lite-toggle-btn:hover {
+  border-color: var(--ai-primary) !important;
+  box-shadow: 0 0 15px rgba(0, 180, 255, 0.3);
+}
+
+.lite-mode-label {
+  font-size: 12px;
+  color: #d4a574;
+  background: rgba(60, 40, 30, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(200, 150, 100, 0.3);
+}
+
+/* ========== 简洁模式背景 ========== */
+.lite-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #f5f7fa 0%, #eef1f5 100%);
+  z-index: 0;
+}
+
+/* ========== 简洁模式样式覆盖 ========== */
+.lite-mode {
+  /* 柔和简约主题变量 - 淡蓝灰色调 */
+  --lite-primary: #7a8b9a;
+  --lite-primary-light: #9aabb8;
+  --lite-accent: #a8b8c8;
+  --lite-bg: #f5f7fa;
+  --lite-bg-card: #ffffff;
+  --lite-border: #e5e9ed;
+  --lite-text: #4a5568;
+  --lite-text-secondary: #718096;
+  --lite-shadow: 0 2px 12px rgba(100, 120, 140, 0.06);
+}
+
+/* 禁用所有动画和过渡 - 性能优化 */
+.lite-mode *,
+.lite-mode *::before,
+.lite-mode *::after {
+  animation: none !important;
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+/* 禁用滤镜和模糊效果 - 性能优化 */
+.lite-mode * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+.lite-mode::before {
+  display: none !important;
+}
+
+/* ========== 简约品牌区域 ========== */
+.lite-mode .brand {
+  background: var(--lite-bg-card);
+  border: 1px solid var(--lite-border);
+  border-radius: 12px;
+  box-shadow: var(--lite-shadow);
+}
+
+.lite-mode .brand::before {
+  display: none !important;
+}
+
+.lite-mode .ai-avatar {
+  width: 56px;
+  height: 56px;
+}
+
+.lite-mode .avatar-ring,
+.lite-mode .avatar-pulse {
+  display: none !important;
+}
+
+.lite-mode .avatar-core {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #8a9bab 0%, #b8c5d0 100%);
+  border: none;
+}
+
+.lite-mode .ai-logo {
+  filter: brightness(1.2) !important;
+}
+
+.lite-mode .brand-text h1 {
+  color: var(--lite-text);
+  text-shadow: none;
+}
+
+.lite-mode .title-prefix {
+  background: linear-gradient(135deg, #8a9bab 0%, #a8b8c5 100%);
+  border: none;
+  color: #fff;
+}
+
+.lite-mode .subtitle {
+  color: var(--lite-text-secondary) !important;
+}
+
+.lite-mode .status-bar {
+  display: none;
+}
+
+/* ========== 简约卡片效果 ========== */
+.lite-mode .glass-effect {
+  background: var(--lite-bg-card) !important;
+  border: 1px solid var(--lite-border) !important;
+  box-shadow: var(--lite-shadow) !important;
+  border-radius: 12px !important;
+}
+
+.lite-mode .glass-effect::before,
+.lite-mode .glass-effect::after {
+  display: none !important;
+}
+
+/* ========== 简约输入区域 ========== */
+.lite-mode .custom-textarea :deep(.el-textarea__inner) {
+  background: #fafafa !important;
+  border: 1px solid var(--lite-border) !important;
+  color: var(--lite-text) !important;
+  box-shadow: none !important;
+}
+
+.lite-mode .custom-textarea :deep(.el-textarea__inner:focus) {
+  border-color: var(--lite-primary) !important;
+  box-shadow: none !important;
+}
+
+.lite-mode .custom-textarea :deep(.el-textarea__inner::placeholder) {
+  color: #999 !important;
+}
+
+/* ========== 简约按钮 ========== */
+.lite-mode .submit-btn {
+  background: linear-gradient(135deg, #7a8b9a 0%, #9aabb8 100%) !important;
+  box-shadow: 0 2px 8px rgba(100, 120, 140, 0.2) !important;
+  border-radius: 8px !important;
+}
+
+.lite-mode .submit-btn::before {
+  display: none !important;
+}
+
+.lite-mode .submit-btn:hover {
+  transform: none !important;
+  box-shadow: 0 3px 12px rgba(100, 120, 140, 0.25) !important;
+}
+
+/* ========== 简约进度条 ========== */
+.lite-mode .progress-card {
+  background: var(--lite-bg-card) !important;
+  border: 1px solid var(--lite-border) !important;
+}
+
+.lite-mode .progress-title {
+  color: var(--lite-primary) !important;
+  text-shadow: none !important;
+}
+
+.lite-mode .progress-value {
+  color: var(--lite-primary) !important;
+  text-shadow: none !important;
+}
+
+.lite-mode .progress-card :deep(.el-progress-bar__outer) {
+  background: #eef1f5 !important;
+  border: none !important;
+}
+
+.lite-mode .progress-card :deep(.el-progress-bar__inner) {
+  background: linear-gradient(90deg, var(--lite-primary), var(--lite-accent)) !important;
+  box-shadow: none !important;
+}
+
+/* ========== 简约思考区域 ========== */
+.lite-mode .thinking-section :deep(.el-collapse) {
+  border: 1px solid var(--lite-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lite-mode .thinking-section :deep(.el-collapse-item__header) {
+  background: #fafafa !important;
+  color: var(--lite-text) !important;
+  border-bottom: 1px solid var(--lite-border) !important;
+}
+
+.lite-mode .thinking-header {
+  color: var(--lite-primary) !important;
+}
+
+.lite-mode .thinking-content {
+  background: #fff !important;
+  color: var(--lite-text) !important;
+}
+
+.lite-mode .thinking-text {
+  color: #4a5568 !important;
+}
+
+.lite-mode .thinking-section :deep(.el-collapse-item__content) {
+  background: #fff !important;
+  color: #4a5568 !important;
+}
+
+.lite-mode .thinking-section :deep(.el-collapse-item__wrap) {
+  background: #fff !important;
+}
+
+/* ========== 简约回答卡片 ========== */
+.lite-mode .answer-card .card-header {
+  background: #fafafa !important;
+  border-bottom: 1px solid var(--lite-border) !important;
+}
+
+.lite-mode .answer-card .card-header .title {
+  color: var(--lite-primary) !important;
+  text-shadow: none !important;
+}
+
+.lite-mode .answer-body {
+  background: #fff !important;
+}
+
+.lite-mode .markdown-body {
+  color: var(--lite-text) !important;
+}
+
+.lite-mode .markdown-body h1,
+.lite-mode .markdown-body h2,
+.lite-mode .markdown-body h3,
+.lite-mode .markdown-body h4 {
+  color: var(--lite-text) !important;
+  border-color: var(--lite-border) !important;
+}
+
+.lite-mode .markdown-body code {
+  background: #f0f3f6 !important;
+  color: #5a6a7a !important;
+}
+
+.lite-mode .markdown-body pre {
+  background: #f5f7fa !important;
+  border: 1px solid var(--lite-border) !important;
+}
+
+/* ========== 简约参考文献 ========== */
+.lite-mode .meta-card {
+  background: var(--lite-bg-card) !important;
+}
+
+.lite-mode .meta-header .left {
+  color: var(--lite-primary) !important;
+}
+
+.lite-mode .reference-item {
+  background: #fafafa !important;
+  border: 1px solid var(--lite-border) !important;
+  border-radius: 8px !important;
+}
+
+.lite-mode .reference-item:hover {
+  transform: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  border-color: var(--lite-primary-light) !important;
+}
+
+.lite-mode .reference-item.is-selected {
+  border-left: 3px solid var(--lite-primary) !important;
+}
+
+.lite-mode .ref-name {
+  color: var(--lite-text) !important;
+}
+
+.lite-mode .ref-content {
+  color: var(--lite-text-secondary) !important;
+}
+
+/* ========== 简约关键词标签 ========== */
+.lite-mode .custom-tag {
+  background: #f0f3f6 !important;
+  border-color: var(--lite-border) !important;
+  color: var(--lite-text) !important;
+}
+
+/* 简洁模式下覆盖所有 el-tag 颜色 */
+.lite-mode .el-tag {
+  background: #f0f3f6 !important;
+  border-color: #d8dce5 !important;
+  color: #606266 !important;
+}
+
+.lite-mode .el-tag--primary {
+  background: #e8eef5 !important;
+  border-color: #c5d4e8 !important;
+  color: #5a6a7a !important;
+}
+
+.lite-mode .el-tag--success {
+  background: #e8f5e9 !important;
+  border-color: #c8e6c9 !important;
+  color: #4a7c59 !important;
+}
+
+.lite-mode .el-tag--warning {
+  background: #f5f0e8 !important;
+  border-color: #e6dcc8 !important;
+  color: #7a6a4a !important;
+}
+
+.lite-mode .el-tag--info {
+  background: #f0f3f6 !important;
+  border-color: #d8dce5 !important;
+  color: #606266 !important;
+}
+
+.lite-mode .el-tag--danger {
+  background: #fce8e8 !important;
+  border-color: #f5c4c4 !important;
+  color: #8b5a5a !important;
+}
+
+/* 参考来源区域标题 */
+.lite-mode .meta-header {
+  background: #fafafa !important;
+  border-bottom: 1px solid var(--lite-border) !important;
+}
+
+/* 参考来源索引标签 */
+.lite-mode .ref-index {
+  background: #e8eef5 !important;
+  color: #5a6a7a !important;
+}
+
+/* 参考来源分数标签 */
+.lite-mode .ref-scores .el-tag {
+  background: #f5f7fa !important;
+  border-color: #e5e9ed !important;
+  color: #606266 !important;
+}
+
+/* ========== 简约选择框和控件 ========== */
+.lite-mode .model-select :deep(.el-select__wrapper) {
+  background: #fafafa !important;
+  border: 1px solid var(--lite-border) !important;
+}
+
+.lite-mode .model-select :deep(.el-select__selected-item) {
+  color: var(--lite-text) !important;
+}
+
+.lite-mode .setting-item {
+  background: #f0f3f6 !important;
+}
+
+.lite-mode .setting-item .label {
+  color: var(--lite-text-secondary) !important;
+}
+
+.lite-mode .toggles :deep(.el-checkbox) {
+  --el-checkbox-checked-bg-color: var(--lite-primary);
+  --el-checkbox-checked-border-color: var(--lite-primary);
+}
+
+/* ========== 简约反馈区域 ========== */
+.lite-mode .answer-footer {
+  background: #fafafa !important;
+  border-top: 1px solid var(--lite-border) !important;
+}
+
+.lite-mode .feedback-label {
+  color: var(--lite-text-secondary) !important;
+}
+
+/* ========== 简洁模式切换按钮 ========== */
+.lite-mode .lite-toggle-btn {
+  background: #7a8b9a !important;
+  border-color: #7a8b9a !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(100, 120, 140, 0.15) !important;
+}
+
+.lite-mode .lite-mode-label {
+  color: var(--lite-primary) !important;
+  background: var(--lite-bg-card) !important;
+  border: 1px solid var(--lite-border) !important;
 }
 </style>

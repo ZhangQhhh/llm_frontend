@@ -59,6 +59,10 @@
                 <el-icon><Document /></el-icon>
                 <span>问答日志</span>
               </el-dropdown-item>
+              <el-dropdown-item v-if="isSuperAdmin" command="knowledge-base">
+                <el-icon><FolderOpened /></el-icon>
+                <span>知识库管理</span>
+              </el-dropdown-item>
               <el-dropdown-item v-if="isAdmin" command="feedback">
                 <el-icon><ChatLineSquare /></el-icon>
                 <span>反馈管理</span>
@@ -114,7 +118,8 @@ import {
   ChatLineSquare,
   DocumentCopy,
   Document,
-  DataBoard
+  DataBoard,
+  FolderOpened
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -128,7 +133,8 @@ export default defineComponent({
     ChatLineSquare,
     DocumentCopy,
     Document,
-    DataBoard
+    DataBoard,
+    FolderOpened
   },
   setup() {
     const store = useStore()
@@ -185,6 +191,8 @@ export default defineComponent({
         router.push('/feedback')
       } else if (command === 'qa-logs') {
         router.push('/qa-logs')
+      } else if (command === 'knowledge-base') {
+        router.push('/knowledge-base')
       }
     }
 

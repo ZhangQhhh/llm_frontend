@@ -567,7 +567,7 @@ export default defineComponent({
     const upgradeRules = reactive<FormRules>({
       username: [
         { required: true, message: '请输入用户名', trigger: 'blur' },
-        { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }
+        { min: 2, message: '用户名至少 2 个字符', trigger: 'blur' }
       ]
     })
 
