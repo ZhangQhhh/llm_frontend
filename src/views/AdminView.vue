@@ -3384,9 +3384,15 @@ export default defineComponent({
       publishing.value = true
       publishMessage.value = '发布中...'
       try {
-        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/publish`, {
+        const userStr = localStorage.getItem('multi_turn_chat_user')
+        const user = userStr ? JSON.parse(userStr) : {}
+        const response = await fetch(`${MCQ_BASE_URL}/exam/publish`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Role': user.role || '',
+            'X-User-Name': encodeURIComponent(user.username || '')
+          },
           body: JSON.stringify({
             exam_name: publishForm.examName.trim(),
             paper_id: publishForm.paperId,
@@ -3396,7 +3402,7 @@ export default defineComponent({
             description: publishForm.description
           })
         })
-        const data = response.data
+        const data = await response.json()
         if (data?.ok) {
           ElMessage.success('考试发布成功')
           publishMessage.value = '发布成功！'
@@ -3421,8 +3427,17 @@ export default defineComponent({
     const loadPublishedExams = async () => {
       loadingPublished.value = true
       try {
-        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/published`, { method: 'GET', cache: 'no-store' })
-        const data = response.data
+        const userStr = localStorage.getItem('multi_turn_chat_user')
+        const user = userStr ? JSON.parse(userStr) : {}
+        const response = await fetch(`${MCQ_BASE_URL}/exam/published`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            'X-User-Role': user.role || '',
+            'X-User-Name': encodeURIComponent(user.username || '')
+          }
+        })
+        const data = await response.json()
         if (data?.ok !== false) {
           publishedExams.value = Array.isArray(data.exams) ? data.exams : []
         }
@@ -3441,12 +3456,18 @@ export default defineComponent({
           { confirmButtonText: '确定取消', cancelButtonText: '返回', type: 'warning' }
         )
         cancelingExam[exam.exam_id] = true
-        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/cancel`, {
+        const userStr = localStorage.getItem('multi_turn_chat_user')
+        const user = userStr ? JSON.parse(userStr) : {}
+        const response = await fetch(`${MCQ_BASE_URL}/exam/cancel`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Role': user.role || '',
+            'X-User-Name': encodeURIComponent(user.username || '')
+          },
           body: JSON.stringify({ exam_id: exam.exam_id })
         })
-        const data = response.data
+        const data = await response.json()
         if (data?.ok) {
           ElMessage.success('已取消考试')
           loadPublishedExams()

@@ -12,12 +12,27 @@ const http: AxiosInstance = axios.create({
   },
 });
 
-// 请求拦截器：自动添加 token
+// 请求拦截器：自动添加 token 和用户信息
 http.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // 添加用户角色和用户名（后端权限校验需要）
+    const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+    if (userStr && config.headers) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role) {
+          config.headers['X-User-Role'] = user.role;
+        }
+        if (user.username) {
+          config.headers['X-User-Name'] = encodeURIComponent(user.username);
+        }
+      } catch (e) {
+        // ignore parse error
+      }
     }
     return config;
   },
