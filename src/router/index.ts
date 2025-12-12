@@ -215,11 +215,8 @@ const router = createRouter({
 })
 
 // 路由守卫：权限检查
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('jwt_token')
-  const isLoggedIn = (store.state as any).user.is_login
-  const isAdmin = store.getters.isAdmin
-  const isSuperAdmin = store.getters.isSuperAdmin
   
   // 设置页面标题
   if (to.meta.title) {
@@ -241,6 +238,33 @@ router.beforeEach((to, from, next) => {
     })
     return
   }
+  
+  // 如果有 token 且需要权限检查，确保用户信息已加载
+  if (token && (to.meta.requiresAdmin || to.meta.requiresSuperAdmin)) {
+    const isLoggedIn = (store.state as any).user.is_login
+    
+    // 如果用户信息还没加载，先加载用户信息
+    if (!isLoggedIn) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          store.dispatch('getinfo', {
+            success: () => resolve(),
+            error: () => reject()
+          })
+        })
+      } catch {
+        // 获取用户信息失败，可能 token 已过期
+        ElMessage.warning('登录已过期，请重新登录')
+        next({ name: 'login', query: { redirect: to.fullPath } })
+        return
+      }
+    }
+  }
+  
+  // 重新获取权限状态（用户信息已加载后）
+  const isLoggedIn = (store.state as any).user.is_login
+  const isAdmin = store.getters.isAdmin
+  const isSuperAdmin = store.getters.isSuperAdmin
   
   // 检查是否需要管理员权限
   if (to.meta.requiresAdmin && !isAdmin) {

@@ -16,12 +16,21 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 const buildUrl = (token: string, userId?: string) => {
   if (!WS_ENDPOINT) return '';
 
+  // 构建基础 URL
   const url = new URL(WS_ENDPOINT, window.location.origin);
   url.searchParams.set('token', token);
   if (userId) {
     url.searchParams.set('userId', userId);
   }
-  return url.toString();
+  
+  // 将 http/https 协议转换为 ws/wss
+  let wsUrl = url.toString();
+  if (wsUrl.startsWith('https://')) {
+    wsUrl = wsUrl.replace('https://', 'wss://');
+  } else if (wsUrl.startsWith('http://')) {
+    wsUrl = wsUrl.replace('http://', 'ws://');
+  }
+  return wsUrl;
 };
 
 const clearHeartbeat = () => {
