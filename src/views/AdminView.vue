@@ -142,8 +142,26 @@
                   <el-button type="success" @click="generateExplanations" :loading="generating" :icon="MagicStick" size="default">
                     一键解析
                   </el-button>
-                  <el-button @click="explainBatchAsync" :loading="asyncExplaining" :icon="Loading" size="default">
+                  <el-button @click="explainBatchAsync" :loading="asyncExplaining" :icon="Loading" size="default" :disabled="isTaskRunning">
                     异步批量
+                  </el-button>
+                  <el-button
+                    v-if="isTaskRunning"
+                    type="warning"
+                    @click="stopTask"
+                    :loading="stoppingTask"
+                    size="default"
+                  >
+                    停止
+                  </el-button>
+                  <el-button
+                    v-if="canResumeTask"
+                    type="primary"
+                    @click="resumeTask"
+                    :loading="resumingTask"
+                    size="default"
+                  >
+                    恢复
                   </el-button>
                   <el-divider direction="vertical" />
                   <el-select v-model="llmModelId" placeholder="AI模型" size="default" style="width:180px">
@@ -152,6 +170,24 @@
                   <el-input-number v-model="topN" :min="1" :step="1" size="default" style="width:90px" controls-position="right" />
                   <el-checkbox v-model="thinking" size="default">思考模式</el-checkbox>
                   <el-checkbox v-model="insertBlock" size="default">精准检索</el-checkbox>
+                  <el-divider direction="vertical" />
+                  <el-popover placement="bottom" :width="200" trigger="click">
+                    <template #reference>
+                      <el-button size="default" plain>
+                        解析目标 ({{ parseTargetStatuses.length }})
+                        <el-icon class="el-icon--right"><Filter /></el-icon>
+                      </el-button>
+                    </template>
+                    <div style="padding: 8px 0;">
+                      <div style="font-size: 12px; color: #909399; margin-bottom: 8px;">选择要解析的题目状态：</div>
+                      <el-checkbox-group v-model="parseTargetStatuses" style="display: flex; flex-direction: column; gap: 8px;">
+                        <el-checkbox label="none">无解析</el-checkbox>
+                        <el-checkbox label="rejected">已驳回</el-checkbox>
+                        <el-checkbox label="abnormal">异常</el-checkbox>
+                        <el-checkbox label="draft">草稿</el-checkbox>
+                      </el-checkbox-group>
+                    </div>
+                  </el-popover>
                 </div>
                 <div v-if="generateMessage || asyncMsg" class="toolbar-message">
                   <el-icon class="message-icon"><InfoFilled /></el-icon>
@@ -214,6 +250,9 @@
                     <el-checkbox v-model="selectedQuestions" :value="q.qid" />
                     <span><strong>{{ (idx + 1) + (page-1)*pageSize }}.</strong> {{ q.stem }}</span>
                   </div>
+                  <el-tag v-if="q.ai_generated_answer" type="warning" size="small" style="margin-right: 6px;" effect="plain">
+                    🤖 AI答案待校对
+                  </el-tag>
                   <el-tag :type="getStatusTagType(q.status)" size="small">{{ getStatusText(q.status) }}</el-tag>
                 </div>
                 <div class="q-options">
@@ -302,7 +341,7 @@
                     <el-form-item label="选项">
                       <div class="opts-grid">
                         <div
-                          v-for="k in optionKeys(q.options)"
+                          v-for="k in editOptionKeys"
                           :key="k"
                           class="opt-row"
                         >
@@ -313,6 +352,26 @@
                             type="textarea"
                             :autosize="{ minRows: 1, maxRows: 4 }"
                           />
+                          <el-button
+                            type="danger"
+                            :icon="Close"
+                            circle
+                            size="small"
+                            class="opt-remove-btn"
+                            @click="removeOption(k)"
+                            title="删除此选项"
+                          />
+                        </div>
+                        <div class="opt-actions">
+                          <el-button
+                            type="primary"
+                            plain
+                            size="small"
+                            @click="addOption"
+                          >
+                            + 添加选项
+                          </el-button>
+                          <span class="opt-hint">（支持 A-H，最少1个选项）</span>
                         </div>
                       </div>
                     </el-form-item>
@@ -338,86 +397,112 @@
 
 
                 <div v-if="showingAnalysis[q.qid]" class="q-analysis">
-                  <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
-                  </div>
-
-                  <!-- 参考资料折叠块（结构参考 qa_public.html） -->
-                  <details class="analysis-sources">
-                    <summary>参考资料（重排序最终 TopN）</summary>
-
-                    <div v-if="sourcesLoading[q.qid]" class="src-loading">
-                      参考资料载入中…
-                    </div>
-                    <div v-else-if="sourcesError[q.qid]" class="src-error">
-                      加载失败：{{ sourcesError[q.qid] }}
-                    </div>
-                    <div
-                      v-else-if="sourcesLoaded[q.qid] && (!sourcesMap[q.qid] || !sourcesMap[q.qid].length)"
-                      class="src-empty"
-                    >
-                      无参考资料
-                    </div>
-
-                    <template v-else>
-                      <!-- 分组选项（复杂验证：sources_grouped） -->
-                      <template v-if="isGroupedSources(q.qid)">
-                        <details
-                          v-for="(group, gi) in sourcesMap[q.qid]"
-                          :key="group.label || gi"
-                          class="src-group"
-                          open
+                  <!-- 复杂验证策略：显示Tab切换 -->
+                  <template v-if="isComplexValidation(q.analysis)">
+                    <div class="analysis-tab-bar">
+                      <el-radio-group
+                        v-model="analysisActiveTab[q.qid]"
+                        size="small"
+                        @change="() => { if (!analysisActiveTab[q.qid]) analysisActiveTab[q.qid] = 'all' }"
+                      >
+                        <el-radio-button label="all">全部</el-radio-button>
+                        <el-radio-button
+                          v-for="opt in q.options"
+                          :key="opt.label"
+                          :label="opt.label"
                         >
-                          <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
-                          <div class="src-group-body">
-                            <div
-                              v-for="(s, si) in group.sources || []"
-                              :key="si"
-                              class="src-card"
-                            >
-                              <div class="src-title">{{ getSourceTitle(s, si) }}</div>
-                              <div v-if="getSourceMeta(s)" class="src-meta">
-                                {{ getSourceMeta(s) }}
-                              </div>
-                              <div v-if="sourcePassages(s).length" class="src-passages">
-                                <div
-                                  v-for="(p, pi) in sourcePassages(s)"
-                                  :key="pi"
-                                  class="passage"
-                                >
-                                  <pre>{{ p }}</pre>
+                          选项 {{ opt.label }}
+                        </el-radio-button>
+                      </el-radio-group>
+                    </div>
+
+                    <!-- 根据Tab显示对应解析内容 -->
+                    <div class="q-analysis-text" v-html="processAnalysisText(getAnalysisForTab(q.qid, q.analysis, analysisActiveTab[q.qid] || 'all'))">
+                    </div>
+
+                    <!-- 参考资料：根据Tab过滤 -->
+                    <details class="analysis-sources">
+                      <summary>参考资料（重排序最终 TopN）</summary>
+                      <div v-if="sourcesLoading[q.qid]" class="src-loading">参考资料载入中…</div>
+                      <div v-else-if="sourcesError[q.qid]" class="src-error">加载失败：{{ sourcesError[q.qid] }}</div>
+                      <div v-else-if="sourcesLoaded[q.qid] && getSourcesForTab(q.qid, analysisActiveTab[q.qid] || 'all').length === 0" class="src-empty">
+                        无参考资料
+                      </div>
+                      <template v-else>
+                        <!-- 当选择"全部"或非分组时显示分组列表 -->
+                        <template v-if="(analysisActiveTab[q.qid] || 'all') === 'all' && isGroupedSources(q.qid)">
+                          <details
+                            v-for="(group, gi) in sourcesMap[q.qid]"
+                            :key="group.label || gi"
+                            class="src-group"
+                            open
+                          >
+                            <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
+                            <div class="src-group-body">
+                              <div v-for="(s, si) in group.sources || []" :key="si" class="src-card">
+                                <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                                <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                                <div v-if="sourcePassages(s).length" class="src-passages">
+                                  <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                                 </div>
+                                <div v-else class="src-empty">无片段</div>
+                              </div>
+                            </div>
+                          </details>
+                        </template>
+                        <!-- 当选择特定选项时只显示该选项的参考资料 -->
+                        <template v-else-if="(analysisActiveTab[q.qid] || 'all') !== 'all' && isGroupedSources(q.qid)">
+                          <template v-for="(group, gi) in getSourcesForTab(q.qid, analysisActiveTab[q.qid] || 'all')" :key="group.label || gi">
+                            <div v-for="(s, si) in group.sources || []" :key="si" class="src-card">
+                              <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                              <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                              <div v-if="sourcePassages(s).length" class="src-passages">
+                                <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                               </div>
                               <div v-else class="src-empty">无片段</div>
                             </div>
-                          </div>
-                        </details>
-                      </template>
-
-                      <!-- 扁平列表（简单检索：sources） -->
-                      <template v-else>
-                        <div
-                          v-for="(s, si) in sourcesMap[q.qid] || []"
-                          :key="si"
-                          class="src-card"
-                        >
-                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
-                          <div v-if="getSourceMeta(s)" class="src-meta">
-                            {{ getSourceMeta(s) }}
-                          </div>
-                          <div v-if="sourcePassages(s).length" class="src-passages">
-                            <div
-                              v-for="(p, pi) in sourcePassages(s)"
-                              :key="pi"
-                              class="passage"
-                            >
-                              <pre>{{ p }}</pre>
+                          </template>
+                        </template>
+                        <!-- 非分组结构 -->
+                        <template v-else>
+                          <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
+                            <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                            <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                            <div v-if="sourcePassages(s).length" class="src-passages">
+                              <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                             </div>
+                            <div v-else class="src-empty">无片段</div>
+                          </div>
+                        </template>
+                      </template>
+                    </details>
+                  </template>
+
+                  <!-- 简单查找策略：直接显示全部 -->
+                  <template v-else>
+                    <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
+                    </div>
+
+                    <!-- 参考资料折叠块 -->
+                    <details class="analysis-sources">
+                      <summary>参考资料（重排序最终 TopN）</summary>
+                      <div v-if="sourcesLoading[q.qid]" class="src-loading">参考资料载入中…</div>
+                      <div v-else-if="sourcesError[q.qid]" class="src-error">加载失败：{{ sourcesError[q.qid] }}</div>
+                      <div v-else-if="sourcesLoaded[q.qid] && (!sourcesMap[q.qid] || !sourcesMap[q.qid].length)" class="src-empty">
+                        无参考资料
+                      </div>
+                      <template v-else>
+                        <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
+                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                          <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                          <div v-if="sourcePassages(s).length" class="src-passages">
+                            <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                           </div>
                           <div v-else class="src-empty">无片段</div>
                         </div>
                       </template>
-                    </template>
-                  </details>
+                    </details>
+                  </template>
                 </div>
               </el-card>
             </div>
@@ -444,6 +529,9 @@
               <el-button @click="loadDeletedQuestions" :loading="loadingDeleted" :icon="Refresh">
                 刷新
               </el-button>
+              <el-checkbox v-model="selectAllDeleted" @change="toggleSelectAllDeleted" style="margin: 0 12px;">
+                全选
+              </el-checkbox>
               <el-button
                 type="success"
                 @click="batchRestore"
@@ -528,20 +616,206 @@
         <!-- 试卷管理 -->
         <el-tab-pane label="试卷管理" name="papers">
           <div class="tab-content">
-            <el-form label-width="100px">
-              <el-form-item label="试卷标题">
-                <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
-                <el-button type="primary" @click="createPaper" :loading="creatingPaper" style="margin-left: 10px">生成试卷</el-button>
-                <span class="status-msg">{{ paperMessage }}</span>
-              </el-form-item>
-            </el-form>
+            <!-- 生成试卷区域 -->
+            <el-card shadow="never" style="margin-bottom: 20px;">
+              <template #header>
+                <span style="font-weight: 600;">生成试卷</span>
+              </template>
+              
+              <!-- 试卷标题和生成模式 -->
+              <el-form label-width="100px" style="margin-bottom: 16px;">
+                <el-form-item label="试卷标题" style="margin-bottom: 12px;">
+                  <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
+                </el-form-item>
+                
+                <!-- 分数设置 -->
+                <el-form-item label="分数设置" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; gap: 16px;">
+                    <span>
+                      <span style="margin-right: 4px;">单选题</span>
+                      <el-input-number v-model="singleScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">多选题</span>
+                      <el-input-number v-model="multiScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">不定项</span>
+                      <el-input-number v-model="indeterminateScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                  </div>
+                </el-form-item>
+                
+                <!-- 生成模式选择 -->
+                <el-form-item label="生成模式" style="margin-bottom: 12px;">
+                  <el-radio-group v-model="paperGenerateMode">
+                    <el-radio value="manual">手动选择题目</el-radio>
+                    <el-radio value="random">随机抽取题目</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                
+                <!-- 随机抽取配置 -->
+                <el-form-item v-if="paperGenerateMode === 'random'" label="题目数量" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <span>
+                      <span style="margin-right: 4px;">单选</span>
+                      <el-input-number v-model="randomSingleCount" :min="0" :max="singleApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ singleApprovedCount }}</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">多选</span>
+                      <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ multiApprovedCount }}</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">不定项</span>
+                      <el-input-number v-model="randomIndeterminateCount" :min="0" :max="singleApprovedCount + multiApprovedCount" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
+                    </span>
+                  </div>
+                </el-form-item>
+                
+                <!-- 手动模式下的不定项配置 -->
+                <el-form-item v-if="paperGenerateMode === 'manual'" label="不定项题" style="margin-bottom: 12px;">
+                  <el-checkbox v-model="enableIndeterminate" style="margin-right: 16px;">启用不定项选择题</el-checkbox>
+                  <template v-if="enableIndeterminate">
+                    <el-radio-group v-model="indeterminateMode" style="margin-right: 16px;">
+                      <el-radio value="select">手动选择题目</el-radio>
+                      <el-radio value="count">按数量抽取</el-radio>
+                    </el-radio-group>
+                    
+                    <template v-if="indeterminateMode === 'select'">
+                      <span style="color: #67c23a; font-size: 13px;">
+                        已选 {{ selectedIndeterminateQuestions.length }} 题为不定项
+                        <span v-if="selectedIndeterminateQuestions.length > 0">（点击下方题目的"不定项"按钮可取消）</span>
+                      </span>
+                    </template>
+                    
+                    <template v-else>
+                      <span style="margin-right: 8px;">单选</span>
+                      <el-input-number v-model="indeterminateSingleCount" :min="0" :max="99" size="small" style="width: 80px;" />
+                      <span style="margin: 0 8px;">题，多选</span>
+                      <el-input-number v-model="indeterminateMultiCount" :min="0" :max="99" size="small" style="width: 80px;" />
+                      <span style="margin-left: 8px;">题（随机抽取）</span>
+                    </template>
+                  </template>
+                </el-form-item>
+                
+                <!-- 生成按钮 -->
+                <el-form-item label="" style="margin-bottom: 0;">
+                  <el-button type="primary" @click="createPaper" :loading="creatingPaper">
+                    {{ paperGenerateMode === 'random' 
+                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomIndeterminateCount}题)` 
+                      : `生成试卷 ${selectedPaperQuestions.length > 0 ? '(' + selectedPaperQuestions.length + '题)' : '(全部)'}` }}
+                  </el-button>
+                  <span class="status-msg">{{ paperMessage }}</span>
+                </el-form-item>
+              </el-form>
+              
+              <!-- 筛选和搜索 -->
+              <div class="action-bar" style="margin-bottom: 12px;">
+                <el-radio-group v-model="paperQuestionFilter" size="small">
+                  <el-radio-button value="all">全部</el-radio-button>
+                  <el-radio-button value="single">单选题</el-radio-button>
+                  <el-radio-button value="multi">多选题</el-radio-button>
+                </el-radio-group>
+                <el-input
+                  v-model="paperQuestionSearch"
+                  placeholder="搜索题干或选项"
+                  clearable
+                  style="width: 250px; margin-left: 12px;"
+                  size="small"
+                >
+                  <template #prefix>
+                    <el-icon><Search /></el-icon>
+                  </template>
+                </el-input>
+                <el-checkbox v-model="selectAllPaperQuestions" @change="toggleSelectAllPaperQuestions" style="margin-left: 12px;">
+                  全选
+                </el-checkbox>
+                <span style="margin-left: 12px; color: #909399; font-size: 13px;">
+                  已选 {{ selectedPaperQuestions.length }} / {{ filteredPaperQuestions.length }} 题
+                  （已通过共 {{ approvedQuestions.length }} 题）
+                </span>
+              </div>
+              
+              <!-- 题目列表 -->
+              <div v-if="approvedQuestions.length === 0" style="text-align: center; padding: 30px; color: #999;">
+                暂无已通过的题目，请先在题库管理中通过题目
+              </div>
+              <div v-else-if="filteredPaperQuestions.length === 0" style="text-align: center; padding: 30px; color: #999;">
+                没有符合筛选条件的题目
+              </div>
+              <div v-else class="paper-question-list">
+                <div
+                  v-for="(q, idx) in filteredPaperQuestions"
+                  :key="q.qid"
+                  class="paper-question-item"
+                  :class="{ selected: selectedPaperQuestions.includes(q.qid) }"
+                >
+                  <el-checkbox
+                    :model-value="selectedPaperQuestions.includes(q.qid)"
+                    @change="(val: boolean) => {
+                      if (val) {
+                        if (!selectedPaperQuestions.includes(q.qid)) selectedPaperQuestions.push(q.qid)
+                      } else {
+                        const i = selectedPaperQuestions.indexOf(q.qid)
+                        if (i > -1) selectedPaperQuestions.splice(i, 1)
+                      }
+                    }"
+                  />
+                  <div class="paper-question-content">
+                    <div class="paper-question-stem">
+                      <el-tag :type="isMultiChoice(q) ? 'warning' : 'info'" size="small" style="margin-right: 8px;">
+                        {{ isMultiChoice(q) ? '多选' : '单选' }}
+                      </el-tag>
+                      <el-tag 
+                        v-if="enableIndeterminate && indeterminateMode === 'select'" 
+                        :type="selectedIndeterminateQuestions.includes(q.qid) ? 'success' : 'info'"
+                        size="small" 
+                        style="margin-right: 8px; cursor: pointer;"
+                        :effect="selectedIndeterminateQuestions.includes(q.qid) ? 'dark' : 'plain'"
+                        @click="toggleIndeterminate(q.qid)"
+                      >
+                        {{ selectedIndeterminateQuestions.includes(q.qid) ? '✓ 不定项' : '+ 不定项' }}
+                      </el-tag>
+                      <el-tag v-if="!q.answer || !q.answer.trim()" type="danger" size="small" style="margin-right: 8px;">
+                        无答案
+                      </el-tag>
+                      <el-tag v-if="q.ai_generated_answer" type="warning" size="small" style="margin-right: 8px;" effect="plain">
+                        🤖 AI答案待校对
+                      </el-tag>
+                      <span>{{ idx + 1 }}. {{ q.stem }}</span>
+                    </div>
+                    <div class="paper-question-options">
+                      <span v-for="opt in q.options" :key="opt.label" class="paper-question-opt">
+                        {{ opt.label }}. {{ opt.text }}
+                      </span>
+                    </div>
+                    <div class="paper-question-answer" :class="{ 'no-answer': !q.answer || !q.answer.trim() }">
+                      {{ q.answer && q.answer.trim() ? `答案：${q.answer}` : '⚠️ 无答案（考试系统无法判分）' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-card>
             
             <!-- 试卷列表 -->
-            <div style="margin-top: 20px;">
-              <div class="action-bar" style="margin-bottom: 10px;">
-                <el-button @click="loadPaperList" :loading="loadingPaperList">刷新列表</el-button>
-                <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份试卷</span>
-              </div>
+            <el-card shadow="never">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600;">已生成试卷</span>
+                  <div>
+                    <input ref="paperUploadRef" type="file" accept=".docx,.txt" style="display:none" @change="onPickPaperFile" />
+                    <el-button size="small" type="success" @click="triggerPickPaperFile" :icon="Upload">上传试卷</el-button>
+                    <el-button size="small" @click="loadPaperList" :loading="loadingPaperList" :icon="Refresh">刷新</el-button>
+                    <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份</span>
+                  </div>
+                </div>
+              </template>
               <el-table :data="paperList" stripe border style="width: 100%">
                 <el-table-column prop="title" label="试卷名称" min-width="200" />
                 <el-table-column prop="paper_id" label="文件名" min-width="250" />
@@ -552,7 +826,109 @@
                   </template>
                 </el-table-column>
               </el-table>
-            </div>
+            </el-card>
+            
+            <!-- 上传试卷预览编辑对话框 -->
+            <el-dialog
+              v-model="paperPreviewVisible"
+              title="上传试卷预览"
+              width="900px"
+              :close-on-click-modal="false"
+            >
+              <div style="margin-bottom: 16px;">
+                <el-form :inline="true">
+                  <el-form-item label="试卷标题">
+                    <el-input v-model="uploadedPaperTitle" placeholder="请输入试卷标题" style="width: 300px" />
+                  </el-form-item>
+                  <el-form-item>
+                    <el-tag type="info">共 {{ uploadedPaperItems.length }} 题</el-tag>
+                    <el-tag v-if="paperParseIssueCount > 0" type="danger" style="margin-left: 8px;">
+                      {{ paperParseIssueCount }} 题存在问题
+                    </el-tag>
+                  </el-form-item>
+                </el-form>
+              </div>
+              
+              <div style="max-height: 500px; overflow-y: auto;">
+                <div
+                  v-for="(item, idx) in uploadedPaperItems"
+                  :key="idx"
+                  class="paper-preview-item"
+                  :class="{ 'has-issue': hasParseIssue(item) }"
+                >
+                  <div class="preview-header">
+                    <span class="preview-num">{{ idx + 1 }}.</span>
+                    <el-tag v-if="item.qtype === 'single'" type="info" size="small">单选</el-tag>
+                    <el-tag v-else-if="item.qtype === 'multi'" type="warning" size="small">多选</el-tag>
+                    <el-tag v-else-if="item.qtype === 'indeterminate'" type="success" size="small">不定项</el-tag>
+                    <el-tag v-if="hasParseIssue(item)" type="danger" size="small">需检查</el-tag>
+                    <el-tag v-if="!item.answer" type="warning" size="small">缺少答案</el-tag>
+                    <el-tag v-if="getOptionsCount(item) < 2" type="warning" size="small">选项不足</el-tag>
+                    <el-button
+                      size="small"
+                      type="primary"
+                      link
+                      @click="toggleEditPaperItem(idx)"
+                      style="margin-left: auto;"
+                    >
+                      {{ editingPaperItemIdx === idx ? '收起' : '编辑' }}
+                    </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      link
+                      @click="deletePaperItem(idx)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                  
+                  <!-- 预览模式 -->
+                  <div v-if="editingPaperItemIdx !== idx" class="preview-content">
+                    <div class="preview-stem">{{ item.stem || '（题干为空）' }}</div>
+                    <div class="preview-options">
+                      <!-- eslint-disable-next-line vue/no-use-v-if-with-v-for -->
+                      <span v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" v-if="item.options && item.options[k]" class="preview-opt">
+                        {{ k }}. {{ item.options[k] }}
+                      </span>
+                    </div>
+                    <div class="preview-answer" :class="{ 'no-answer': !item.answer }">
+                      {{ item.answer ? `答案：${item.answer}` : '⚠️ 缺少答案' }}
+                    </div>
+                  </div>
+                  
+                  <!-- 编辑模式 -->
+                  <div v-else class="preview-edit">
+                    <el-form label-width="60px" size="small">
+                      <el-form-item label="题干">
+                        <el-input v-model="item.stem" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
+                      </el-form-item>
+                      <el-form-item label="选项">
+                        <div style="width: 100%;">
+                          <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
+                            <el-input v-model="item.options[k]" placeholder="留空则不显示此选项" style="flex: 1;" />
+                          </div>
+                        </div>
+                      </el-form-item>
+                      <el-form-item label="答案">
+                        <el-input v-model="item.answer" placeholder="如 A 或 ABC" style="width: 200px;" />
+                      </el-form-item>
+                      <el-form-item label="解析">
+                        <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
+                      </el-form-item>
+                    </el-form>
+                  </div>
+                </div>
+              </div>
+              
+              <template #footer>
+                <el-button @click="paperPreviewVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveUploadedPaper" :loading="savingUploadedPaper">
+                  保存试卷
+                </el-button>
+              </template>
+            </el-dialog>
           </div>
         </el-tab-pane>
 
@@ -560,7 +936,7 @@
         <el-tab-pane label="成绩导出" name="export">
           <div class="tab-content">
             <div class="action-bar">
-              <el-select v-model="selectedExportPaper" placeholder="选择试卷" style="width: 300px">
+              <el-select v-model="selectedExportPaper" placeholder="选择试卷" style="width: 300px" @change="loadGradesStats">
                 <el-option v-for="paper in exportPapers" :key="paper.paper_id" :label="paper.title" :value="paper.paper_id" />
               </el-select>
               <el-button @click="loadExportPapers" :loading="loadingExportPapers">刷新</el-button>
@@ -568,6 +944,239 @@
               <el-button @click="exportDocx" :loading="exportingDocx">导出DOCX</el-button>
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
+            
+            <!-- 成绩统计图表 -->
+            <div v-if="selectedExportPaper && gradesStats" class="grades-stats-panel">
+              <el-row :gutter="20">
+                <!-- 总体概览 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><TrendCharts /></el-icon>
+                        <span>总体概览</span>
+                      </div>
+                    </template>
+                    <div class="stats-overview">
+                      <div class="stat-item">
+                        <div class="stat-value">{{ gradesStats.total_students || 0 }}</div>
+                        <div class="stat-label">参考人数</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value">{{ gradesStats.submitted_count || 0 }}</div>
+                        <div class="stat-label">已交卷</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value highlight">{{ (gradesStats.avg_score || 0).toFixed(1) }}</div>
+                        <div class="stat-label">平均分</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value">{{ (gradesStats.pass_rate || 0).toFixed(1) }}%</div>
+                        <div class="stat-label">及格率</div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+                
+                <!-- 分数分布 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><Histogram /></el-icon>
+                        <span>分数分布</span>
+                      </div>
+                    </template>
+                    <div class="score-distribution">
+                      <div v-for="(item, idx) in scoreDistribution" :key="idx" class="dist-item">
+                        <div class="dist-label">{{ item.range }}</div>
+                        <div class="dist-bar-wrapper">
+                          <div class="dist-bar" :style="{ width: item.percent + '%', background: item.color }"></div>
+                        </div>
+                        <div class="dist-count">{{ item.count }}人 ({{ item.percent.toFixed(1) }}%)</div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+                
+                <!-- 最高/最低分 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><Medal /></el-icon>
+                        <span>成绩排名</span>
+                      </div>
+                    </template>
+                    <div class="rank-info">
+                      <div class="rank-item best">
+                        <div class="rank-icon">🏆</div>
+                        <div class="rank-content">
+                          <div class="rank-title">最高分</div>
+                          <div class="rank-score">{{ gradesStats.max_score || 0 }}</div>
+                          <div class="rank-name">{{ gradesStats.max_score_student || '-' }}</div>
+                        </div>
+                      </div>
+                      <el-divider />
+                      <div class="rank-item worst">
+                        <div class="rank-icon">📉</div>
+                        <div class="rank-content">
+                          <div class="rank-title">最低分</div>
+                          <div class="rank-score">{{ gradesStats.min_score || 0 }}</div>
+                          <div class="rank-name">{{ gradesStats.min_score_student || '-' }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+              </el-row>
+              
+              <!-- 成绩明细表 -->
+              <el-card shadow="hover" style="margin-top: 20px;">
+                <template #header>
+                  <div class="stats-card-header">
+                    <el-icon class="stats-icon"><List /></el-icon>
+                    <span>成绩明细</span>
+                    <span style="margin-left: auto; color: #909399; font-size: 13px;">共 {{ gradesStats.details?.length || 0 }} 人</span>
+                  </div>
+                </template>
+                <el-table :data="gradesStats.details || []" border stripe max-height="400" style="width: 100%">
+                  <el-table-column type="index" label="排名" width="70" />
+                  <el-table-column prop="student_name" label="学生姓名" min-width="120" />
+                  <el-table-column prop="student_id" label="学号/警号" min-width="140" />
+                  <el-table-column prop="score" label="得分" width="100" sortable>
+                    <template #default="scope">
+                      <span :class="{ 'score-pass': scope.row.score >= 60, 'score-fail': scope.row.score < 60 }">
+                        {{ scope.row.score?.toFixed(1) || 0 }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="correct_count" label="正确题数" width="100" />
+                  <el-table-column prop="submit_time" label="交卷时间" min-width="160" />
+                </el-table>
+              </el-card>
+            </div>
+            
+            <el-empty v-else-if="selectedExportPaper && !loadingGradesStats" description="暂无成绩数据" />
+          </div>
+        </el-tab-pane>
+        
+        <!-- 考试发布 -->
+        <el-tab-pane label="考试发布" name="publish">
+          <div class="tab-content">
+            <!-- 发布考试表单 -->
+            <el-card shadow="never" style="margin-bottom: 20px;">
+              <template #header>
+                <span style="font-weight: 600;">📢 发布新考试</span>
+              </template>
+              
+              <el-form :model="publishForm" label-width="100px" style="max-width: 700px;">
+                <el-form-item label="考试名称" required>
+                  <el-input v-model="publishForm.examName" placeholder="请输入考试名称，如：2024年度业务考核" />
+                </el-form-item>
+                
+                <el-form-item label="选择试卷" required>
+                  <el-select v-model="publishForm.paperId" placeholder="选择已生成的试卷" style="width: 100%">
+                    <el-option
+                      v-for="paper in paperList"
+                      :key="paper.paper_id"
+                      :label="paper.title"
+                      :value="paper.paper_id"
+                    />
+                  </el-select>
+                </el-form-item>
+                
+                <el-form-item label="考试时间" required>
+                  <el-date-picker
+                    v-model="publishForm.timeRange"
+                    type="datetimerange"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    format="YYYY-MM-DD HH:mm"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                
+                <el-form-item label="考试时长">
+                  <el-input-number v-model="publishForm.durationMin" :min="10" :max="180" :step="5" />
+                  <span style="margin-left: 10px; color: #909399;">分钟（学生进入考试后的答题时间）</span>
+                </el-form-item>
+                
+                <el-form-item label="考试说明">
+                  <el-input
+                    v-model="publishForm.description"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="可选，填写考试注意事项等"
+                  />
+                </el-form-item>
+                
+                <el-form-item>
+                  <el-button type="primary" @click="publishExam" :loading="publishing" :icon="Bell">
+                    发布考试通知
+                  </el-button>
+                  <span class="status-msg" v-if="publishMessage">{{ publishMessage }}</span>
+                </el-form-item>
+              </el-form>
+            </el-card>
+            
+            <!-- 已发布考试列表 -->
+            <el-card shadow="never">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600;">📋 已发布考试</span>
+                  <el-button size="small" @click="loadPublishedExams" :loading="loadingPublished" :icon="Refresh">刷新</el-button>
+                </div>
+              </template>
+              
+              <el-empty v-if="publishedExams.length === 0" description="暂无已发布的考试" />
+              
+              <el-table v-else :data="publishedExams" border stripe style="width: 100%">
+                <el-table-column prop="exam_name" label="考试名称" min-width="180" />
+                <el-table-column prop="paper_title" label="试卷" min-width="150" />
+                <el-table-column label="考试时间" min-width="280">
+                  <template #default="{ row }">
+                    {{ row.start_time }} ~ {{ row.end_time }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="duration_min" label="时长" width="80">
+                  <template #default="{ row }">{{ row.duration_min }}分钟</template>
+                </el-table-column>
+                <el-table-column label="状态" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getExamStatusType(row.status)">{{ getExamStatusText(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="参与人数" width="100">
+                  <template #default="{ row }">{{ row.participant_count || 0 }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="{ row }">
+                    <el-button
+                      v-if="row.status === 'pending' || row.status === 'active'"
+                      type="danger"
+                      size="small"
+                      plain
+                      @click="cancelExam(row)"
+                      :loading="cancelingExam[row.exam_id]"
+                    >
+                      取消
+                    </el-button>
+                    <el-button
+                      v-else
+                      type="info"
+                      size="small"
+                      plain
+                      disabled
+                    >
+                      已结束
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -672,7 +1281,7 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
@@ -685,6 +1294,7 @@ interface Question {
   answer: string
   analysis: string
   status: string
+  ai_generated_answer?: boolean  // 标记答案是否由 AI 生成（需人工校对）
   deleted_at?: string
   deleted_by?: string
 }
@@ -697,7 +1307,7 @@ interface Paper {
 export default defineComponent({
   name: 'AdminView',
   // eslint-disable-next-line vue/no-unused-components
-  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled },
+  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
@@ -730,6 +1340,9 @@ export default defineComponent({
     const uploadMessage = ref('')
     const generating = ref(false)
     const generateMessage = ref('')
+    // 解析目标状态选择（默认选中：无解析、已驳回、异常）
+    const parseTargetStatuses = ref<string[]>(['none', 'rejected', 'abnormal'])
+
     const pollingInterval = ref<number | null>(null)
     const questions = ref<Question[]>([])
     const statusFilter = ref<'all'|'none'|'draft'|'approved'|'rejected'|'abnormal'|'processing'>('all')
@@ -737,11 +1350,96 @@ export default defineComponent({
     const showingAnalysis = reactive<Record<string, boolean>>({})
     const approvingAll = ref(false)
 
+    // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
+    const analysisActiveTab = reactive<Record<string, string>>({})
+
+    // 判断解析是否为复杂验证策略（通过文本标识判断）
+    const isComplexValidation = (analysis: string): boolean => {
+      return !!(analysis && analysis.includes('【复杂验证（逐选项核查·汇总）】'))
+    }
+
+    // 解析复杂验证的分项解析内容
+    const parseOptionAnalyses = (analysis: string): Record<string, string> => {
+      const result: Record<string, string> = {}
+      if (!analysis) return result
+      
+      // 查找"分项解析："之后的内容
+      const marker = '分项解析：'
+      const markerIdx = analysis.indexOf(marker)
+      if (markerIdx === -1) return result
+      
+      const afterMarker = analysis.substring(markerIdx + marker.length)
+      
+      // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
+      const optionPattern = /([A-H])[.、]\s*([\s\S]*?)(?=(?:\n[A-H][.、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      let match
+      while ((match = optionPattern.exec(afterMarker)) !== null) {
+        const label = match[1].toUpperCase()
+        const content = match[2].trim()
+        if (content) {
+          result[label] = content
+        }
+      }
+      
+      return result
+    }
+
+    // 获取指定Tab对应的解析内容（优先使用后端per_option数据）
+    const getAnalysisForTab = (qid: string, analysis: string, tab: string): string => {
+      if (!analysis) return ''
+      if (tab === 'all') return analysis
+      
+      // 优先使用后端返回的per_option数据
+      const perOpts = perOptionMap[qid]
+      if (perOpts && perOpts.length > 0) {
+        const opt = perOpts.find(o => o.label === tab)
+        if (opt && opt.explain) {
+          return opt.explain
+        }
+      }
+      
+      // 回退：使用正则解析（兼容旧数据）
+      const optionAnalyses = parseOptionAnalyses(analysis)
+      return optionAnalyses[tab] || '（无该选项解析）'
+    }
+
+    // 获取指定Tab对应的参考资料（过滤分组）
+    const getSourcesForTab = (qid: string, tab: string): any[] => {
+      const src = sourcesMap[qid]
+      if (!Array.isArray(src) || !src.length) return []
+      
+      // 如果是"全部"Tab，返回所有
+      if (tab === 'all') return src
+      
+      // 检查是否为分组结构
+      const first = src[0] as any
+      if (first && typeof first === 'object' && Array.isArray(first.sources)) {
+        // 分组结构，只返回对应选项的组
+        return src.filter((group: any) => group.label === tab)
+      }
+      
+      // 非分组结构，返回全部
+      return src
+    }
+
+    // 获取题目可用的Tab选项
+    const getAvailableTabs = (q: Question): string[] => {
+      const tabs = ['all']
+      if (q.options && Array.isArray(q.options)) {
+        q.options.forEach(opt => {
+          if (opt.label) tabs.push(opt.label.toUpperCase())
+        })
+      }
+      return tabs
+    }
+
     // 参考资料缓存与渲染（结构与 qa_public.html 对齐）
     const sourcesMap = reactive<Record<string, any[]>>({})
     const sourcesLoading = reactive<Record<string, boolean>>({})
     const sourcesLoaded = reactive<Record<string, boolean>>({})
     const sourcesError = reactive<Record<string, string>>({})
+    // 分选项解析缓存（复杂验证策略）
+    const perOptionMap = reactive<Record<string, Array<{label: string, explain: string}>>>({})
 
     const sourcePassages = (src: any): string[] => {
       const out: string[] = []
@@ -810,6 +1508,9 @@ export default defineComponent({
         }
         const src = j.sources || []
         sourcesMap[qid] = Array.isArray(src) ? src : []
+        // 保存分选项解析数据（复杂验证策略）
+        const perOpt = j.per_option || []
+        perOptionMap[qid] = Array.isArray(perOpt) ? perOpt : []
         sourcesLoaded[qid] = true
       } catch (error: any) {
         sourcesError[qid] = error?.message || String(error)
@@ -824,6 +1525,10 @@ export default defineComponent({
     const bankImportRef = ref<HTMLInputElement | null>(null)
     const asyncExplaining = ref(false)
     const asyncMsg = ref('')
+    const currentTaskId = ref<string | null>(null)
+    const currentTaskStatus = ref<string>('')  // queued, running, stopped, done, failed
+    const stoppingTask = ref(false)
+    const resumingTask = ref(false)
     const llmOptions = ref([
       { value: 'qwen3-32b',     label: 'Qwen (通用) ' },
       { value: 'qwen2025',      label: 'Qwen (增强)' },
@@ -851,10 +1556,20 @@ export default defineComponent({
     // 回收站相关
     const deletedQuestions = ref<Question[]>([])
     const selectedDeleted = ref<string[]>([])
+    const selectAllDeleted = ref(false)
     const loadingDeleted = ref(false)
     const recycleMessage = ref('')
     const restoringQuestion = reactive<Record<string, boolean>>({})
     const permanentDeleting = reactive<Record<string, boolean>>({})
+
+    // 回收站全选切换
+    const toggleSelectAllDeleted = () => {
+      if (selectAllDeleted.value) {
+        selectedDeleted.value = deletedQuestions.value.map(q => q.qid)
+      } else {
+        selectedDeleted.value = []
+      }
+    }
 
     const filteredQuestions = computed(() => {
       try {
@@ -866,6 +1581,12 @@ export default defineComponent({
     const paperTitle = ref('')
     const creatingPaper = ref(false)
     const paperMessage = ref('')
+
+    // 分数设置
+    const singleScore = ref(1)       // 单选题分数
+    const multiScore = ref(5)        // 多选题分数
+    const indeterminateScore = ref(5) // 不定项分数
+
     // 试卷列表管理
     const paperList = ref<Paper[]>([])
     const loadingPaperList = ref(false)
@@ -876,6 +1597,148 @@ export default defineComponent({
     const exportingZip = ref(false)
     const exportingDocx = ref(false)
     const exportMessage = ref('')
+
+    // 试卷题目选择相关
+    const paperQuestionFilter = ref<'all' | 'single' | 'multi'>('all')
+    const paperQuestionSearch = ref('')
+    const selectedPaperQuestions = ref<string[]>([])
+    const selectAllPaperQuestions = ref(false)
+
+    // 试卷生成模式
+    const paperGenerateMode = ref<'manual' | 'random'>('manual')
+    
+    // 随机抽取配置
+    const randomSingleCount = ref(5)
+    const randomMultiCount = ref(5)
+    const randomIndeterminateCount = ref(0)
+    
+    // 计算题库中各类型的题目数量
+    const singleApprovedCount = computed(() => {
+      return approvedQuestions.value.filter(q => !isMultiChoice(q)).length
+    })
+    const multiApprovedCount = computed(() => {
+      return approvedQuestions.value.filter(q => isMultiChoice(q)).length
+    })
+    
+    // 不定项配置（手动模式下使用）
+    const enableIndeterminate = ref(false)
+    const indeterminateMode = ref<'select' | 'count'>('select')
+    const indeterminateSingleCount = ref(5)
+    const indeterminateMultiCount = ref(5)
+    const indeterminateTotalCount = ref(10)
+    const selectedIndeterminateQuestions = ref<string[]>([])
+
+    // 切换题目的不定项状态
+    const toggleIndeterminate = (qid: string) => {
+      const idx = selectedIndeterminateQuestions.value.indexOf(qid)
+      if (idx > -1) {
+        selectedIndeterminateQuestions.value.splice(idx, 1)
+      } else {
+        selectedIndeterminateQuestions.value.push(qid)
+      }
+    }
+
+    // 上传试卷相关
+    const paperUploadRef = ref<HTMLInputElement | null>(null)
+    const paperPreviewVisible = ref(false)
+    const uploadedPaperTitle = ref('')
+    const uploadedPaperItems = ref<any[]>([])
+    const editingPaperItemIdx = ref<number | null>(null)
+    const savingUploadedPaper = ref(false)
+
+    // ======= 考试发布相关 =======
+    const publishForm = reactive({
+      examName: '',
+      paperId: '',
+      timeRange: [] as string[],
+      durationMin: 60,
+      description: ''
+    })
+    const publishing = ref(false)
+    const publishMessage = ref('')
+    const publishedExams = ref<any[]>([])
+    const loadingPublished = ref(false)
+    const cancelingExam = reactive<Record<string, boolean>>({})
+
+    // ======= 成绩统计相关 =======
+    const gradesStats = ref<any>(null)
+    const loadingGradesStats = ref(false)
+    
+    // 分数分布计算
+    const scoreDistribution = computed(() => {
+      if (!gradesStats.value?.details?.length) return []
+      const details = gradesStats.value.details
+      const total = details.length
+      const ranges = [
+        { range: '90-100', min: 90, max: 100, color: '#67c23a', count: 0 },
+        { range: '80-89', min: 80, max: 89, color: '#409eff', count: 0 },
+        { range: '70-79', min: 70, max: 79, color: '#e6a23c', count: 0 },
+        { range: '60-69', min: 60, max: 69, color: '#f56c6c', count: 0 },
+        { range: '0-59', min: 0, max: 59, color: '#909399', count: 0 }
+      ]
+      details.forEach((d: any) => {
+        const score = d.score || 0
+        for (const r of ranges) {
+          if (score >= r.min && score <= r.max) {
+            r.count++
+            break
+          }
+        }
+      })
+      return ranges.map(r => ({
+        ...r,
+        percent: total > 0 ? (r.count / total) * 100 : 0
+      }))
+    })
+
+    // 判断题目是否为多选题（答案包含多个字母）
+    const isMultiChoice = (q: Question) => {
+      const answer = (q.answer || '').toUpperCase().replace(/[^A-H]/g, '')
+      return answer.length > 1
+    }
+
+    // 已通过的题目列表
+    const approvedQuestions = computed(() => {
+      return questions.value.filter(q => q.status === 'approved')
+    })
+
+    // 根据筛选和搜索过滤后的题目
+    const filteredPaperQuestions = computed(() => {
+      let result = approvedQuestions.value
+
+      // 按类型筛选
+      if (paperQuestionFilter.value === 'single') {
+        result = result.filter(q => !isMultiChoice(q))
+      } else if (paperQuestionFilter.value === 'multi') {
+        result = result.filter(q => isMultiChoice(q))
+      }
+
+      // 按关键词搜索
+      const keyword = paperQuestionSearch.value.trim().toLowerCase()
+      if (keyword) {
+        result = result.filter(q => {
+          // 搜索题干
+          if (q.stem.toLowerCase().includes(keyword)) return true
+          // 搜索选项
+          for (const opt of q.options) {
+            if (opt.text.toLowerCase().includes(keyword)) return true
+          }
+          return false
+        })
+      }
+
+      return result
+    })
+
+    // 切换全选试卷题目
+    const toggleSelectAllPaperQuestions = () => {
+      if (selectAllPaperQuestions.value) {
+        selectedPaperQuestions.value = filteredPaperQuestions.value.map(q => q.qid)
+      } else {
+        selectedPaperQuestions.value = []
+      }
+    }
+
     const userSearch = ref('')
     interface ManagedUser {
       id?: string
@@ -969,6 +1832,7 @@ export default defineComponent({
         ElMessage.warning('请选择 .docx / .txt 文件')
         return
       }
+      
       uploading.value = true
       uploadMessage.value = '识别中…'
 
@@ -989,14 +1853,109 @@ export default defineComponent({
         const upsertPayload = items.map((x: any) => ({
           stem: x.stem || '',
           options: x.options || {},
-          answer: (x.answer || '').toString().toUpperCase(),  // ← 关键：传 answer
+          answer: (x.answer || '').toString().toUpperCase(),
           explain: x.explain_original || '',
         }))
 
-        const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
+        // 3）检查重复题目
+        uploadMessage.value = '检查重复题目中…'
+        const checkRes = await fetch(`${MCQ_BASE_URL}/bank/check_duplicates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: upsertPayload }),
+        })
+        const checkData = await checkRes.json()
+        
+        if (!checkData || checkData.ok === false) {
+          throw new Error(checkData?.msg || '检查重复失败')
+        }
+
+        let finalPayload = upsertPayload
+        let skippedCount = 0
+
+        // 4）如果有重复题目，弹窗提示用户（自动跳过重复，提供预览）
+        if (checkData.has_duplicates && checkData.dup_count > 0) {
+          const dupCount = checkData.dup_count
+          const newCount = checkData.new_count
+          
+          // 构建重复题目的 HTML 预览列表
+          const dupListHtml = (checkData.duplicates || [])
+            .map((d: any, i: number) => {
+              const stem = (d.new_item?.stem || '').substring(0, 80)
+              const answer = d.new_item?.answer || ''
+              return `<div style="padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px;">
+                <span style="color: #909399;">${i + 1}.</span> 
+                <span>${stem}${stem.length >= 80 ? '...' : ''}</span>
+                <span style="color: #E6A23C; margin-left: 8px;">答案: ${answer}</span>
+              </div>`
+            })
+            .join('')
+          
+          // 构建完整的 HTML 消息
+          const messageHtml = `
+            <div style="margin-bottom: 12px;">
+              检测到 <strong style="color: #E6A23C;">${dupCount}</strong> 道题目已存在于题库中（题干、选项、答案相同），将自动跳过。
+              ${newCount > 0 ? `<br/>本次将保存 <strong style="color: #67C23A;">${newCount}</strong> 道新题目。` : ''}
+            </div>
+            <details style="margin-top: 8px; cursor: pointer;">
+              <summary style="color: #409EFF; font-size: 13px; outline: none;">
+                点击查看重复题目列表
+              </summary>
+              <div style="max-height: 300px; overflow-y: auto; margin-top: 8px; padding: 8px; background: #f5f7fa; border-radius: 4px;">
+                ${dupListHtml}
+              </div>
+            </details>
+          `
+
+          // 如果全部都是重复题目
+          if (newCount === 0) {
+            await ElMessageBox.alert(
+              messageHtml,
+              '全部题目已存在',
+              {
+                dangerouslyUseHTMLString: true,
+                confirmButtonText: '知道了',
+                type: 'info',
+              }
+            )
+            uploadMessage.value = `全部 ${dupCount} 道题目已存在于题库中，无需保存`
+            uploading.value = false
+            return
+          }
+
+          try {
+            // 弹出确认对话框
+            await ElMessageBox.confirm(
+              messageHtml,
+              '发现重复题目',
+              {
+                dangerouslyUseHTMLString: true,
+                distinguishCancelAndClose: true,
+                confirmButtonText: '确定保存新题目',
+                cancelButtonText: '取消上传',
+                type: 'warning',
+              }
+            )
+            
+            // 用户确认，自动跳过重复项
+            const dupIndexSet = new Set((checkData.duplicates || []).map((d: any) => d.index))
+            finalPayload = upsertPayload.filter((_: any, idx: number) => !dupIndexSet.has(idx))
+            skippedCount = dupCount
+            
+          } catch (dialogAction) {
+            // 用户取消上传
+            uploadMessage.value = '已取消上传'
+            uploading.value = false
+            return
+          }
+        }
+
+        // 5）执行保存
+        uploadMessage.value = '保存中…'
+        const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: finalPayload }),
         })
         const saved = await rs.json()
         if (!saved || saved.ok === false) {
@@ -1005,14 +1964,14 @@ export default defineComponent({
 
         const bankItems = Array.isArray(saved.items) ? saved.items : []
 
-        // 3）映射成前端 Question 时，记得带上 answer
+        // 6）映射成前端 Question 时，记得带上 answer
         questions.value = bankItems.map((it: any): Question => {
           const status = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
             options: normalizeOptions(it.options),
-            answer: (it.answer || '').toString().toUpperCase(),      // ← 新增
+            answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
           }
@@ -1021,7 +1980,19 @@ export default defineComponent({
         const parsedExplainCount = questions.value.filter(
           q => (q.analysis || '').trim().length > 0
         ).length
-        uploadMessage.value = `识别成功并已保存：${questions.value.length} 题；识别解析：${parsedExplainCount} 条`
+        
+        // 7）构建消息，包含格式化和去重信息
+        let msg = `识别成功并已保存：${questions.value.length} 题；识别解析：${parsedExplainCount} 条`
+        if (skippedCount > 0) {
+          msg += `；跳过重复：${skippedCount} 题`
+        }
+        if (j.llm_formatted) {
+          msg += '（已使用LLM格式化）'
+        }
+        if (j.format_msg) {
+          msg += ` [${j.format_msg}]`
+        }
+        uploadMessage.value = msg
         ElMessage.success('上传成功')
       } catch (e: any) {
         const msg = e?.message || String(e) || '未知错误'
@@ -1034,11 +2005,24 @@ export default defineComponent({
 
 
     const explainBatchAsync = async () => {
+      // 检查是否选择了解析目标
+      if (parseTargetStatuses.value.length === 0) {
+        asyncMsg.value = '请至少选择一个解析目标状态'
+        return
+      }
       asyncExplaining.value = true; asyncMsg.value = '创建任务中…'
       try{
-        const req:any = { model_id: llmModelId.value, thinking: thinking.value, rerank_top_n: topN.value, use_insert_block: insertBlock.value }
+        const req:any = { 
+          model_id: llmModelId.value, 
+          thinking: thinking.value, 
+          rerank_top_n: topN.value, 
+          use_insert_block: insertBlock.value,
+          target_statuses: parseTargetStatuses.value  // 传递选中的目标状态
+        }
         const r = await fetch(`${MCQ_BASE_URL}/explain_batch_async`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req) })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '创建任务失败')
+        currentTaskId.value = String(j.task_id)
+        currentTaskStatus.value = 'running'
         pollTaskStatus(String(j.task_id))
       }catch(e:any){ asyncMsg.value = `失败：${e?.message||e}` }
       finally{ asyncExplaining.value = false }
@@ -1060,10 +2044,12 @@ export default defineComponent({
 
     const pollTaskStatus = (taskId: string) => {
       if (pollingInterval.value) clearInterval(pollingInterval.value)
+      currentTaskId.value = taskId
       pollingInterval.value = window.setInterval(async () => {
         try {
           const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache:'no-store' })
           const j = await r.json(); if (!j || !j.ok) return
+          currentTaskStatus.value = j.status || ''
           asyncMsg.value = `进度：${j.done||0}/${j.total||0}`
           const arrs = [j.results, j.delta_results, j.partial_results, j.latest_results, j.items, j.updates]
           ;(arrs||[]).forEach((arr:any[]) => {
@@ -1078,9 +2064,15 @@ export default defineComponent({
               }
             })
           })
-          if (j.status && String(j.status).toLowerCase() in {done:1, failed:1}){
+          if (j.status && String(j.status).toLowerCase() in {done:1, failed:1, stopped:1}){
             if (pollingInterval.value) clearInterval(pollingInterval.value)
-            asyncMsg.value = '任务已结束'
+            if (j.status === 'stopped') {
+              asyncMsg.value = `任务已停止（${j.done||0}/${j.total||0}）`
+            } else {
+              asyncMsg.value = '任务已结束'
+              currentTaskId.value = null
+              currentTaskStatus.value = ''
+            }
             await loadQuestions()
           }
         } catch (e) {
@@ -1091,16 +2083,101 @@ export default defineComponent({
       }, 2000)
     }
 
+    // 停止任务
+    const stopTask = async () => {
+      if (!currentTaskId.value) return
+      stoppingTask.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/tasks/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: currentTaskId.value })
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          asyncMsg.value = '正在停止任务...'
+        } else {
+          throw new Error(j?.msg || '停止失败')
+        }
+      } catch (e: any) {
+        ElMessage.error(e?.message || '停止任务失败')
+      } finally {
+        stoppingTask.value = false
+      }
+    }
+
+    // 恢复任务
+    const resumeTask = async () => {
+      resumingTask.value = true
+      asyncMsg.value = '正在恢复任务...'
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/tasks/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: currentTaskId.value || '' })
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          currentTaskId.value = j.task_id
+          currentTaskStatus.value = 'running'
+          asyncMsg.value = j.msg || `已恢复，剩余 ${j.remaining} 题`
+          pollTaskStatus(j.task_id)
+        } else {
+          throw new Error(j?.msg || '恢复失败')
+        }
+      } catch (e: any) {
+        asyncMsg.value = `恢复失败：${e?.message || e}`
+        ElMessage.error(e?.message || '恢复任务失败')
+      } finally {
+        resumingTask.value = false
+      }
+    }
+
+    // 检查是否有未完成的任务（页面加载时调用）
+    const checkPendingTask = async () => {
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/tasks/pending`, { cache: 'no-store' })
+        const j = await r.json()
+        if (j?.ok && j.has_pending) {
+          currentTaskId.value = j.task_id
+          currentTaskStatus.value = j.status || 'stopped'
+          asyncMsg.value = `发现未完成任务（${j.done}/${j.total}），可点击"恢复"继续`
+          if (j.status === 'running') {
+            pollTaskStatus(j.task_id)
+          }
+        }
+      } catch (e) {
+        console.debug && console.debug('检查未完成任务失败', e)
+      }
+    }
+
+    // 计算属性：是否有正在运行的任务
+    const isTaskRunning = computed(() => {
+      return currentTaskStatus.value === 'running' || currentTaskStatus.value === 'queued'
+    })
+
+    // 计算属性：是否有已停止的任务可恢复
+    const canResumeTask = computed(() => {
+      return currentTaskId.value && currentTaskStatus.value === 'stopped'
+    })
+
     const generateExplanations = async () => {
       generating.value = true
       generateMessage.value = '正在生成解析...'
 
       try {
+        // 根据选中的目标状态筛选题目
+        const selectedStatuses = parseTargetStatuses.value
+        if (selectedStatuses.length === 0) {
+          generateMessage.value = '请至少选择一个解析目标状态'
+          generating.value = false
+          return
+        }
         const targets = (questions.value || []).filter(
-          q => (q.status || 'none') !== 'approved'
+          q => selectedStatuses.includes(q.status || 'none')
         )
         if (targets.length === 0) {
-          generateMessage.value = '无可解析题目'
+          generateMessage.value = `无符合条件的题目（目标状态：${selectedStatuses.join(', ')}）`
           generating.value = false
           return
         }
@@ -1126,10 +2203,6 @@ export default defineComponent({
               ),
             })),
             thinking: false,
-            // 不写也可以，用默认模型；写上更显式
-            // model_id: llmModelId.value,
-            // rerank_top_n: topN.value,
-            // use_insert_block: insertBlock.value,
           }
 
           const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
@@ -1138,7 +2211,6 @@ export default defineComponent({
             body: JSON.stringify(payload),
           })
 
-          // 先拿原始文本，再尝试 JSON.parse，这样 HTML 错误页不会触发 "Unexpected token <" 这种糊涂报错
           const raw = await resp.text()
           let data: any
           try {
@@ -1153,10 +2225,26 @@ export default defineComponent({
             throw new Error(data?.msg || '生成失败')
           }
 
-          const updates = (data.results || []).map((r: any) => ({
-            id: String(r.qid),
-            explain: r.explain || '',
-          }))
+          // 处理结果，检查无答案的题目
+          const updates = (data.results || []).map((r: any) => {
+            const qid = String(r.qid)
+            const originalQuestion = batch.find(q => q.qid === qid)
+            const originalAnswer = (originalQuestion?.answer || '').trim()
+            const aiFinalAnswer = (r.final_answer || '').trim()
+            
+            const updateItem: any = {
+              id: qid,
+              explain: r.explain || '',
+            }
+            
+            // 如果原题无答案且 AI 给出了答案，自动填充并标记
+            if (!originalAnswer && aiFinalAnswer) {
+              updateItem.answer = aiFinalAnswer.toUpperCase()
+              updateItem.ai_generated_answer = true
+            }
+            
+            return updateItem
+          })
 
           allUpdates.push(...updates)
         }
@@ -1214,9 +2302,10 @@ export default defineComponent({
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
             options: normalizeOptions(it.options),
-            answer: (it.answer || '').toString().toUpperCase(),   // ← 这里也要带
+            answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
+            ai_generated_answer: Boolean(it.ai_generated_answer),  // AI 生成的答案标记
           }
         })
       } catch (error: any) {
@@ -1812,6 +2901,35 @@ export default defineComponent({
       if (Array.isArray(opts)) return (opts as any[]).map((o:any)=>o.label).filter(Boolean).sort()
       return Object.keys(opts || {}).sort()
     }
+
+    // 获取当前编辑缓冲区的选项 keys（用于编辑模式）
+    const editOptionKeys = computed(() => {
+      return Object.keys(editBuf.options || {}).sort()
+    })
+
+    // 添加选项
+    const addOption = () => {
+      const allKeys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+      const existingKeys = Object.keys(editBuf.options || {})
+      // 找到下一个可用的选项字母
+      const nextKey = allKeys.find(k => !existingKeys.includes(k))
+      if (nextKey) {
+        editBuf.options[nextKey] = ''
+      } else {
+        ElMessage.warning('最多支持8个选项（A-H）')
+      }
+    }
+
+    // 删除选项
+    const removeOption = (key: string) => {
+      const existingKeys = Object.keys(editBuf.options || {})
+      if (existingKeys.length <= 1) {
+        ElMessage.warning('至少需要保留1个选项')
+        return
+      }
+      delete editBuf.options[key]
+    }
+
     const pagedQuestions = computed(() => {
       const start = (page.value - 1) * pageSize.value
       return (filteredQuestions.value || []).slice(start, start + pageSize.value)
@@ -1835,21 +2953,69 @@ export default defineComponent({
         .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
         .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
         .replace(/正在使用精准检索分析[.…]*\s*/g, '')
+        // 清理残留的孤立 ** 符号
+        .replace(/^\s*\*\*\s*$/gm, '')
+        .replace(/\*\*(?=\s*$)/gm, '')
       return renderMarkdown(cleaned)
     }
     const createPaper = async () => {
       // 仍然要求填写标题，和原行为保持一致
       if (!paperTitle.value) return ElMessage.warning('请输入试卷标题')
-
+      
       const name = (paperTitle.value || '').trim() || '试卷'
       creatingPaper.value = true
       paperMessage.value = '生成中…'
+      
+      let requestBody: any = { 
+        name,
+        score_config: {
+          single: singleScore.value,
+          multi: multiScore.value,
+          indeterminate: indeterminateScore.value
+        }
+      }
+      
+      if (paperGenerateMode.value === 'random') {
+        // 随机抽取模式
+        requestBody.random_mode = {
+          single_count: randomSingleCount.value,
+          multi_count: randomMultiCount.value,
+          indeterminate_count: randomIndeterminateCount.value
+        }
+      } else {
+        // 手动选择模式
+        // 如果选择了题目，则使用选中的题目；否则使用全部已通过题目
+        const questionIds = selectedPaperQuestions.value.length > 0 
+          ? selectedPaperQuestions.value 
+          : null
+        requestBody.question_ids = questionIds
+        
+        // 构建不定项配置
+        if (enableIndeterminate.value) {
+          if (indeterminateMode.value === 'select') {
+            // 手动选择模式：传递选中的不定项题目ID
+            if (selectedIndeterminateQuestions.value.length > 0) {
+              requestBody.indeterminate = {
+                mode: 'select',
+                question_ids: selectedIndeterminateQuestions.value
+              }
+            }
+          } else {
+            // 按数量抽取模式
+            requestBody.indeterminate = {
+              mode: 'count',
+              single_count: indeterminateSingleCount.value,
+              multi_count: indeterminateMultiCount.value
+            }
+          }
+        }
+      }
 
       try {
         const r = await fetch(`${MCQ_BASE_URL}/bank/generate_paper`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+          body: JSON.stringify(requestBody)
         })
 
         const ct = (r.headers && r.headers.get)
@@ -1942,6 +3108,161 @@ export default defineComponent({
       }
     }
 
+    // ========== 上传试卷相关函数 ==========
+
+    // 计算有问题的题目数量
+    const paperParseIssueCount = computed(() => {
+      return uploadedPaperItems.value.filter(item => hasParseIssue(item)).length
+    })
+
+    // 判断题目是否有解析问题
+    const hasParseIssue = (item: any): boolean => {
+      if (!item.stem || item.stem.trim().length === 0) return true
+      if (getOptionsCount(item) < 2) return true
+      return false
+    }
+
+    // 获取有效选项数量
+    const getOptionsCount = (item: any): number => {
+      if (!item.options) return 0
+      let count = 0
+      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+        if (item.options[k] && item.options[k].trim()) count++
+      }
+      return count
+    }
+
+    // 触发选择试卷文件
+    const triggerPickPaperFile = () => { paperUploadRef.value?.click() }
+
+    // 选择试卷文件后处理
+    const onPickPaperFile = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const f = input?.files?.[0]
+      if (!f) return
+      
+      try {
+        ElMessage.info('正在解析试卷文件...')
+        
+        const fd = new FormData()
+        fd.append('file', f)
+        
+        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', body: fd })
+        const j = await r.json()
+        
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || '解析失败')
+        }
+        
+        const items = Array.isArray(j.items) ? j.items : []
+        
+        if (items.length === 0) {
+          ElMessage.warning('未识别到任何题目，请检查文件格式')
+          return
+        }
+        
+        // 确保每个item的options是对象格式，保留qtype
+        uploadedPaperItems.value = items.map((x: any) => ({
+          stem: x.stem || '',
+          options: x.options || {},
+          answer: (x.answer || '').toString().toUpperCase(),
+          explain: x.explain_original || '',
+          qtype: x.qtype || '',  // 保留题目类型（single/multi/indeterminate）
+        }))
+        
+        // 从文件名提取标题
+        const fileName = f.name.replace(/\.(docx|txt)$/i, '')
+        uploadedPaperTitle.value = fileName
+        
+        editingPaperItemIdx.value = null
+        paperPreviewVisible.value = true
+        
+        const issueCount = uploadedPaperItems.value.filter(item => hasParseIssue(item)).length
+        if (issueCount > 0) {
+          ElMessage.warning(`识别到 ${items.length} 道题目，其中 ${issueCount} 道可能存在问题，请检查`)
+        } else {
+          ElMessage.success(`成功识别 ${items.length} 道题目`)
+        }
+        
+      } catch (e: any) {
+        ElMessage.error(`解析失败：${e?.message || e}`)
+      } finally {
+        if (paperUploadRef.value) paperUploadRef.value.value = ''
+      }
+    }
+
+    // 切换编辑某题
+    const toggleEditPaperItem = (idx: number) => {
+      if (editingPaperItemIdx.value === idx) {
+        editingPaperItemIdx.value = null
+      } else {
+        editingPaperItemIdx.value = idx
+      }
+    }
+
+    // 删除某题
+    const deletePaperItem = (idx: number) => {
+      ElMessageBox.confirm(
+        `确定要删除第 ${idx + 1} 题吗？`,
+        '删除确认',
+        { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      ).then(() => {
+        uploadedPaperItems.value.splice(idx, 1)
+        // 如果正在编辑的题目被删除，重置编辑状态
+        if (editingPaperItemIdx.value === idx) {
+          editingPaperItemIdx.value = null
+        } else if (editingPaperItemIdx.value !== null && editingPaperItemIdx.value > idx) {
+          // 如果删除的是编辑题目之前的题，索引需要减1
+          editingPaperItemIdx.value--
+        }
+        ElMessage.success('已删除')
+      }).catch(() => {})
+    }
+
+    // 保存上传的试卷
+    const saveUploadedPaper = async () => {
+      if (!uploadedPaperTitle.value.trim()) {
+        ElMessage.warning('请输入试卷标题')
+        return
+      }
+      
+      const validItems = uploadedPaperItems.value.filter(item => item.stem && item.stem.trim())
+      if (validItems.length === 0) {
+        ElMessage.warning('没有有效的题目可保存')
+        return
+      }
+      
+      savingUploadedPaper.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/save_paper`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: uploadedPaperTitle.value.trim(),
+            items: validItems
+          })
+        })
+        const j = await r.json()
+        
+        if (!j || j.ok === false) {
+          throw new Error(j?.msg || '保存失败')
+        }
+        
+        ElMessage.success(j.msg || '试卷保存成功')
+        paperPreviewVisible.value = false
+        uploadedPaperItems.value = []
+        uploadedPaperTitle.value = ''
+        
+        // 刷新试卷列表
+        await loadPaperList()
+        
+      } catch (e: any) {
+        ElMessage.error(`保存失败：${e?.message || e}`)
+      } finally {
+        savingUploadedPaper.value = false
+      }
+    }
+
     const loadExportPapers = async () => {
       loadingExportPapers.value = true
       try {
@@ -1970,13 +3291,25 @@ export default defineComponent({
       exportMessage.value = '正在生成ZIP压缩包...'
       try {
         const url = `${MCQ_BASE_URL}/grades/export_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-        openInNewTab(url)
+        const response = await fetch(url)
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ msg: '导出失败' }))
+          throw new Error(error.msg || '导出失败')
+        }
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `成绩报告_${Date.now()}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
         exportMessage.value = '导出成功！'
         setTimeout(() => { exportMessage.value = '' }, 3000)
       } catch (error: any) {
         exportMessage.value = '导出失败：' + (error?.message || error)
         ElMessage.error('导出失败：' + (error?.message || error))
-      } finally {
         exportingZip.value = false
       }
     }
@@ -1989,7 +3322,20 @@ export default defineComponent({
       exportMessage.value = '正在生成成绩汇总表...'
       try {
         const url = `${MCQ_BASE_URL}/grades/export_summary_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
-        openInNewTab(url)
+        const response = await fetch(url)
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ msg: '导出失败' }))
+          throw new Error(error.msg || '导出失败')
+        }
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `成绩汇总_${Date.now()}.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
         exportMessage.value = '导出成功！'
         setTimeout(() => { exportMessage.value = '' }, 3000)
       } catch (error: any) {
@@ -1998,6 +3344,132 @@ export default defineComponent({
       } finally {
         exportingDocx.value = false
       }
+    }
+
+    // ========== 成绩统计相关函数 ==========
+    const loadGradesStats = async () => {
+      if (!selectedExportPaper.value) {
+        gradesStats.value = null
+        return
+      }
+      loadingGradesStats.value = true
+      try {
+        const url = `${MCQ_BASE_URL}/grades/stats?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        const response = await fetch(url)
+        const data = await response.json()
+        if (data?.ok !== false) {
+          gradesStats.value = data
+        } else {
+          gradesStats.value = null
+        }
+      } catch (error: any) {
+        gradesStats.value = null
+      } finally {
+        loadingGradesStats.value = false
+      }
+    }
+
+    // ========== 考试发布相关函数 ==========
+    const publishExam = async () => {
+      if (!publishForm.examName.trim()) {
+        return ElMessage.warning('请输入考试名称')
+      }
+      if (!publishForm.paperId) {
+        return ElMessage.warning('请选择试卷')
+      }
+      if (!publishForm.timeRange || publishForm.timeRange.length < 2) {
+        return ElMessage.warning('请设置考试时间')
+      }
+      
+      publishing.value = true
+      publishMessage.value = '发布中...'
+      try {
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exam_name: publishForm.examName.trim(),
+            paper_id: publishForm.paperId,
+            start_time: publishForm.timeRange[0],
+            end_time: publishForm.timeRange[1],
+            duration_min: publishForm.durationMin,
+            description: publishForm.description
+          })
+        })
+        const data = response.data
+        if (data?.ok) {
+          ElMessage.success('考试发布成功')
+          publishMessage.value = '发布成功！'
+          publishForm.examName = ''
+          publishForm.paperId = ''
+          publishForm.timeRange = []
+          publishForm.durationMin = 60
+          publishForm.description = ''
+          loadPublishedExams()
+        } else {
+          throw new Error(data?.msg || '发布失败')
+        }
+      } catch (error: any) {
+        publishMessage.value = '发布失败：' + (error?.message || error)
+        ElMessage.error('发布失败：' + (error?.message || error))
+      } finally {
+        publishing.value = false
+        setTimeout(() => { publishMessage.value = '' }, 3000)
+      }
+    }
+
+    const loadPublishedExams = async () => {
+      loadingPublished.value = true
+      try {
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/published`, { method: 'GET', cache: 'no-store' })
+        const data = response.data
+        if (data?.ok !== false) {
+          publishedExams.value = Array.isArray(data.exams) ? data.exams : []
+        }
+      } catch (error: any) {
+        ElMessage.error('加载已发布考试失败：' + (error?.message || error))
+      } finally {
+        loadingPublished.value = false
+      }
+    }
+
+    const cancelExam = async (exam: any) => {
+      try {
+        await ElMessageBox.confirm(
+          `确认取消考试「${exam.exam_name}」？`,
+          '取消确认',
+          { confirmButtonText: '确定取消', cancelButtonText: '返回', type: 'warning' }
+        )
+        cancelingExam[exam.exam_id] = true
+        const response = await fetchWithAuth(`${MCQ_BASE_URL}/exam/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exam_id: exam.exam_id })
+        })
+        const data = response.data
+        if (data?.ok) {
+          ElMessage.success('已取消考试')
+          loadPublishedExams()
+        } else {
+          throw new Error(data?.msg || '取消失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('取消失败：' + (error?.message || error))
+        }
+      } finally {
+        cancelingExam[exam.exam_id] = false
+      }
+    }
+
+    const getExamStatusType = (status: string) => {
+      const map: Record<string, string> = { pending: 'warning', active: 'success', ended: 'info', cancelled: 'danger' }
+      return map[status] || 'info'
+    }
+
+    const getExamStatusText = (status: string) => {
+      const map: Record<string, string> = { pending: '未开始', active: '进行中', ended: '已结束', cancelled: '已取消' }
+      return map[status] || status
     }
 
     const normalizeRole = (role?: string) => (role || '').toLowerCase()
@@ -2185,18 +3657,13 @@ export default defineComponent({
       loadPaperList()  // 加载试卷管理列表
       loadUsers()
       loadPendingUsers()
+      loadPublishedExams()  // 加载已发布考试列表
+      checkPendingTask()  // 检查是否有未完成的异步解析任务
     })
 
     return {
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
-      changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage,
-      questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
-      paperTitle, creatingPaper, paperMessage,
-      // 试卷列表管理
-      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
-      exportPapers, selectedExportPaper,
-      loadingExportPapers, exportingZip, exportingDocx, exportMessage,
-      userSearch, users, loadingUsers, actionLoadingId,
+      changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
@@ -2205,16 +3672,45 @@ export default defineComponent({
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,
       rejectingAll,page,pageSize,rowRegenLoading,deletingQuestion,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
-      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,
+      // 任务控制相关
+      currentTaskId, currentTaskStatus, stoppingTask, resumingTask, isTaskRunning, canResumeTask, stopTask, resumeTask,
       sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
       processAnalysisText,
+      // 解析Tab切换相关
+      analysisActiveTab, isComplexValidation, getAnalysisForTab, getSourcesForTab, getAvailableTabs,
       // 批量选择相关
       selectedQuestions, selectAll, toggleSelectAll, batchDelete,
       // 回收站相关
-      deletedQuestions, selectedDeleted, loadingDeleted, recycleMessage,
+      deletedQuestions, selectedDeleted, selectAllDeleted, toggleSelectAllDeleted, loadingDeleted, recycleMessage,
       restoringQuestion, permanentDeleting,
       loadDeletedQuestions, restoreQuestion, batchRestore,
-      permanentDelete, batchPermanentDelete, clearRecycleBin
+      permanentDelete, batchPermanentDelete, clearRecycleBin,
+      // 试卷生成相关
+      questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
+      paperTitle, creatingPaper, paperMessage,
+      singleScore, multiScore, indeterminateScore,
+      paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
+      approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
+      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
+      exportPapers, selectedExportPaper, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
+      userSearch, users, loadingUsers, actionLoadingId,
+      // 试卷生成模式
+      paperGenerateMode, randomSingleCount, randomMultiCount, randomIndeterminateCount,
+      singleApprovedCount, multiApprovedCount,
+      // 不定项配置
+      enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,
+      selectedIndeterminateQuestions, toggleIndeterminate,
+      // 上传试卷相关
+      paperUploadRef, paperPreviewVisible, uploadedPaperTitle, uploadedPaperItems,
+      editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
+      hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
+      toggleEditPaperItem, deletePaperItem, saveUploadedPaper,
+      // 考试发布相关
+      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam,
+      publishExam, loadPublishedExams, cancelExam, getExamStatusType, getExamStatusText, Bell,
+      // 成绩统计相关
+      gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats
     }
   }
 })
@@ -2304,6 +3800,16 @@ export default defineComponent({
 .q-analysis-text {
   white-space: pre-wrap;
   margin-bottom: 0.5rem;
+}
+
+.analysis-tab-bar {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.analysis-tab-bar :deep(.el-radio-button__inner) {
+  padding: 6px 12px;
 }
 
 .analysis-sources {
@@ -2417,6 +3923,27 @@ export default defineComponent({
 /* 右侧输入框占掉剩余所有宽度 */
 .opt-input {
   flex: 1 1 auto;
+}
+
+/* 选项删除按钮 */
+.opt-remove-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* 选项操作区域（添加按钮 + 提示） */
+.opt-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.opt-hint {
+  font-size: 12px;
+  color: #9ca3af;
 }
 
 .mcq-tab-content {
@@ -2542,4 +4069,284 @@ export default defineComponent({
   margin-top: 4px;
 }
 
+/* 试卷题目选择列表 */
+.paper-question-list {
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.paper-question-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.paper-question-item:last-child {
+  border-bottom: none;
+}
+
+.paper-question-item:hover {
+  background-color: #f9fafb;
+}
+
+.paper-question-item.selected {
+  background-color: #eff6ff;
+}
+
+.paper-question-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.paper-question-stem {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.paper-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.paper-question-opt {
+  white-space: nowrap;
+}
+
+.paper-question-answer {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.paper-question-answer.no-answer {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* 上传试卷预览样式 */
+.paper-preview-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.paper-preview-item.has-issue {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.preview-num {
+  font-weight: 600;
+  color: #374151;
+}
+
+.preview-content {
+  padding-left: 20px;
+}
+
+.preview-stem {
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.preview-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.preview-opt {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.preview-answer {
+  font-size: 13px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.preview-answer.no-answer {
+  color: #ef4444;
+}
+
+.preview-edit {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+/* 成绩统计面板样式 */
+.grades-stats-panel {
+  margin-top: 20px;
+}
+
+.stats-card {
+  height: 100%;
+}
+
+.stats-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.stats-icon {
+  color: #667eea;
+  font-size: 18px;
+}
+
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stats-overview .stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.stats-overview .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.stats-overview .stat-value.highlight {
+  color: #667eea;
+}
+
+.stats-overview .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.score-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dist-label {
+  width: 60px;
+  font-size: 13px;
+  color: #4b5563;
+  flex-shrink: 0;
+}
+
+.dist-bar-wrapper {
+  flex: 1;
+  height: 18px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dist-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.dist-count {
+  width: 90px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rank-info {
+  padding: 8px 0;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.rank-item.best {
+  background: linear-gradient(135deg, rgba(103, 194, 58, 0.1) 0%, rgba(103, 194, 58, 0.05) 100%);
+}
+
+.rank-item.worst {
+  background: linear-gradient(135deg, rgba(245, 108, 108, 0.1) 0%, rgba(245, 108, 108, 0.05) 100%);
+}
+
+.rank-icon {
+  font-size: 28px;
+}
+
+.rank-content {
+  flex: 1;
+}
+
+.rank-title {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rank-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.rank-name {
+  font-size: 13px;
+  color: #4b5563;
+  margin-top: 2px;
+}
+
+.score-pass {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.score-fail {
+  color: #f56c6c;
+  font-weight: 600;
+}
 </style>

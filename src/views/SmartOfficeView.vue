@@ -269,7 +269,7 @@
                     <el-option label="通用识别" value="universal" />
                     <el-option label="文档识别" value="document" />
                     <el-option label="手写识别" value="handwritten" />
-                    <el-option label="身份证" value="idcard" />
+                    <!-- <el-option label="身份证" value="idcard" /> -->
                   </el-select>
                   <input
                     ref="ocrFileInputRef"
@@ -398,35 +398,46 @@
             </div>
           </div>
 
-          <!-- OCR 识别结果显示区域 -->
+          <!-- OCR 识别结果显示区域（可折叠） -->
           <div v-if="ocrResults.length" class="ocr-results-section">
-            <div class="ocr-header">
-              <span class="ocr-title">
-                <el-icon><Picture /></el-icon>
-                图片识别结果
-              </span>
-              <el-button size="small" type="danger" plain @click="clearOcrResults">
-                <el-icon><Delete /></el-icon>
-                清除
-              </el-button>
-            </div>
-            <div class="ocr-results">
-              <div
-                v-for="(result, idx) in ocrResults"
-                :key="idx"
-                :class="['ocr-result-item', { 'success': result.success, 'failed': !result.success }]"
-              >
-                <div class="result-header">
-                  <span class="filename">{{ result.filename }}</span>
-                  <el-tag :type="result.success ? 'success' : 'danger'" size="small">
-                    {{ result.success ? '识别成功' : '识别失败' }}
-                  </el-tag>
+            <el-collapse class="ocr-collapse">
+              <el-collapse-item>
+                <template #title>
+                  <div class="ocr-collapse-header">
+                    <el-icon><Picture /></el-icon>
+                    <span class="ocr-title">图片识别结果</span>
+                    <el-badge :value="ocrSuccessCount" type="success" class="ocr-badge" />
+                    <el-button 
+                      size="small" 
+                      type="danger" 
+                      plain 
+                      class="ocr-clear-btn"
+                      @click.stop="clearOcrResults"
+                    >
+                      <el-icon><Delete /></el-icon>
+                      清除
+                    </el-button>
+                  </div>
+                </template>
+                <div class="ocr-results">
+                  <div
+                    v-for="(result, idx) in ocrResults"
+                    :key="idx"
+                    :class="['ocr-result-item', { 'success': result.success, 'failed': !result.success }]"
+                  >
+                    <div class="result-header">
+                      <span class="filename">{{ result.filename }}</span>
+                      <el-tag :type="result.success ? 'success' : 'danger'" size="small">
+                        {{ result.success ? '识别成功' : '识别失败' }}
+                      </el-tag>
+                    </div>
+                    <div v-if="result.success && result.text" class="result-text">
+                      {{ result.text }}
+                    </div>
+                  </div>
                 </div>
-                <div v-if="result.success && result.text" class="result-text">
-                  {{ result.text }}
-                </div>
-              </div>
-            </div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
 
           <div class="input-bar">
@@ -637,6 +648,11 @@ export default defineComponent({
       return writeMode.value === 'complete' ? '补全' : '发送';
     });
 
+    // OCR成功识别的数量
+    const ocrSuccessCount = computed(() => {
+      return ocrResults.value.filter((r) => r.success && r.text).length;
+    });
+
     const scrollToBottom = () => {
       nextTick(() => {
         const el = chatWindowRef.value;
@@ -826,27 +842,81 @@ export default defineComponent({
       }
 
       ocrUploading.value = true;
+      const results: Array<{ filename: string; text: string; success: boolean }> = [];
 
       try {
         // 逐个调用OCR服务识别每张图片
         const files = Array.from(input.files);
         for (const file of files) {
           try {
+            // 创建FormData，OCR服务需要 image_bytes 参数
             const fd = new FormData();
             fd.append('image_bytes', file);
-            await fetch(`${ocrBase}/online/?ocr_type=${ocrType.value}`, {
+
+            // 调用OCR服务的 /online/ 接口
+            console.log('[OCR] 正在调用OCR服务:', `${ocrBase}/online/?ocr_type=${ocrType.value}`);
+            const resp = await fetch(`${ocrBase}/online/?ocr_type=${ocrType.value}`, {
               method: 'POST',
               body: fd,
             });
-          } catch {
-            // 忽略错误
+
+            console.log('[OCR] 响应状态:', resp.status, resp.statusText);
+            const data = await resp.json();
+            console.log('[OCR] 响应数据:', data);
+
+            if (data.status === 200 && data.result) {
+              // 识别成功
+              let resultText = '';
+              if (typeof data.result === 'string') {
+                resultText = data.result;
+              } else if (typeof data.result === 'object') {
+                // 身份证识别返回对象
+                resultText = Object.entries(data.result)
+                  .filter((entry) => entry[1] !== null)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join('\n');
+              }
+              results.push({
+                filename: file.name,
+                text: resultText,
+                success: true,
+              });
+            } else {
+              // 识别失败
+              results.push({
+                filename: file.name,
+                text: data.detail || '识别失败',
+                success: false,
+              });
+            }
+          } catch (fileErr: any) {
+            results.push({
+              filename: file.name,
+              text: fileErr?.message || '请求失败',
+              success: false,
+            });
           }
         }
 
-        ElMessage.success('已成功识别');
+        // 保存识别结果
+        console.log('[OCR] 所有识别结果:', results);
+        ocrResults.value = results;
+
+        // 统计识别结果
+        const successResults = results.filter((r) => r.success && r.text);
+        const failedResults = results.filter((r) => !r.success);
+
+        if (successResults.length > 0) {
+          ElMessage.success(`成功识别 ${successResults.length} 张图片，内容将作为参考资料`);
+        } else if (failedResults.length > 0) {
+          ElMessage.warning(`识别失败：${failedResults[0].text}`);
+        } else {
+          ElMessage.warning('未能从图片中识别出文字');
+        }
+
         if (input) input.value = '';
-      } catch {
-        ElMessage.success('已成功识别');
+      } catch (e: any) {
+        ElMessage.error(`OCR 识别失败：${e?.message || String(e)}`);
       } finally {
         ocrUploading.value = false;
       }
@@ -956,6 +1026,12 @@ export default defineComponent({
         ? kbFiles.value.filter((f) => f.selected).map((f) => f.name)
         : [];
 
+      // 获取OCR识别的文本内容作为参考资料
+      const ocrTexts = ocrResults.value
+        .filter((r) => r.success && r.text)
+        .map((r) => `【${r.filename}】\n${r.text}`)
+        .join('\n\n');
+
       const payload: any = {
         session_id: sessionId.value,
         instruction: text,
@@ -965,6 +1041,7 @@ export default defineComponent({
         use_kb: !!useKb.value,
         kb_selected: kbSelected,
         write_mode: writeMode.value,
+        ocr_content: ocrTexts || undefined,  // OCR识别内容作为参考资料
       };
 
       const ac = new AbortController();
@@ -1328,6 +1405,7 @@ export default defineComponent({
       ocrUploading,
       ocrResults,
       ocrType,
+      ocrSuccessCount,
       uploadOcrImages,
       clearOcrResults,
       thinkingMode,
@@ -1727,28 +1805,52 @@ export default defineComponent({
   width: 100%;
 }
 
-/* ========== OCR 识别结果区域 ========== */
+/* ========== OCR 识别结果区域（可折叠） ========== */
 .ocr-results-section {
   margin: 16px 0;
-  padding: 16px;
+}
+
+.ocr-collapse {
   border: 1px solid rgba(245, 166, 35, 0.3);
   border-radius: 8px;
   background: rgba(255, 248, 230, 0.5);
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-content-bg-color: transparent;
 }
 
-.ocr-header {
+.ocr-collapse :deep(.el-collapse-item__header) {
+  background: transparent;
+  border-bottom: none;
+  padding: 12px 16px;
+  height: auto;
+}
+
+.ocr-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+}
+
+.ocr-collapse :deep(.el-collapse-item__content) {
+  padding: 0 16px 16px;
+}
+
+.ocr-collapse-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 8px;
+  width: 100%;
 }
 
 .ocr-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-weight: 600;
   color: #f5a623;
+}
+
+.ocr-badge {
+  margin-left: 4px;
+}
+
+.ocr-clear-btn {
+  margin-left: auto;
 }
 
 .ocr-results {

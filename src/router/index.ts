@@ -98,6 +98,15 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/format-tool',
+    name: 'format-tool',
+    component: () => import('../views/FormatToolView.vue'),
+    meta: { 
+      requiresAuth: true,
+      title: '选择题格式化工具'
+    }
+  },
+  {
     path: '/exam',
     name: 'exam',
     component: () => import('../views/ExamView.vue'),

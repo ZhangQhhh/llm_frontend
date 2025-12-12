@@ -42,6 +42,10 @@ export const API_ENDPOINTS = {
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
     // MCQ策略判断 - 使用完整URL
     MCQ_STRATEGY: `${LLM_BASE_URL}/mcq_strategy`,
+    // MCQ格式化 - 使用完整URL
+    MCQ_FORMAT: `${LLM_BASE_URL}/mcq_format`,
+    // MCQ答案总结 - 使用完整URL
+    MCQ_SUMMARIZE: `${LLM_BASE_URL}/mcq_summarize`,
     // 会话管理 - 使用相对路径（用于llmHttp）
     CONVERSATION_NEW: `/conversation/new`,
     CONVERSATION_CLEAR: `/conversation/clear`,
@@ -89,6 +93,12 @@ export const API_ENDPOINTS = {
     START: '/exam/start',
     SUBMIT: '/exam/submit',
     REVIEW: '/exam/review',
+    // 考试发布相关
+    PUBLISH: '/exam/publish',           // 发布考试
+    PUBLISHED_LIST: '/exam/published',   // 获取已发布考试列表
+    CANCEL: '/exam/cancel',             // 取消已发布考试
+    NOTIFICATIONS: '/exam/notifications', // 获取考试通知（学生端）
+    GRADES_STATS: '/exam/grades_stats',  // 获取成绩统计数据
   },
   // 学生端API
   STUDENT: {

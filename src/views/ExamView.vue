@@ -47,25 +47,109 @@
       </div>
     </div>
 
+    <!-- 考试通知面板 -->
+    <div v-if="publishedExams.length > 0 && !examStarted" class="notification-panel">
+      <div class="notification-header">
+        <el-icon class="notification-icon"><Bell /></el-icon>
+        <span>考试通知</span>
+        <el-button size="small" text @click="loadPublishedExams" :loading="loadingExamNotifications">
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </div>
+      <div class="notification-list">
+        <div
+          v-for="exam in publishedExams"
+          :key="exam.exam_id"
+          class="notification-item"
+          :class="{ active: getExamStatus(exam) === 'active', pending: getExamStatus(exam) === 'pending' }"
+        >
+          <div class="exam-info">
+            <div class="exam-name">{{ exam.exam_name }}</div>
+            <div class="exam-meta">
+              <span>试卷：{{ exam.paper_title }}</span>
+              <span class="divider">|</span>
+              <span>时长：{{ exam.duration_min }}分钟</span>
+            </div>
+            <div class="exam-time">
+              <el-icon><Clock /></el-icon>
+              {{ exam.start_time }} ~ {{ exam.end_time }}
+            </div>
+            <div class="exam-desc" v-if="exam.description">{{ exam.description }}</div>
+          </div>
+          <div class="exam-action">
+            <el-tag v-if="getExamStatus(exam) === 'pending'" type="warning" effect="plain">未开始</el-tag>
+            <el-tag v-else-if="getExamStatus(exam) === 'ended'" type="info" effect="plain">已结束</el-tag>
+            <el-button
+              v-else-if="getExamStatus(exam) === 'active'"
+              type="primary"
+              @click="enterPublishedExam(exam)"
+              :loading="enteringExam === exam.exam_id"
+            >
+              进入考试
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 主布局 -->
     <div class="wrap">
       <!-- 左侧导航 -->
       <div class="side card" v-if="examStarted && questions.length > 0">
         <h3>题目导航</h3>
-        <div class="navgrid">
-          <button
-            v-for="(q, idx) in questions"
-            :key="q.qid"
-            :class="['navbtn', { answered: isAnswered(q.qid), current: isCurrentPage(idx) }]"
-            @click="jumpToQuestion(idx)"
-          >
-            {{ idx + 1 }}
-          </button>
+        <!-- 单选题导航 -->
+        <div v-if="singleQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag single">单选</span>
+            <span class="nav-count">{{ singleQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in singleQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
         </div>
-        <div class="pager" style="margin-top: 10px">
-          <el-button size="small" @click="prevPage" :disabled="currentPage === 1">上一页</el-button>
-          <span class="muted">第 {{ currentPage }} / {{ totalPages }} 页</span>
-          <el-button size="small" @click="nextPage" :disabled="currentPage === totalPages">下一页</el-button>
+        <!-- 多选题导航 -->
+        <div v-if="multiQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag multi">多选</span>
+            <span class="nav-count">{{ multiQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in multiQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
+        </div>
+        <!-- 不定项选择题导航 -->
+        <div v-if="indeterminateQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag indeterminate">不定项</span>
+            <span class="nav-count">{{ indeterminateQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in indeterminateQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
+        </div>
+        <div class="nav-summary" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(96, 165, 250, 0.2);">
+          <span class="muted">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
         </div>
       </div>
 
@@ -75,14 +159,26 @@
         <!-- 头部信息 -->
         <div class="card head">
           <h2>{{ paperTitle }}</h2>
-          <div class="sub">
-            <span class="muted">每页显示</span>
-            <el-select v-model="pageSize" size="small" style="width: 80px; margin: 0 8px" @change="handlePageSizeChange">
-              <el-option :value="3" label="3" />
-              <el-option :value="5" label="5" />
-              <el-option :value="10" label="10" />
-            </el-select>
-            <span class="muted">题</span>
+          <div class="sub" v-if="examStarted && questions.length > 0">
+            <span class="head-stat" v-if="singleQuestions.length > 0">
+              <span class="stat-label">单选</span>
+              <span class="stat-value">{{ singleQuestions.length }}题</span>
+            </span>
+            <span class="head-divider" v-if="singleQuestions.length > 0 && (multiQuestions.length > 0 || indeterminateQuestions.length > 0)">|</span>
+            <span class="head-stat" v-if="multiQuestions.length > 0">
+              <span class="stat-label">多选</span>
+              <span class="stat-value">{{ multiQuestions.length }}题</span>
+            </span>
+            <span class="head-divider" v-if="multiQuestions.length > 0 && indeterminateQuestions.length > 0">|</span>
+            <span class="head-stat" v-if="indeterminateQuestions.length > 0">
+              <span class="stat-label">不定项</span>
+              <span class="stat-value">{{ indeterminateQuestions.length }}题</span>
+            </span>
+            <span class="head-divider">|</span>
+            <span class="head-stat">
+              <span class="stat-label">共</span>
+              <span class="stat-value">{{ questions.length }}题</span>
+            </span>
           </div>
         </div>
 
@@ -96,28 +192,18 @@
         </div>
 
         <div v-else class="qlist">
-          <div v-for="(q, idx) in currentPageQuestions" :key="q.qid" class="q">
-            <div class="qheader">
-              <b><span>{{ getQuestionNumber(idx) }}. </span><span v-html="formatText(q.stem)"></span></b>
-              <span :class="['tag', q.qtype === 'multi' ? 'multi' : 'single']">
-                {{ q.qtype === 'multi' ? '多选' : '单选' }}
-              </span>
+          <!-- 单选题区域 -->
+          <div v-if="singleQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag single">一、单选题</span>
+              <span class="section-count">共 {{ singleQuestions.length }} 题</span>
             </div>
-            <div class="opts">
-              <!-- 多选题 -->
-              <template v-if="q.qtype === 'multi'">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
-                  @click="toggleMultiOption(q.qid, opt.label)"
-                  :disabled="submitted"
-                >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                </button>
-              </template>
-              <!-- 单选题 -->
-              <template v-else>
+            <div v-for="(q, idx) in singleQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag single">单选</span>
+              </div>
+              <div class="opts">
                 <button
                   v-for="opt in q.options"
                   :key="opt.label"
@@ -127,7 +213,57 @@
                 >
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
-              </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- 多选题区域 -->
+          <div v-if="multiQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag multi">{{ singleQuestions.length > 0 ? '二' : '一' }}、多选题</span>
+              <span class="section-count">共 {{ multiQuestions.length }} 题</span>
+            </div>
+            <div v-for="(q, idx) in multiQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag multi">多选</span>
+              </div>
+              <div class="opts">
+                <button
+                  v-for="opt in q.options"
+                  :key="opt.label"
+                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                  @click="toggleMultiOption(q.qid, opt.label)"
+                  :disabled="submitted"
+                >
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 不定项选择题区域 -->
+          <div v-if="indeterminateQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag indeterminate">{{ (singleQuestions.length > 0 ? 1 : 0) + (multiQuestions.length > 0 ? 1 : 0) === 2 ? '三' : ((singleQuestions.length > 0 || multiQuestions.length > 0) ? '二' : '一') }}、不定项选择题</span>
+              <span class="section-count">共 {{ indeterminateQuestions.length }} 题</span>
+            </div>
+            <div v-for="(q, idx) in indeterminateQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+              <div class="qheader">
+                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag indeterminate">不定项</span>
+              </div>
+              <div class="opts">
+                <button
+                  v-for="opt in q.options"
+                  :key="opt.label"
+                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                  @click="toggleMultiOption(q.qid, opt.label)"
+                  :disabled="submitted"
+                >
+                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -138,6 +274,10 @@
             交卷并评分
           </el-button>
           <span class="muted">{{ submitMessage }}</span>
+          <span class="auto-save-status" v-if="!submitted">
+            <span v-if="savingProgress" class="saving">💾 保存中...</span>
+            <span v-else-if="lastSaveTime" class="saved">✓ 已自动保存 {{ lastSaveTime }}</span>
+          </span>
         </div>
 
         <!-- 错题统计与知识点分析 -->
@@ -219,7 +359,6 @@
             <div class="chart">
               <div class="legend">
                 <span class="lg ok">✅ 正确</span>
-                <span class="lg partial">🟡 部分得分</span>
                 <span class="lg bad">❌ 错误</span>
               </div>
               <div class="stat-text">
@@ -266,7 +405,7 @@
               <div class="muted" style="margin: 8px 0">
                 标准答案：{{ item.correct_labels.join('') }}
                 ｜ 我的作答：{{ item.my_labels?.join('') || '(未作答)' }}
-                ｜ 判定：{{ item.is_correct ? '正确' : (item.my_labels?.length > 0 ? '部分得分' : '错误') }}
+                ｜ 判定：{{ item.is_correct ? '正确' : '错误' }}
               </div>
               <div class="opts">
                 <button
@@ -281,7 +420,30 @@
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </div>
-              <div class="analysis" v-html="formatAnalysis(item.analysis) || '（无解析）'">
+              <!-- 解析区域：复杂验证策略显示Tab切换 -->
+              <div class="analysis" @mouseenter="isComplexValidation(item.analysis) && loadPerOption(item.qid)">
+                <template v-if="isComplexValidation(item.analysis)">
+                  <div class="analysis-tab-bar">
+                    <el-radio-group
+                      v-model="analysisActiveTab[idx]"
+                      size="small"
+                      @change="() => { if (!analysisActiveTab[idx]) analysisActiveTab[idx] = 'all'; loadPerOption(item.qid) }"
+                    >
+                      <el-radio-button label="all">全部</el-radio-button>
+                      <el-radio-button
+                        v-for="opt in item.options"
+                        :key="opt.label"
+                        :label="opt.label"
+                      >
+                        选项 {{ opt.label }}
+                      </el-radio-button>
+                    </el-radio-group>
+                  </div>
+                  <div v-html="formatAnalysis(getAnalysisForTab(item.qid, item.analysis, analysisActiveTab[idx] || 'all')) || '（无解析）'"></div>
+                </template>
+                <template v-else>
+                  <div v-html="formatAnalysis(item.analysis) || '（无解析）'"></div>
+                </template>
               </div>
             </div>
           </div>
@@ -310,9 +472,10 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Bell, Refresh, Clock } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -325,7 +488,10 @@ const API_ENDPOINTS = {
   EXAM: {
     START: `${MCQ_BASE_URL}/exam/start`,
     SUBMIT: `${MCQ_BASE_URL}/exam/submit`,
-    REVIEW: `${MCQ_BASE_URL}/exam/review`
+    REVIEW: `${MCQ_BASE_URL}/exam/review`,
+    PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
+    SAVE_PROGRESS: `${MCQ_BASE_URL}/exam/save_progress`,
+    NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`
   },
   STUDENT: {
     EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`,
@@ -396,6 +562,13 @@ export default defineComponent({
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
     const pageSize = ref(3)
+    
+    // 自动保存相关
+    const autoSaveHandle = ref<number | null>(null)
+    const debounceSaveHandle = ref<number | null>(null)
+    const lastSaveTime = ref('')
+    const savingProgress = ref(false)
+    const lastSavedAnswersHash = ref('')  // 用于检测答案是否真正变化
 
     // 提交相关
     const submitted = ref(false)
@@ -410,6 +583,85 @@ export default defineComponent({
     const exportMessage = ref('')
     const scoreChartRef = ref<HTMLCanvasElement | null>(null)
 
+    // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
+    const analysisActiveTab = reactive<Record<number, string>>({})
+    // 分选项解析缓存（从后端获取）
+    const perOptionMap = reactive<Record<string, Array<{label: string, explain: string}>>>({})
+    const perOptionLoading = reactive<Record<string, boolean>>({})
+    const perOptionLoaded = reactive<Record<string, boolean>>({})
+
+    // 判断解析是否为复杂验证策略（通过文本标识判断）
+    const isComplexValidation = (analysis: string): boolean => {
+      return !!(analysis && analysis.includes('【复杂验证（逐选项核查·汇总）】'))
+    }
+
+    // 加载分选项解析数据
+    const loadPerOption = async (qid: string) => {
+      if (!qid || perOptionLoaded[qid] || perOptionLoading[qid]) return
+      perOptionLoading[qid] = true
+      try {
+        const url = `${MCQ_BASE_URL}/bank/sources?qid=${encodeURIComponent(qid)}`
+        const res = await fetch(url, { method: 'GET' })
+        if (res.ok) {
+          const j = await res.json()
+          if (j && j.ok !== false) {
+            const perOpt = j.per_option || []
+            perOptionMap[qid] = Array.isArray(perOpt) ? perOpt : []
+          }
+        }
+        perOptionLoaded[qid] = true
+      } catch (e) {
+        console.warn('加载per_option失败:', e)
+      } finally {
+        perOptionLoading[qid] = false
+      }
+    }
+
+    // 解析复杂验证的分项解析内容（回退方案）
+    const parseOptionAnalyses = (analysis: string): Record<string, string> => {
+      const result: Record<string, string> = {}
+      if (!analysis) return result
+      
+      // 查找"分项解析："之后的内容
+      const marker = '分项解析：'
+      const markerIdx = analysis.indexOf(marker)
+      if (markerIdx === -1) return result
+      
+      const afterMarker = analysis.substring(markerIdx + marker.length)
+      
+      // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
+      const optionPattern = /([A-H])[.、]\s*([\s\S]*?)(?=(?:\n[A-H][.、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      let match
+      while ((match = optionPattern.exec(afterMarker)) !== null) {
+        const label = match[1].toUpperCase()
+        const content = match[2].trim()
+        if (content) {
+          result[label] = content
+        }
+      }
+      
+      return result
+    }
+
+    // 获取指定Tab对应的解析内容（优先使用后端per_option数据）
+    const getAnalysisForTab = (qid: string, analysis: string, tab: string): string => {
+      if (!analysis) return ''
+      if (tab === 'all') return analysis
+      
+      // 优先使用后端返回的per_option数据
+      const perOpts = perOptionMap[qid]
+      if (perOpts && perOpts.length > 0) {
+        const opt = perOpts.find(o => o.label === tab)
+        if (opt && opt.explain) {
+          return opt.explain
+        }
+      }
+      
+      // 回退：使用正则解析（兼容旧数据）
+      const optionAnalyses = parseOptionAnalyses(analysis)
+      return optionAnalyses[tab] || '（无该选项解析）'
+    }
+
     // 修改密码
     const passwordDialogVisible = ref(false)
     const passwordForm = ref({
@@ -417,6 +669,11 @@ export default defineComponent({
       newPassword: ''
     })
     const changingPassword = ref(false)
+
+    // 考试通知相关
+    const publishedExams = ref<any[]>([])
+    const loadingExamNotifications = ref(false)
+    const enteringExam = ref('')
 
     const timerDisplay = computed(() => {
       if (!examStarted.value) return '--:--'
@@ -450,6 +707,47 @@ export default defineComponent({
       if (!reviewData.value) return []
       return reviewData.value.items.filter(item => !item.is_correct)
     })
+
+    // 单选题列表
+    const singleQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'single')
+    })
+
+    // 多选题列表
+    const multiQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'multi')
+    })
+
+    // 不定项选择题列表
+    const indeterminateQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'indeterminate')
+    })
+
+    // 已答题目数
+    const answeredCount = computed(() => {
+      let count = 0
+      questions.value.forEach(q => {
+        if (isAnswered(q.qid)) count++
+      })
+      return count
+    })
+
+    // 当前高亮的题目ID
+    const currentQid = ref('')
+
+    // 滚动到指定题目
+    const scrollToQuestion = (qid: string) => {
+      currentQid.value = qid
+      const element = document.getElementById('q-' + qid)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // 添加高亮效果
+        element.classList.add('highlight-question')
+        setTimeout(() => {
+          element.classList.remove('highlight-question')
+        }, 1500)
+      }
+    }
 
     // 从解析文本中提取知识点
     const extractKnowledgePoints = (analysis: string): string[] => {
@@ -557,13 +855,27 @@ export default defineComponent({
         .replace(/&lt;NEWLINE&gt;/g, '<br>')
     }
 
-    // 格式化解析文本：渲染 markdown 并过滤"参考来源"
+    // 格式化解析文本：渲染 markdown 并过滤"参考来源"和进度提示
     const formatAnalysis = (text: string | undefined | null): string => {
       if (!text) return ''
+      // 带选项字母的进度提示替换为选项分隔标记
+      const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
       // 过滤掉"参考来源"（可能被加粗）
       let cleaned = text
-        .replace(/\*\*参考来源\*\*[：:\s]*/g, '')
-        .replace(/参考来源[：:\s]*/g, '')
+        .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
+        // 将带选项字母的进度提示替换为选项分隔标记
+        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        // 移除不带选项字母的通用进度提示（支持行内任意位置）
+        .replace(/正在进行混合检索[.…]*\s*/g, '')
+        .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
+        .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
+        .replace(/正在使用精准检索分析[.…]*\s*/g, '')
+        // 清理残留的孤立 ** 符号
+        .replace(/^\s*\*\*\s*$/gm, '')
+        .replace(/\*\*(?=\s*$)/gm, '')
       return renderMarkdown(cleaned)
     }
 
@@ -576,11 +888,15 @@ export default defineComponent({
       } else {
         answersState.value[qid] = [...current, label]
       }
+      // 答案变化后触发防抖保存
+      debounceSave()
     }
 
     const selectSingleOption = (qid: string, label: string) => {
       if (submitted.value) return
       answersState.value[qid] = label
+      // 答案变化后触发防抖保存
+      debounceSave()
     }
 
     // 绘制圆环进度图
@@ -663,6 +979,165 @@ export default defineComponent({
       }
     }
 
+    // 收集当前答案用于保存
+    const collectAnswersForSave = () => {
+      const answers: Array<{ qid: string; chosen_labels: string[] }> = []
+      questions.value.forEach(q => {
+        const answer = answersState.value[q.qid]
+        let labels: string[] = []
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
+          labels = Array.isArray(answer) ? answer : []
+        } else {
+          labels = answer ? [answer] : []
+        }
+        // 保存所有答案，包括空的
+        answers.push({ qid: q.qid, chosen_labels: labels })
+      })
+      return answers
+    }
+
+    // 保存答题进度到后端
+    const saveProgress = async (force = false) => {
+      if (!attemptId.value || submitted.value || savingProgress.value) return
+      
+      const answers = collectAnswersForSave()
+      // 计算答案hash，避免重复保存相同内容
+      const currentHash = JSON.stringify(answers)
+      if (!force && currentHash === lastSavedAnswersHash.value) {
+        return  // 答案没有变化，跳过保存
+      }
+      
+      savingProgress.value = true
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.SAVE_PROGRESS, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attempt_id: attemptId.value,
+            answers
+          })
+        })
+        
+        if (data.ok) {
+          lastSavedAnswersHash.value = currentHash
+          lastSaveTime.value = new Date().toLocaleTimeString()
+          // 如果返回超时信息，触发自动提交
+          if (data.timeout) {
+            ElMessage.warning('考试已超时，正在自动提交...')
+            submitExam(true)
+          }
+        }
+      } catch (error: any) {
+        console.error('保存进度失败:', error)
+      } finally {
+        savingProgress.value = false
+      }
+    }
+
+    // 启动自动保存定时器（每30秒保存一次）
+    const startAutoSave = () => {
+      if (autoSaveHandle.value) clearInterval(autoSaveHandle.value)
+      autoSaveHandle.value = window.setInterval(() => {
+        saveProgress()
+      }, 30000)  // 30秒保存一次
+    }
+
+    // 停止自动保存
+    const stopAutoSave = () => {
+      if (autoSaveHandle.value) {
+        clearInterval(autoSaveHandle.value)
+        autoSaveHandle.value = null
+      }
+      if (debounceSaveHandle.value) {
+        clearTimeout(debounceSaveHandle.value)
+        debounceSaveHandle.value = null
+      }
+    }
+
+    // 防抖保存（答案变化后3秒保存）
+    const debounceSave = () => {
+      if (debounceSaveHandle.value) {
+        clearTimeout(debounceSaveHandle.value)
+      }
+      debounceSaveHandle.value = window.setTimeout(() => {
+        saveProgress()
+      }, 3000)  // 3秒防抖，连续答题时不会频繁触发
+    }
+
+    // 检查是否有未完成的考试
+    const checkInProgressExam = async () => {
+      const studentId = store.state.user.username || 'anonymous'
+      try {
+        const url = `${API_ENDPOINTS.EXAM.PROGRESS}?student_id=${encodeURIComponent(studentId)}`
+        const data = await mcqFetch(url)
+        
+        if (data.ok && data.has_progress) {
+          // 找到未完成的考试，询问是否恢复
+          try {
+            await ElMessageBox.confirm(
+              `您有一个未完成的考试「${data.title}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？`,
+              '发现未完成的考试',
+              {
+                confirmButtonText: '继续答题',
+                cancelButtonText: '放弃并重新开始',
+                type: 'warning'
+              }
+            )
+            // 用户选择恢复考试
+            resumeExam(data)
+          } catch {
+            // 用户选择放弃，不做任何操作
+          }
+        }
+      } catch (error: any) {
+        console.error('检查未完成考试失败:', error)
+      }
+    }
+
+    // 恢复考试
+    const resumeExam = (progressData: any) => {
+      attemptId.value = progressData.attempt_id
+      leftSeconds.value = progressData.left_sec
+      questions.value = progressData.items || []
+      paperTitle.value = progressData.title || '试卷'
+      selectedPaperId.value = progressData.paper_id
+      
+      // 恢复已保存的答案
+      const newAnswersState: Record<string, any> = {}
+      questions.value.forEach(q => {
+        const saved = progressData.saved_answers?.[q.qid]
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
+          newAnswersState[q.qid] = saved || []
+        } else {
+          newAnswersState[q.qid] = saved?.[0] || ''
+        }
+      })
+      answersState.value = newAnswersState
+      
+      examStarted.value = true
+      currentPage.value = 1
+      submitted.value = false
+      gradeReport.value = null
+      reviewData.value = null
+      
+      // 启动倒计时和自动保存
+      startTimer()
+      startAutoSave()
+      
+      ElMessage.success('已恢复考试进度')
+    }
+
+    // 页面关闭前警告
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (examStarted.value && !submitted.value) {
+        // 先保存一次进度
+        saveProgress()
+        e.preventDefault()
+        e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
+        return e.returnValue
+      }
+    }
+
     const loadPapers = async () => {
       loadingPapers.value = true
       try {
@@ -680,6 +1155,48 @@ export default defineComponent({
         ElMessage.error('加载试卷失败：' + (error.message || '未知错误'))
       } finally {
         loadingPapers.value = false
+      }
+    }
+
+    // ========== 考试通知相关函数 ==========
+    const loadPublishedExams = async () => {
+      loadingExamNotifications.value = true
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.NOTIFICATIONS)
+        if (data?.ok !== false) {
+          publishedExams.value = Array.isArray(data.exams) ? data.exams : []
+        }
+      } catch (error: any) {
+        console.error('加载考试通知失败:', error)
+      } finally {
+        loadingExamNotifications.value = false
+      }
+    }
+
+    // 获取考试状态
+    const getExamStatus = (exam: any): string => {
+      const now = new Date()
+      const startTime = new Date(exam.start_time)
+      const endTime = new Date(exam.end_time)
+      if (now < startTime) return 'pending'
+      if (now > endTime) return 'ended'
+      return 'active'
+    }
+
+    // 进入已发布的考试
+    const enterPublishedExam = async (exam: any) => {
+      enteringExam.value = exam.exam_id
+      try {
+        // 设置试卷和时长
+        selectedPaperId.value = exam.paper_id
+        durationMin.value = exam.duration_min
+        
+        // 直接开始考试
+        await startExam()
+      } catch (error: any) {
+        ElMessage.error('进入考试失败：' + (error?.message || error))
+      } finally {
+        enteringExam.value = ''
       }
     }
 
@@ -708,22 +1225,15 @@ export default defineComponent({
         attemptId.value = startData.attempt_id
         leftSeconds.value = startData.left_sec || durationMin.value * 60
 
-        // 获取题目
-        const questionsData = await mcqFetch(
-          `${API_ENDPOINTS.PAPERS.VIEW}?paper_id=${encodeURIComponent(selectedPaperId.value)}`
-        )
-        
-        if (!questionsData.ok) {
-          throw new Error(questionsData.detail || '获取题目失败')
-        }
-        
-        questions.value = questionsData.items || []
-        paperTitle.value = questionsData.title || '试卷'
+        // 直接使用 exam_start 返回的题目（已根据学生ID随机打乱顺序）
+        questions.value = startData.items || []
+        paperTitle.value = startData.title || '试卷'
 
         // 初始化答案状态
         const newAnswersState: Record<string, any> = {}
         questions.value.forEach(q => {
-          newAnswersState[q.qid] = q.qtype === 'multi' ? [] : ''
+          // 多选题和不定项题目使用数组，单选题使用字符串
+          newAnswersState[q.qid] = (q.qtype === 'multi' || q.qtype === 'indeterminate') ? [] : ''
         })
         answersState.value = newAnswersState
 
@@ -733,8 +1243,9 @@ export default defineComponent({
         gradeReport.value = null
         reviewData.value = null
 
-        // 启动倒计时
+        // 启动倒计时和自动保存
         startTimer()
+        startAutoSave()
 
         ElMessage.success('考试已开始')
       } catch (error: any) {
@@ -828,6 +1339,7 @@ export default defineComponent({
         submitted.value = true
         submitMessage.value = '评分完成'
         stopTimer()
+        stopAutoSave()
 
         // 绘制圆环图
         await nextTick()
@@ -1009,10 +1521,17 @@ export default defineComponent({
 
     onMounted(() => {
       loadPapers()
+      loadPublishedExams()  // 加载考试通知
+      // 检查是否有未完成的考试
+      checkInProgressExam()
+      // 添加页面关闭前警告
+      window.addEventListener('beforeunload', handleBeforeUnload)
     })
 
     onUnmounted(() => {
       stopTimer()
+      stopAutoSave()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     })
 
     return {
@@ -1039,6 +1558,12 @@ export default defineComponent({
       correctRate,
       reviewData,
       wrongQuestions,
+      singleQuestions,
+      multiQuestions,
+      indeterminateQuestions,
+      answeredCount,
+      currentQid,
+      scrollToQuestion,
       knowledgePointStats,
       scrollToWrongByKp,
       exporting,
@@ -1063,10 +1588,26 @@ export default defineComponent({
       getScoreClass,
       formatText,
       formatAnalysis,
+      // 解析Tab切换相关
+      analysisActiveTab, isComplexValidation, getAnalysisForTab, loadPerOption,
       toggleMultiOption,
       selectSingleOption,
       handleChangePassword,
-      changePassword
+      changePassword,
+      lastSaveTime,
+      savingProgress,
+      saveProgress,
+      // 考试通知相关
+      publishedExams,
+      loadingExamNotifications,
+      enteringExam,
+      loadPublishedExams,
+      getExamStatus,
+      enterPublishedExam,
+      // Icons
+      Bell,
+      Refresh,
+      Clock
     }
   }
 })
@@ -1079,7 +1620,7 @@ export default defineComponent({
   --card: #ffffff;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --ink: #111827;
+  --ink: #e5e7eb;
   --pri: #2b7cff;
   --ok: #10b981;
   --warn: #f59e0b;
@@ -1116,6 +1657,108 @@ export default defineComponent({
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(96, 165, 250, 0.2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 考试通知面板 */
+.notification-panel {
+  max-width: 1400px;
+  margin: 16px auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-radius: 10px 10px 0 0;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-bottom: none;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.notification-icon {
+  font-size: 20px;
+}
+
+.notification-list {
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 0 0 10px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-top: none;
+  overflow: hidden;
+}
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+  transition: background-color 0.2s;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background: rgba(96, 165, 250, 0.05);
+}
+
+.notification-item.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-left: 3px solid #10b981;
+}
+
+.notification-item.pending {
+  opacity: 0.7;
+}
+
+.exam-info {
+  flex: 1;
+}
+
+.exam-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+}
+
+.exam-meta {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.exam-meta .divider {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.exam-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.exam-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(96, 165, 250, 0.3);
+}
+
+.exam-action {
+  margin-left: 20px;
 }
 
 .topwrap {
@@ -1184,7 +1827,7 @@ export default defineComponent({
 
 .user-name {
   font-size: 14px;
-  color: #4b5563;
+  color: #e5e7eb;
 }
 
 /* 布局 */
@@ -1335,7 +1978,7 @@ export default defineComponent({
   align-items: center;
   gap: 6px;
   font-size: 14px;
-  color: #6b7280;
+  color: #cbd5e1;
 }
 
 .empty-hint {
@@ -1398,6 +2041,11 @@ export default defineComponent({
 
 .tag.multi {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: #fff;
+}
+
+.tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
   color: #fff;
 }
 
@@ -1481,7 +2129,7 @@ export default defineComponent({
   margin: 0 0 20px;
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1616,13 +2264,13 @@ export default defineComponent({
 
 .analysis {
   white-space: pre-wrap;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-  border: 2px dashed rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border: 2px dashed rgba(102, 126, 234, 0.4);
   padding: 16px;
   border-radius: 12px;
   margin-top: 12px;
   font-size: 14px;
-  color: #4b5563;
+  color: #cbd5e1;
   line-height: 1.8;
   position: relative;
 }
@@ -1641,13 +2289,32 @@ export default defineComponent({
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
+.analysis-tab-bar {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.analysis-tab-bar :deep(.el-radio-button__inner) {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #e2e8f0;
+}
+
+.analysis-tab-bar :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: #fff;
+}
+
 /* 响应式优化 */
 /* 错题统计与知识点分析 */
 .wrong-stats-panel h3 {
   margin: 0 0 20px;
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1717,7 +2384,7 @@ export default defineComponent({
 .review-suggestion h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: #e5e7eb;
   margin: 0 0 16px;
 }
 
@@ -1749,7 +2416,7 @@ export default defineComponent({
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   font-weight: 600;
   font-size: 14px;
-  color: #4b5563;
+  color: #e5e7eb;
 }
 
 .kp-row.kp-danger {
@@ -1762,7 +2429,7 @@ export default defineComponent({
 
 .kp-name {
   font-size: 14px;
-  color: #1f2937;
+  color: #e5e7eb;
   font-weight: 500;
 }
 
@@ -1808,7 +2475,7 @@ export default defineComponent({
 .review-suggestion p {
   margin: 0 0 16px;
   font-size: 14px;
-  color: #4b5563;
+  color: #cbd5e1;
 }
 
 .suggestion-tags {
@@ -1929,5 +2596,132 @@ export default defineComponent({
     padding: 6px 12px;
     font-size: 13px;
   }
+}
+
+/* 题目分类导航样式 */
+.nav-section {
+  margin-bottom: 16px;
+}
+
+.nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.nav-type-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.nav-type-tag.single {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.nav-type-tag.multi {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.nav-type-tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.nav-count {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.nav-summary {
+  text-align: center;
+}
+
+/* 题目分类区域样式 */
+.question-section {
+  margin-bottom: 24px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.section-tag {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.section-tag.single {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.section-tag.multi {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.section-tag.indeterminate {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.section-count {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* 头部统计样式 */
+.head-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.head-stat .stat-label {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.head-stat .stat-value {
+  color: #e5e7eb;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.head-divider {
+  color: rgba(96, 165, 250, 0.3);
+  margin: 0 8px;
+}
+
+/* 自动保存状态样式 */
+.auto-save-status {
+  margin-left: 16px;
+  font-size: 13px;
+}
+
+.auto-save-status .saving {
+  color: #fbbf24;
+  animation: pulse 1s infinite;
+}
+
+.auto-save-status .saved {
+  color: #4ade80;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

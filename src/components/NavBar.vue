@@ -87,6 +87,10 @@
                 <el-icon><Document /></el-icon>
                 <span>DOCX 工具</span>
               </el-dropdown-item>
+              <el-dropdown-item command="format-tool">
+                <el-icon><Document /></el-icon>
+                <span>格式化工具</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 <span>退出登录</span>
@@ -181,6 +185,8 @@ export default defineComponent({
       } else if (command === 'docx-tool') {
         // 跳转到 nginx 代理的 docx 服务
         window.location.href = '/docx/'
+      } else if (command === 'format-tool') {
+        router.push('/format-tool')
       } else if (command === 'admin') {
         router.push('/admin')
       } else if (command === 'super-admin') {
