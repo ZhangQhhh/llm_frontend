@@ -340,27 +340,51 @@ export default defineComponent({
     const loadStatus = async () => {
       try {
         const response = await getUpdateStatus();
-        if (response.ok) {
+        if (response.ok && response.data) {
           allKBStatus.value = response.data;
           if (response.data[currentKB.value]) {
             kbStatus.value = response.data[currentKB.value];
+          } else {
+            // 如果没有当前知识库的状态，设置默认值
+            kbStatus.value = {
+              kb_type: currentKB.value,
+              updating: false,
+              progress: '',
+              file_count: files.value.length,
+              last_error: ''
+            };
           }
         }
       } catch (error) {
         console.error('加载状态失败:', error);
+        // API 失败时设置默认状态
+        kbStatus.value = {
+          kb_type: currentKB.value,
+          updating: false,
+          progress: '',
+          file_count: files.value.length,
+          last_error: ''
+        };
       }
     };
 
-    // 开始状态轮询
+    // 开始状态轮询（仅在有更新任务时轮询）
     const startStatusPolling = () => {
       if (statusPollingTimer) return;
       statusPollingTimer = window.setInterval(async () => {
-        const response = await isUpdating();
-        if (response.ok && response.updating) {
-          await loadStatus();
-        } else if (response.ok && !response.updating) {
-          await loadStatus();
-          await loadFiles();
+        try {
+          const response = await isUpdating();
+          if (response.ok && response.updating) {
+            // 正在更新，继续轮询
+            await loadStatus();
+          } else if (response.ok && !response.updating) {
+            // 更新完成，停止轮询
+            await loadStatus();
+            await loadFiles();
+            stopStatusPolling();
+          }
+        } catch (error) {
+          console.error('轮询状态失败:', error);
         }
       }, 3000);
     };
@@ -549,7 +573,10 @@ export default defineComponent({
     onMounted(async () => {
       await loadFiles();
       await loadStatus();
-      startStatusPolling();
+      // 只在有更新任务时才启动轮询
+      if (kbStatus.value?.updating) {
+        startStatusPolling();
+      }
     });
 
     onUnmounted(() => {
