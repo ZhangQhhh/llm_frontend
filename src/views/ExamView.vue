@@ -420,7 +420,30 @@
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                 </button>
               </div>
-              <div class="analysis" v-html="formatAnalysis(item.analysis) || '（无解析）'">
+              <!-- 解析区域：复杂验证策略显示Tab切换 -->
+              <div class="analysis" @mouseenter="isComplexValidation(item.analysis) && loadPerOption(item.qid)">
+                <template v-if="isComplexValidation(item.analysis)">
+                  <div class="analysis-tab-bar">
+                    <el-radio-group
+                      v-model="analysisActiveTab[idx]"
+                      size="small"
+                      @change="() => { if (!analysisActiveTab[idx]) analysisActiveTab[idx] = 'all'; loadPerOption(item.qid) }"
+                    >
+                      <el-radio-button label="all">全部</el-radio-button>
+                      <el-radio-button
+                        v-for="opt in item.options"
+                        :key="opt.label"
+                        :label="opt.label"
+                      >
+                        选项 {{ opt.label }}
+                      </el-radio-button>
+                    </el-radio-group>
+                  </div>
+                  <div v-html="formatAnalysis(getAnalysisForTab(item.qid, item.analysis, analysisActiveTab[idx] || 'all')) || '（无解析）'"></div>
+                </template>
+                <template v-else>
+                  <div v-html="formatAnalysis(item.analysis) || '（无解析）'"></div>
+                </template>
               </div>
             </div>
           </div>
@@ -449,7 +472,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Refresh, Clock } from '@element-plus/icons-vue'
@@ -559,6 +582,85 @@ export default defineComponent({
     const exportingWrong = ref(false)
     const exportMessage = ref('')
     const scoreChartRef = ref<HTMLCanvasElement | null>(null)
+
+    // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
+    const analysisActiveTab = reactive<Record<number, string>>({})
+    // 分选项解析缓存（从后端获取）
+    const perOptionMap = reactive<Record<string, Array<{label: string, explain: string}>>>({})
+    const perOptionLoading = reactive<Record<string, boolean>>({})
+    const perOptionLoaded = reactive<Record<string, boolean>>({})
+
+    // 判断解析是否为复杂验证策略（通过文本标识判断）
+    const isComplexValidation = (analysis: string): boolean => {
+      return !!(analysis && analysis.includes('【复杂验证（逐选项核查·汇总）】'))
+    }
+
+    // 加载分选项解析数据
+    const loadPerOption = async (qid: string) => {
+      if (!qid || perOptionLoaded[qid] || perOptionLoading[qid]) return
+      perOptionLoading[qid] = true
+      try {
+        const url = `${MCQ_BASE_URL}/bank/sources?qid=${encodeURIComponent(qid)}`
+        const res = await fetch(url, { method: 'GET' })
+        if (res.ok) {
+          const j = await res.json()
+          if (j && j.ok !== false) {
+            const perOpt = j.per_option || []
+            perOptionMap[qid] = Array.isArray(perOpt) ? perOpt : []
+          }
+        }
+        perOptionLoaded[qid] = true
+      } catch (e) {
+        console.warn('加载per_option失败:', e)
+      } finally {
+        perOptionLoading[qid] = false
+      }
+    }
+
+    // 解析复杂验证的分项解析内容（回退方案）
+    const parseOptionAnalyses = (analysis: string): Record<string, string> => {
+      const result: Record<string, string> = {}
+      if (!analysis) return result
+      
+      // 查找"分项解析："之后的内容
+      const marker = '分项解析：'
+      const markerIdx = analysis.indexOf(marker)
+      if (markerIdx === -1) return result
+      
+      const afterMarker = analysis.substring(markerIdx + marker.length)
+      
+      // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
+      const optionPattern = /([A-H])[\.\、]\s*([\s\S]*?)(?=(?:\n[A-H][\.\、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      let match
+      while ((match = optionPattern.exec(afterMarker)) !== null) {
+        const label = match[1].toUpperCase()
+        const content = match[2].trim()
+        if (content) {
+          result[label] = content
+        }
+      }
+      
+      return result
+    }
+
+    // 获取指定Tab对应的解析内容（优先使用后端per_option数据）
+    const getAnalysisForTab = (qid: string, analysis: string, tab: string): string => {
+      if (!analysis) return ''
+      if (tab === 'all') return analysis
+      
+      // 优先使用后端返回的per_option数据
+      const perOpts = perOptionMap[qid]
+      if (perOpts && perOpts.length > 0) {
+        const opt = perOpts.find(o => o.label === tab)
+        if (opt && opt.explain) {
+          return opt.explain
+        }
+      }
+      
+      // 回退：使用正则解析（兼容旧数据）
+      const optionAnalyses = parseOptionAnalyses(analysis)
+      return optionAnalyses[tab] || '（无该选项解析）'
+    }
 
     // 修改密码
     const passwordDialogVisible = ref(false)
@@ -753,13 +855,24 @@ export default defineComponent({
         .replace(/&lt;NEWLINE&gt;/g, '<br>')
     }
 
-    // 格式化解析文本：渲染 markdown 并过滤"参考来源"
+    // 格式化解析文本：渲染 markdown 并过滤"参考来源"和进度提示
     const formatAnalysis = (text: string | undefined | null): string => {
       if (!text) return ''
+      // 带选项字母的进度提示替换为选项分隔标记
+      const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
       // 过滤掉"参考来源"（可能被加粗）
       let cleaned = text
-        .replace(/\*\*参考来源\*\*[：:\s]*/g, '')
-        .replace(/参考来源[：:\s]*/g, '')
+        .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
+        // 将带选项字母的进度提示替换为选项分隔标记
+        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        // 移除不带选项字母的通用进度提示（支持行内任意位置）
+        .replace(/正在进行混合检索[.…]*\s*/g, '')
+        .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
+        .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
+        .replace(/正在使用精准检索分析[.…]*\s*/g, '')
       return renderMarkdown(cleaned)
     }
 
@@ -1472,6 +1585,8 @@ export default defineComponent({
       getScoreClass,
       formatText,
       formatAnalysis,
+      // 解析Tab切换相关
+      analysisActiveTab, isComplexValidation, getAnalysisForTab, loadPerOption,
       toggleMultiOption,
       selectSingleOption,
       handleChangePassword,
@@ -2169,6 +2284,25 @@ export default defineComponent({
   font-size: 12px;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.analysis-tab-bar {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.analysis-tab-bar :deep(.el-radio-button__inner) {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #e2e8f0;
+}
+
+.analysis-tab-bar :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: #fff;
 }
 
 /* 响应式优化 */

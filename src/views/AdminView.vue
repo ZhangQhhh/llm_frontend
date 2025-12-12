@@ -397,86 +397,112 @@
 
 
                 <div v-if="showingAnalysis[q.qid]" class="q-analysis">
-                  <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
-                  </div>
-
-                  <!-- 参考资料折叠块（结构参考 qa_public.html） -->
-                  <details class="analysis-sources">
-                    <summary>参考资料（重排序最终 TopN）</summary>
-
-                    <div v-if="sourcesLoading[q.qid]" class="src-loading">
-                      参考资料载入中…
-                    </div>
-                    <div v-else-if="sourcesError[q.qid]" class="src-error">
-                      加载失败：{{ sourcesError[q.qid] }}
-                    </div>
-                    <div
-                      v-else-if="sourcesLoaded[q.qid] && (!sourcesMap[q.qid] || !sourcesMap[q.qid].length)"
-                      class="src-empty"
-                    >
-                      无参考资料
-                    </div>
-
-                    <template v-else>
-                      <!-- 分组选项（复杂验证：sources_grouped） -->
-                      <template v-if="isGroupedSources(q.qid)">
-                        <details
-                          v-for="(group, gi) in sourcesMap[q.qid]"
-                          :key="group.label || gi"
-                          class="src-group"
-                          open
+                  <!-- 复杂验证策略：显示Tab切换 -->
+                  <template v-if="isComplexValidation(q.analysis)">
+                    <div class="analysis-tab-bar">
+                      <el-radio-group
+                        v-model="analysisActiveTab[q.qid]"
+                        size="small"
+                        @change="() => { if (!analysisActiveTab[q.qid]) analysisActiveTab[q.qid] = 'all' }"
+                      >
+                        <el-radio-button label="all">全部</el-radio-button>
+                        <el-radio-button
+                          v-for="opt in q.options"
+                          :key="opt.label"
+                          :label="opt.label"
                         >
-                          <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
-                          <div class="src-group-body">
-                            <div
-                              v-for="(s, si) in group.sources || []"
-                              :key="si"
-                              class="src-card"
-                            >
-                              <div class="src-title">{{ getSourceTitle(s, si) }}</div>
-                              <div v-if="getSourceMeta(s)" class="src-meta">
-                                {{ getSourceMeta(s) }}
-                              </div>
-                              <div v-if="sourcePassages(s).length" class="src-passages">
-                                <div
-                                  v-for="(p, pi) in sourcePassages(s)"
-                                  :key="pi"
-                                  class="passage"
-                                >
-                                  <pre>{{ p }}</pre>
+                          选项 {{ opt.label }}
+                        </el-radio-button>
+                      </el-radio-group>
+                    </div>
+
+                    <!-- 根据Tab显示对应解析内容 -->
+                    <div class="q-analysis-text" v-html="processAnalysisText(getAnalysisForTab(q.qid, q.analysis, analysisActiveTab[q.qid] || 'all'))">
+                    </div>
+
+                    <!-- 参考资料：根据Tab过滤 -->
+                    <details class="analysis-sources">
+                      <summary>参考资料（重排序最终 TopN）</summary>
+                      <div v-if="sourcesLoading[q.qid]" class="src-loading">参考资料载入中…</div>
+                      <div v-else-if="sourcesError[q.qid]" class="src-error">加载失败：{{ sourcesError[q.qid] }}</div>
+                      <div v-else-if="sourcesLoaded[q.qid] && getSourcesForTab(q.qid, analysisActiveTab[q.qid] || 'all').length === 0" class="src-empty">
+                        无参考资料
+                      </div>
+                      <template v-else>
+                        <!-- 当选择"全部"或非分组时显示分组列表 -->
+                        <template v-if="(analysisActiveTab[q.qid] || 'all') === 'all' && isGroupedSources(q.qid)">
+                          <details
+                            v-for="(group, gi) in sourcesMap[q.qid]"
+                            :key="group.label || gi"
+                            class="src-group"
+                            open
+                          >
+                            <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
+                            <div class="src-group-body">
+                              <div v-for="(s, si) in group.sources || []" :key="si" class="src-card">
+                                <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                                <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                                <div v-if="sourcePassages(s).length" class="src-passages">
+                                  <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                                 </div>
+                                <div v-else class="src-empty">无片段</div>
+                              </div>
+                            </div>
+                          </details>
+                        </template>
+                        <!-- 当选择特定选项时只显示该选项的参考资料 -->
+                        <template v-else-if="(analysisActiveTab[q.qid] || 'all') !== 'all' && isGroupedSources(q.qid)">
+                          <template v-for="(group, gi) in getSourcesForTab(q.qid, analysisActiveTab[q.qid] || 'all')" :key="group.label || gi">
+                            <div v-for="(s, si) in group.sources || []" :key="si" class="src-card">
+                              <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                              <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                              <div v-if="sourcePassages(s).length" class="src-passages">
+                                <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                               </div>
                               <div v-else class="src-empty">无片段</div>
                             </div>
-                          </div>
-                        </details>
-                      </template>
-
-                      <!-- 扁平列表（简单检索：sources） -->
-                      <template v-else>
-                        <div
-                          v-for="(s, si) in sourcesMap[q.qid] || []"
-                          :key="si"
-                          class="src-card"
-                        >
-                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
-                          <div v-if="getSourceMeta(s)" class="src-meta">
-                            {{ getSourceMeta(s) }}
-                          </div>
-                          <div v-if="sourcePassages(s).length" class="src-passages">
-                            <div
-                              v-for="(p, pi) in sourcePassages(s)"
-                              :key="pi"
-                              class="passage"
-                            >
-                              <pre>{{ p }}</pre>
+                          </template>
+                        </template>
+                        <!-- 非分组结构 -->
+                        <template v-else>
+                          <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
+                            <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                            <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                            <div v-if="sourcePassages(s).length" class="src-passages">
+                              <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                             </div>
+                            <div v-else class="src-empty">无片段</div>
+                          </div>
+                        </template>
+                      </template>
+                    </details>
+                  </template>
+
+                  <!-- 简单查找策略：直接显示全部 -->
+                  <template v-else>
+                    <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
+                    </div>
+
+                    <!-- 参考资料折叠块 -->
+                    <details class="analysis-sources">
+                      <summary>参考资料（重排序最终 TopN）</summary>
+                      <div v-if="sourcesLoading[q.qid]" class="src-loading">参考资料载入中…</div>
+                      <div v-else-if="sourcesError[q.qid]" class="src-error">加载失败：{{ sourcesError[q.qid] }}</div>
+                      <div v-else-if="sourcesLoaded[q.qid] && (!sourcesMap[q.qid] || !sourcesMap[q.qid].length)" class="src-empty">
+                        无参考资料
+                      </div>
+                      <template v-else>
+                        <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
+                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                          <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                          <div v-if="sourcePassages(s).length" class="src-passages">
+                            <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
                           </div>
                           <div v-else class="src-empty">无片段</div>
                         </div>
                       </template>
-                    </template>
-                  </details>
+                    </details>
+                  </template>
                 </div>
               </el-card>
             </div>
@@ -1324,11 +1350,96 @@ export default defineComponent({
     const showingAnalysis = reactive<Record<string, boolean>>({})
     const approvingAll = ref(false)
 
+    // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
+    const analysisActiveTab = reactive<Record<string, string>>({})
+
+    // 判断解析是否为复杂验证策略（通过文本标识判断）
+    const isComplexValidation = (analysis: string): boolean => {
+      return !!(analysis && analysis.includes('【复杂验证（逐选项核查·汇总）】'))
+    }
+
+    // 解析复杂验证的分项解析内容
+    const parseOptionAnalyses = (analysis: string): Record<string, string> => {
+      const result: Record<string, string> = {}
+      if (!analysis) return result
+      
+      // 查找"分项解析："之后的内容
+      const marker = '分项解析：'
+      const markerIdx = analysis.indexOf(marker)
+      if (markerIdx === -1) return result
+      
+      const afterMarker = analysis.substring(markerIdx + marker.length)
+      
+      // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
+      const optionPattern = /([A-H])[\.\、]\s*([\s\S]*?)(?=(?:\n[A-H][\.\、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      let match
+      while ((match = optionPattern.exec(afterMarker)) !== null) {
+        const label = match[1].toUpperCase()
+        const content = match[2].trim()
+        if (content) {
+          result[label] = content
+        }
+      }
+      
+      return result
+    }
+
+    // 获取指定Tab对应的解析内容（优先使用后端per_option数据）
+    const getAnalysisForTab = (qid: string, analysis: string, tab: string): string => {
+      if (!analysis) return ''
+      if (tab === 'all') return analysis
+      
+      // 优先使用后端返回的per_option数据
+      const perOpts = perOptionMap[qid]
+      if (perOpts && perOpts.length > 0) {
+        const opt = perOpts.find(o => o.label === tab)
+        if (opt && opt.explain) {
+          return opt.explain
+        }
+      }
+      
+      // 回退：使用正则解析（兼容旧数据）
+      const optionAnalyses = parseOptionAnalyses(analysis)
+      return optionAnalyses[tab] || '（无该选项解析）'
+    }
+
+    // 获取指定Tab对应的参考资料（过滤分组）
+    const getSourcesForTab = (qid: string, tab: string): any[] => {
+      const src = sourcesMap[qid]
+      if (!Array.isArray(src) || !src.length) return []
+      
+      // 如果是"全部"Tab，返回所有
+      if (tab === 'all') return src
+      
+      // 检查是否为分组结构
+      const first = src[0] as any
+      if (first && typeof first === 'object' && Array.isArray(first.sources)) {
+        // 分组结构，只返回对应选项的组
+        return src.filter((group: any) => group.label === tab)
+      }
+      
+      // 非分组结构，返回全部
+      return src
+    }
+
+    // 获取题目可用的Tab选项
+    const getAvailableTabs = (q: Question): string[] => {
+      const tabs = ['all']
+      if (q.options && Array.isArray(q.options)) {
+        q.options.forEach(opt => {
+          if (opt.label) tabs.push(opt.label.toUpperCase())
+        })
+      }
+      return tabs
+    }
+
     // 参考资料缓存与渲染（结构与 qa_public.html 对齐）
     const sourcesMap = reactive<Record<string, any[]>>({})
     const sourcesLoading = reactive<Record<string, boolean>>({})
     const sourcesLoaded = reactive<Record<string, boolean>>({})
     const sourcesError = reactive<Record<string, string>>({})
+    // 分选项解析缓存（复杂验证策略）
+    const perOptionMap = reactive<Record<string, Array<{label: string, explain: string}>>>({})
 
     const sourcePassages = (src: any): string[] => {
       const out: string[] = []
@@ -1397,6 +1508,9 @@ export default defineComponent({
         }
         const src = j.sources || []
         sourcesMap[qid] = Array.isArray(src) ? src : []
+        // 保存分选项解析数据（复杂验证策略）
+        const perOpt = j.per_option || []
+        perOptionMap[qid] = Array.isArray(perOpt) ? perOpt : []
         sourcesLoaded[qid] = true
       } catch (error: any) {
         sourcesError[qid] = error?.message || String(error)
@@ -3560,6 +3674,8 @@ export default defineComponent({
       currentTaskId, currentTaskStatus, stoppingTask, resumingTask, isTaskRunning, canResumeTask, stopTask, resumeTask,
       sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
       processAnalysisText,
+      // 解析Tab切换相关
+      analysisActiveTab, isComplexValidation, getAnalysisForTab, getSourcesForTab, getAvailableTabs,
       // 批量选择相关
       selectedQuestions, selectAll, toggleSelectAll, batchDelete,
       // 回收站相关
@@ -3681,6 +3797,16 @@ export default defineComponent({
 .q-analysis-text {
   white-space: pre-wrap;
   margin-bottom: 0.5rem;
+}
+
+.analysis-tab-bar {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.analysis-tab-bar :deep(.el-radio-button__inner) {
+  padding: 6px 12px;
 }
 
 .analysis-sources {
