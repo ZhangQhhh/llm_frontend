@@ -47,6 +47,51 @@
       </div>
     </div>
 
+    <!-- 考试通知面板 -->
+    <div v-if="publishedExams.length > 0 && !examStarted" class="notification-panel">
+      <div class="notification-header">
+        <el-icon class="notification-icon"><Bell /></el-icon>
+        <span>考试通知</span>
+        <el-button size="small" text @click="loadPublishedExams" :loading="loadingExamNotifications">
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </div>
+      <div class="notification-list">
+        <div
+          v-for="exam in publishedExams"
+          :key="exam.exam_id"
+          class="notification-item"
+          :class="{ active: getExamStatus(exam) === 'active', pending: getExamStatus(exam) === 'pending' }"
+        >
+          <div class="exam-info">
+            <div class="exam-name">{{ exam.exam_name }}</div>
+            <div class="exam-meta">
+              <span>试卷：{{ exam.paper_title }}</span>
+              <span class="divider">|</span>
+              <span>时长：{{ exam.duration_min }}分钟</span>
+            </div>
+            <div class="exam-time">
+              <el-icon><Clock /></el-icon>
+              {{ exam.start_time }} ~ {{ exam.end_time }}
+            </div>
+            <div class="exam-desc" v-if="exam.description">{{ exam.description }}</div>
+          </div>
+          <div class="exam-action">
+            <el-tag v-if="getExamStatus(exam) === 'pending'" type="warning" effect="plain">未开始</el-tag>
+            <el-tag v-else-if="getExamStatus(exam) === 'ended'" type="info" effect="plain">已结束</el-tag>
+            <el-button
+              v-else-if="getExamStatus(exam) === 'active'"
+              type="primary"
+              @click="enterPublishedExam(exam)"
+              :loading="enteringExam === exam.exam_id"
+            >
+              进入考试
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 主布局 -->
     <div class="wrap">
       <!-- 左侧导航 -->
@@ -229,6 +274,10 @@
             交卷并评分
           </el-button>
           <span class="muted">{{ submitMessage }}</span>
+          <span class="auto-save-status" v-if="!submitted">
+            <span v-if="savingProgress" class="saving">💾 保存中...</span>
+            <span v-else-if="lastSaveTime" class="saved">✓ 已自动保存 {{ lastSaveTime }}</span>
+          </span>
         </div>
 
         <!-- 错题统计与知识点分析 -->
@@ -310,7 +359,6 @@
             <div class="chart">
               <div class="legend">
                 <span class="lg ok">✅ 正确</span>
-                <span class="lg partial">🟡 部分得分</span>
                 <span class="lg bad">❌ 错误</span>
               </div>
               <div class="stat-text">
@@ -357,7 +405,7 @@
               <div class="muted" style="margin: 8px 0">
                 标准答案：{{ item.correct_labels.join('') }}
                 ｜ 我的作答：{{ item.my_labels?.join('') || '(未作答)' }}
-                ｜ 判定：{{ item.is_correct ? '正确' : (item.my_labels?.length > 0 ? '部分得分' : '错误') }}
+                ｜ 判定：{{ item.is_correct ? '正确' : '错误' }}
               </div>
               <div class="opts">
                 <button
@@ -404,6 +452,7 @@
 import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Bell, Refresh, Clock } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -416,7 +465,10 @@ const API_ENDPOINTS = {
   EXAM: {
     START: `${MCQ_BASE_URL}/exam/start`,
     SUBMIT: `${MCQ_BASE_URL}/exam/submit`,
-    REVIEW: `${MCQ_BASE_URL}/exam/review`
+    REVIEW: `${MCQ_BASE_URL}/exam/review`,
+    PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
+    SAVE_PROGRESS: `${MCQ_BASE_URL}/exam/save_progress`,
+    NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`
   },
   STUDENT: {
     EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`,
@@ -487,6 +539,13 @@ export default defineComponent({
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
     const pageSize = ref(3)
+    
+    // 自动保存相关
+    const autoSaveHandle = ref<number | null>(null)
+    const debounceSaveHandle = ref<number | null>(null)
+    const lastSaveTime = ref('')
+    const savingProgress = ref(false)
+    const lastSavedAnswersHash = ref('')  // 用于检测答案是否真正变化
 
     // 提交相关
     const submitted = ref(false)
@@ -508,6 +567,11 @@ export default defineComponent({
       newPassword: ''
     })
     const changingPassword = ref(false)
+
+    // 考试通知相关
+    const publishedExams = ref<any[]>([])
+    const loadingExamNotifications = ref(false)
+    const enteringExam = ref('')
 
     const timerDisplay = computed(() => {
       if (!examStarted.value) return '--:--'
@@ -708,11 +772,15 @@ export default defineComponent({
       } else {
         answersState.value[qid] = [...current, label]
       }
+      // 答案变化后触发防抖保存
+      debounceSave()
     }
 
     const selectSingleOption = (qid: string, label: string) => {
       if (submitted.value) return
       answersState.value[qid] = label
+      // 答案变化后触发防抖保存
+      debounceSave()
     }
 
     // 绘制圆环进度图
@@ -795,6 +863,165 @@ export default defineComponent({
       }
     }
 
+    // 收集当前答案用于保存
+    const collectAnswersForSave = () => {
+      const answers: Array<{ qid: string; chosen_labels: string[] }> = []
+      questions.value.forEach(q => {
+        const answer = answersState.value[q.qid]
+        let labels: string[] = []
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
+          labels = Array.isArray(answer) ? answer : []
+        } else {
+          labels = answer ? [answer] : []
+        }
+        // 保存所有答案，包括空的
+        answers.push({ qid: q.qid, chosen_labels: labels })
+      })
+      return answers
+    }
+
+    // 保存答题进度到后端
+    const saveProgress = async (force = false) => {
+      if (!attemptId.value || submitted.value || savingProgress.value) return
+      
+      const answers = collectAnswersForSave()
+      // 计算答案hash，避免重复保存相同内容
+      const currentHash = JSON.stringify(answers)
+      if (!force && currentHash === lastSavedAnswersHash.value) {
+        return  // 答案没有变化，跳过保存
+      }
+      
+      savingProgress.value = true
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.SAVE_PROGRESS, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attempt_id: attemptId.value,
+            answers
+          })
+        })
+        
+        if (data.ok) {
+          lastSavedAnswersHash.value = currentHash
+          lastSaveTime.value = new Date().toLocaleTimeString()
+          // 如果返回超时信息，触发自动提交
+          if (data.timeout) {
+            ElMessage.warning('考试已超时，正在自动提交...')
+            submitExam(true)
+          }
+        }
+      } catch (error: any) {
+        console.error('保存进度失败:', error)
+      } finally {
+        savingProgress.value = false
+      }
+    }
+
+    // 启动自动保存定时器（每30秒保存一次）
+    const startAutoSave = () => {
+      if (autoSaveHandle.value) clearInterval(autoSaveHandle.value)
+      autoSaveHandle.value = window.setInterval(() => {
+        saveProgress()
+      }, 30000)  // 30秒保存一次
+    }
+
+    // 停止自动保存
+    const stopAutoSave = () => {
+      if (autoSaveHandle.value) {
+        clearInterval(autoSaveHandle.value)
+        autoSaveHandle.value = null
+      }
+      if (debounceSaveHandle.value) {
+        clearTimeout(debounceSaveHandle.value)
+        debounceSaveHandle.value = null
+      }
+    }
+
+    // 防抖保存（答案变化后3秒保存）
+    const debounceSave = () => {
+      if (debounceSaveHandle.value) {
+        clearTimeout(debounceSaveHandle.value)
+      }
+      debounceSaveHandle.value = window.setTimeout(() => {
+        saveProgress()
+      }, 3000)  // 3秒防抖，连续答题时不会频繁触发
+    }
+
+    // 检查是否有未完成的考试
+    const checkInProgressExam = async () => {
+      const studentId = store.state.user.username || 'anonymous'
+      try {
+        const url = `${API_ENDPOINTS.EXAM.PROGRESS}?student_id=${encodeURIComponent(studentId)}`
+        const data = await mcqFetch(url)
+        
+        if (data.ok && data.has_progress) {
+          // 找到未完成的考试，询问是否恢复
+          try {
+            await ElMessageBox.confirm(
+              `您有一个未完成的考试「${data.title}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？`,
+              '发现未完成的考试',
+              {
+                confirmButtonText: '继续答题',
+                cancelButtonText: '放弃并重新开始',
+                type: 'warning'
+              }
+            )
+            // 用户选择恢复考试
+            resumeExam(data)
+          } catch {
+            // 用户选择放弃，不做任何操作
+          }
+        }
+      } catch (error: any) {
+        console.error('检查未完成考试失败:', error)
+      }
+    }
+
+    // 恢复考试
+    const resumeExam = (progressData: any) => {
+      attemptId.value = progressData.attempt_id
+      leftSeconds.value = progressData.left_sec
+      questions.value = progressData.items || []
+      paperTitle.value = progressData.title || '试卷'
+      selectedPaperId.value = progressData.paper_id
+      
+      // 恢复已保存的答案
+      const newAnswersState: Record<string, any> = {}
+      questions.value.forEach(q => {
+        const saved = progressData.saved_answers?.[q.qid]
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
+          newAnswersState[q.qid] = saved || []
+        } else {
+          newAnswersState[q.qid] = saved?.[0] || ''
+        }
+      })
+      answersState.value = newAnswersState
+      
+      examStarted.value = true
+      currentPage.value = 1
+      submitted.value = false
+      gradeReport.value = null
+      reviewData.value = null
+      
+      // 启动倒计时和自动保存
+      startTimer()
+      startAutoSave()
+      
+      ElMessage.success('已恢复考试进度')
+    }
+
+    // 页面关闭前警告
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (examStarted.value && !submitted.value) {
+        // 先保存一次进度
+        saveProgress()
+        e.preventDefault()
+        e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
+        return e.returnValue
+      }
+    }
+
     const loadPapers = async () => {
       loadingPapers.value = true
       try {
@@ -812,6 +1039,48 @@ export default defineComponent({
         ElMessage.error('加载试卷失败：' + (error.message || '未知错误'))
       } finally {
         loadingPapers.value = false
+      }
+    }
+
+    // ========== 考试通知相关函数 ==========
+    const loadPublishedExams = async () => {
+      loadingExamNotifications.value = true
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.NOTIFICATIONS)
+        if (data?.ok !== false) {
+          publishedExams.value = Array.isArray(data.exams) ? data.exams : []
+        }
+      } catch (error: any) {
+        console.error('加载考试通知失败:', error)
+      } finally {
+        loadingExamNotifications.value = false
+      }
+    }
+
+    // 获取考试状态
+    const getExamStatus = (exam: any): string => {
+      const now = new Date()
+      const startTime = new Date(exam.start_time)
+      const endTime = new Date(exam.end_time)
+      if (now < startTime) return 'pending'
+      if (now > endTime) return 'ended'
+      return 'active'
+    }
+
+    // 进入已发布的考试
+    const enterPublishedExam = async (exam: any) => {
+      enteringExam.value = exam.exam_id
+      try {
+        // 设置试卷和时长
+        selectedPaperId.value = exam.paper_id
+        durationMin.value = exam.duration_min
+        
+        // 直接开始考试
+        await startExam()
+      } catch (error: any) {
+        ElMessage.error('进入考试失败：' + (error?.message || error))
+      } finally {
+        enteringExam.value = ''
       }
     }
 
@@ -858,8 +1127,9 @@ export default defineComponent({
         gradeReport.value = null
         reviewData.value = null
 
-        // 启动倒计时
+        // 启动倒计时和自动保存
         startTimer()
+        startAutoSave()
 
         ElMessage.success('考试已开始')
       } catch (error: any) {
@@ -953,6 +1223,7 @@ export default defineComponent({
         submitted.value = true
         submitMessage.value = '评分完成'
         stopTimer()
+        stopAutoSave()
 
         // 绘制圆环图
         await nextTick()
@@ -1134,10 +1405,17 @@ export default defineComponent({
 
     onMounted(() => {
       loadPapers()
+      loadPublishedExams()  // 加载考试通知
+      // 检查是否有未完成的考试
+      checkInProgressExam()
+      // 添加页面关闭前警告
+      window.addEventListener('beforeunload', handleBeforeUnload)
     })
 
     onUnmounted(() => {
       stopTimer()
+      stopAutoSave()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     })
 
     return {
@@ -1197,7 +1475,21 @@ export default defineComponent({
       toggleMultiOption,
       selectSingleOption,
       handleChangePassword,
-      changePassword
+      changePassword,
+      lastSaveTime,
+      savingProgress,
+      saveProgress,
+      // 考试通知相关
+      publishedExams,
+      loadingExamNotifications,
+      enteringExam,
+      loadPublishedExams,
+      getExamStatus,
+      enterPublishedExam,
+      // Icons
+      Bell,
+      Refresh,
+      Clock
     }
   }
 })
@@ -1247,6 +1539,108 @@ export default defineComponent({
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(96, 165, 250, 0.2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 考试通知面板 */
+.notification-panel {
+  max-width: 1400px;
+  margin: 16px auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-radius: 10px 10px 0 0;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-bottom: none;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.notification-icon {
+  font-size: 20px;
+}
+
+.notification-list {
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 0 0 10px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-top: none;
+  overflow: hidden;
+}
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+  transition: background-color 0.2s;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background: rgba(96, 165, 250, 0.05);
+}
+
+.notification-item.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-left: 3px solid #10b981;
+}
+
+.notification-item.pending {
+  opacity: 0.7;
+}
+
+.exam-info {
+  flex: 1;
+}
+
+.exam-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+}
+
+.exam-meta {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.exam-meta .divider {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.exam-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.exam-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(96, 165, 250, 0.3);
+}
+
+.exam-action {
+  margin-left: 20px;
 }
 
 .topwrap {
@@ -2172,5 +2566,25 @@ export default defineComponent({
 .head-divider {
   color: rgba(96, 165, 250, 0.3);
   margin: 0 8px;
+}
+
+/* 自动保存状态样式 */
+.auto-save-status {
+  margin-left: 16px;
+  font-size: 13px;
+}
+
+.auto-save-status .saving {
+  color: #fbbf24;
+  animation: pulse 1s infinite;
+}
+
+.auto-save-status .saved {
+  color: #4ade80;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

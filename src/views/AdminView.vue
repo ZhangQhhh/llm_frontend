@@ -602,6 +602,27 @@
                   <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
                 </el-form-item>
                 
+                <!-- 分数设置 -->
+                <el-form-item label="分数设置" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; gap: 16px;">
+                    <span>
+                      <span style="margin-right: 4px;">单选题</span>
+                      <el-input-number v-model="singleScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">多选题</span>
+                      <el-input-number v-model="multiScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                    <span>
+                      <span style="margin-right: 4px;">不定项</span>
+                      <el-input-number v-model="indeterminateScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <span style="margin-left: 4px;">分/题</span>
+                    </span>
+                  </div>
+                </el-form-item>
+                
                 <!-- 生成模式选择 -->
                 <el-form-item label="生成模式" style="margin-bottom: 12px;">
                   <el-radio-group v-model="paperGenerateMode">
@@ -888,9 +909,8 @@
         <!-- 成绩导出 -->
         <el-tab-pane label="成绩导出" name="export">
           <div class="tab-content">
-            <!-- ... -->
             <div class="action-bar">
-              <el-select v-model="selectedExportPaper" placeholder="选择试卷" style="width: 300px">
+              <el-select v-model="selectedExportPaper" placeholder="选择试卷" style="width: 300px" @change="loadGradesStats">
                 <el-option v-for="paper in exportPapers" :key="paper.paper_id" :label="paper.title" :value="paper.paper_id" />
               </el-select>
               <el-button @click="loadExportPapers" :loading="loadingExportPapers">刷新</el-button>
@@ -898,6 +918,239 @@
               <el-button @click="exportDocx" :loading="exportingDocx">导出DOCX</el-button>
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
+            
+            <!-- 成绩统计图表 -->
+            <div v-if="selectedExportPaper && gradesStats" class="grades-stats-panel">
+              <el-row :gutter="20">
+                <!-- 总体概览 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><TrendCharts /></el-icon>
+                        <span>总体概览</span>
+                      </div>
+                    </template>
+                    <div class="stats-overview">
+                      <div class="stat-item">
+                        <div class="stat-value">{{ gradesStats.total_students || 0 }}</div>
+                        <div class="stat-label">参考人数</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value">{{ gradesStats.submitted_count || 0 }}</div>
+                        <div class="stat-label">已交卷</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value highlight">{{ (gradesStats.avg_score || 0).toFixed(1) }}</div>
+                        <div class="stat-label">平均分</div>
+                      </div>
+                      <div class="stat-item">
+                        <div class="stat-value">{{ (gradesStats.pass_rate || 0).toFixed(1) }}%</div>
+                        <div class="stat-label">及格率</div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+                
+                <!-- 分数分布 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><Histogram /></el-icon>
+                        <span>分数分布</span>
+                      </div>
+                    </template>
+                    <div class="score-distribution">
+                      <div v-for="(item, idx) in scoreDistribution" :key="idx" class="dist-item">
+                        <div class="dist-label">{{ item.range }}</div>
+                        <div class="dist-bar-wrapper">
+                          <div class="dist-bar" :style="{ width: item.percent + '%', background: item.color }"></div>
+                        </div>
+                        <div class="dist-count">{{ item.count }}人 ({{ item.percent.toFixed(1) }}%)</div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+                
+                <!-- 最高/最低分 -->
+                <el-col :span="8">
+                  <el-card shadow="hover" class="stats-card">
+                    <template #header>
+                      <div class="stats-card-header">
+                        <el-icon class="stats-icon"><Medal /></el-icon>
+                        <span>成绩排名</span>
+                      </div>
+                    </template>
+                    <div class="rank-info">
+                      <div class="rank-item best">
+                        <div class="rank-icon">🏆</div>
+                        <div class="rank-content">
+                          <div class="rank-title">最高分</div>
+                          <div class="rank-score">{{ gradesStats.max_score || 0 }}</div>
+                          <div class="rank-name">{{ gradesStats.max_score_student || '-' }}</div>
+                        </div>
+                      </div>
+                      <el-divider />
+                      <div class="rank-item worst">
+                        <div class="rank-icon">📉</div>
+                        <div class="rank-content">
+                          <div class="rank-title">最低分</div>
+                          <div class="rank-score">{{ gradesStats.min_score || 0 }}</div>
+                          <div class="rank-name">{{ gradesStats.min_score_student || '-' }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </el-card>
+                </el-col>
+              </el-row>
+              
+              <!-- 成绩明细表 -->
+              <el-card shadow="hover" style="margin-top: 20px;">
+                <template #header>
+                  <div class="stats-card-header">
+                    <el-icon class="stats-icon"><List /></el-icon>
+                    <span>成绩明细</span>
+                    <span style="margin-left: auto; color: #909399; font-size: 13px;">共 {{ gradesStats.details?.length || 0 }} 人</span>
+                  </div>
+                </template>
+                <el-table :data="gradesStats.details || []" border stripe max-height="400" style="width: 100%">
+                  <el-table-column type="index" label="排名" width="70" />
+                  <el-table-column prop="student_name" label="学生姓名" min-width="120" />
+                  <el-table-column prop="student_id" label="学号/警号" min-width="140" />
+                  <el-table-column prop="score" label="得分" width="100" sortable>
+                    <template #default="scope">
+                      <span :class="{ 'score-pass': scope.row.score >= 60, 'score-fail': scope.row.score < 60 }">
+                        {{ scope.row.score?.toFixed(1) || 0 }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="correct_count" label="正确题数" width="100" />
+                  <el-table-column prop="submit_time" label="交卷时间" min-width="160" />
+                </el-table>
+              </el-card>
+            </div>
+            
+            <el-empty v-else-if="selectedExportPaper && !loadingGradesStats" description="暂无成绩数据" />
+          </div>
+        </el-tab-pane>
+        
+        <!-- 考试发布 -->
+        <el-tab-pane label="考试发布" name="publish">
+          <div class="tab-content">
+            <!-- 发布考试表单 -->
+            <el-card shadow="never" style="margin-bottom: 20px;">
+              <template #header>
+                <span style="font-weight: 600;">📢 发布新考试</span>
+              </template>
+              
+              <el-form :model="publishForm" label-width="100px" style="max-width: 700px;">
+                <el-form-item label="考试名称" required>
+                  <el-input v-model="publishForm.examName" placeholder="请输入考试名称，如：2024年度业务考核" />
+                </el-form-item>
+                
+                <el-form-item label="选择试卷" required>
+                  <el-select v-model="publishForm.paperId" placeholder="选择已生成的试卷" style="width: 100%">
+                    <el-option
+                      v-for="paper in paperList"
+                      :key="paper.paper_id"
+                      :label="paper.title"
+                      :value="paper.paper_id"
+                    />
+                  </el-select>
+                </el-form-item>
+                
+                <el-form-item label="考试时间" required>
+                  <el-date-picker
+                    v-model="publishForm.timeRange"
+                    type="datetimerange"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    format="YYYY-MM-DD HH:mm"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                
+                <el-form-item label="考试时长">
+                  <el-input-number v-model="publishForm.durationMin" :min="10" :max="180" :step="5" />
+                  <span style="margin-left: 10px; color: #909399;">分钟（学生进入考试后的答题时间）</span>
+                </el-form-item>
+                
+                <el-form-item label="考试说明">
+                  <el-input
+                    v-model="publishForm.description"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="可选，填写考试注意事项等"
+                  />
+                </el-form-item>
+                
+                <el-form-item>
+                  <el-button type="primary" @click="publishExam" :loading="publishing" :icon="Bell">
+                    发布考试通知
+                  </el-button>
+                  <span class="status-msg" v-if="publishMessage">{{ publishMessage }}</span>
+                </el-form-item>
+              </el-form>
+            </el-card>
+            
+            <!-- 已发布考试列表 -->
+            <el-card shadow="never">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600;">📋 已发布考试</span>
+                  <el-button size="small" @click="loadPublishedExams" :loading="loadingPublished" :icon="Refresh">刷新</el-button>
+                </div>
+              </template>
+              
+              <el-empty v-if="publishedExams.length === 0" description="暂无已发布的考试" />
+              
+              <el-table v-else :data="publishedExams" border stripe style="width: 100%">
+                <el-table-column prop="exam_name" label="考试名称" min-width="180" />
+                <el-table-column prop="paper_title" label="试卷" min-width="150" />
+                <el-table-column label="考试时间" min-width="280">
+                  <template #default="{ row }">
+                    {{ row.start_time }} ~ {{ row.end_time }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="duration_min" label="时长" width="80">
+                  <template #default="{ row }">{{ row.duration_min }}分钟</template>
+                </el-table-column>
+                <el-table-column label="状态" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getExamStatusType(row.status)">{{ getExamStatusText(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="参与人数" width="100">
+                  <template #default="{ row }">{{ row.participant_count || 0 }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="{ row }">
+                    <el-button
+                      v-if="row.status === 'pending' || row.status === 'active'"
+                      type="danger"
+                      size="small"
+                      plain
+                      @click="cancelExam(row)"
+                      :loading="cancelingExam[row.exam_id]"
+                    >
+                      取消
+                    </el-button>
+                    <el-button
+                      v-else
+                      type="info"
+                      size="small"
+                      plain
+                      disabled
+                    >
+                      已结束
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -1002,7 +1255,7 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
@@ -1028,7 +1281,7 @@ interface Paper {
 export default defineComponent({
   name: 'AdminView',
   // eslint-disable-next-line vue/no-unused-components
-  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled },
+  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
@@ -1214,6 +1467,12 @@ export default defineComponent({
     const paperTitle = ref('')
     const creatingPaper = ref(false)
     const paperMessage = ref('')
+
+    // 分数设置
+    const singleScore = ref(1)       // 单选题分数
+    const multiScore = ref(5)        // 多选题分数
+    const indeterminateScore = ref(5) // 不定项分数
+
     // 试卷列表管理
     const paperList = ref<Paper[]>([])
     const loadingPaperList = ref(false)
@@ -1272,6 +1531,51 @@ export default defineComponent({
     const uploadedPaperItems = ref<any[]>([])
     const editingPaperItemIdx = ref<number | null>(null)
     const savingUploadedPaper = ref(false)
+
+    // ======= 考试发布相关 =======
+    const publishForm = reactive({
+      examName: '',
+      paperId: '',
+      timeRange: [] as string[],
+      durationMin: 60,
+      description: ''
+    })
+    const publishing = ref(false)
+    const publishMessage = ref('')
+    const publishedExams = ref<any[]>([])
+    const loadingPublished = ref(false)
+    const cancelingExam = reactive<Record<string, boolean>>({})
+
+    // ======= 成绩统计相关 =======
+    const gradesStats = ref<any>(null)
+    const loadingGradesStats = ref(false)
+    
+    // 分数分布计算
+    const scoreDistribution = computed(() => {
+      if (!gradesStats.value?.details?.length) return []
+      const details = gradesStats.value.details
+      const total = details.length
+      const ranges = [
+        { range: '90-100', min: 90, max: 100, color: '#67c23a', count: 0 },
+        { range: '80-89', min: 80, max: 89, color: '#409eff', count: 0 },
+        { range: '70-79', min: 70, max: 79, color: '#e6a23c', count: 0 },
+        { range: '60-69', min: 60, max: 69, color: '#f56c6c', count: 0 },
+        { range: '0-59', min: 0, max: 59, color: '#909399', count: 0 }
+      ]
+      details.forEach((d: any) => {
+        const score = d.score || 0
+        for (const r of ranges) {
+          if (score >= r.min && score <= r.max) {
+            r.count++
+            break
+          }
+        }
+      })
+      return ranges.map(r => ({
+        ...r,
+        percent: total > 0 ? (r.count / total) * 100 : 0
+      }))
+    })
 
     // 判断题目是否为多选题（答案包含多个字母）
     const isMultiChoice = (q: Question) => {
@@ -2545,7 +2849,14 @@ export default defineComponent({
       creatingPaper.value = true
       paperMessage.value = '生成中…'
       
-      let requestBody: any = { name }
+      let requestBody: any = { 
+        name,
+        score_config: {
+          single: singleScore.value,
+          multi: multiScore.value,
+          indeterminate: indeterminateScore.value
+        }
+      }
       
       if (paperGenerateMode.value === 'random') {
         // 随机抽取模式
@@ -2882,7 +3193,6 @@ export default defineComponent({
       } catch (error: any) {
         exportMessage.value = '导出失败：' + (error?.message || error)
         ElMessage.error('导出失败：' + (error?.message || error))
-      } finally {
         exportingZip.value = false
       }
     }
@@ -2917,6 +3227,132 @@ export default defineComponent({
       } finally {
         exportingDocx.value = false
       }
+    }
+
+    // ========== 成绩统计相关函数 ==========
+    const loadGradesStats = async () => {
+      if (!selectedExportPaper.value) {
+        gradesStats.value = null
+        return
+      }
+      loadingGradesStats.value = true
+      try {
+        const url = `${MCQ_BASE_URL}/grades/stats?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        const response = await fetch(url)
+        const data = await response.json()
+        if (data?.ok !== false) {
+          gradesStats.value = data
+        } else {
+          gradesStats.value = null
+        }
+      } catch (error: any) {
+        gradesStats.value = null
+      } finally {
+        loadingGradesStats.value = false
+      }
+    }
+
+    // ========== 考试发布相关函数 ==========
+    const publishExam = async () => {
+      if (!publishForm.examName.trim()) {
+        return ElMessage.warning('请输入考试名称')
+      }
+      if (!publishForm.paperId) {
+        return ElMessage.warning('请选择试卷')
+      }
+      if (!publishForm.timeRange || publishForm.timeRange.length < 2) {
+        return ElMessage.warning('请设置考试时间')
+      }
+      
+      publishing.value = true
+      publishMessage.value = '发布中...'
+      try {
+        const response = await fetch(`${MCQ_BASE_URL}/exam/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exam_name: publishForm.examName.trim(),
+            paper_id: publishForm.paperId,
+            start_time: publishForm.timeRange[0],
+            end_time: publishForm.timeRange[1],
+            duration_min: publishForm.durationMin,
+            description: publishForm.description
+          })
+        })
+        const data = await response.json()
+        if (data?.ok) {
+          ElMessage.success('考试发布成功')
+          publishMessage.value = '发布成功！'
+          publishForm.examName = ''
+          publishForm.paperId = ''
+          publishForm.timeRange = []
+          publishForm.durationMin = 60
+          publishForm.description = ''
+          loadPublishedExams()
+        } else {
+          throw new Error(data?.msg || '发布失败')
+        }
+      } catch (error: any) {
+        publishMessage.value = '发布失败：' + (error?.message || error)
+        ElMessage.error('发布失败：' + (error?.message || error))
+      } finally {
+        publishing.value = false
+        setTimeout(() => { publishMessage.value = '' }, 3000)
+      }
+    }
+
+    const loadPublishedExams = async () => {
+      loadingPublished.value = true
+      try {
+        const response = await fetch(`${MCQ_BASE_URL}/exam/published`, { method: 'GET', cache: 'no-store' })
+        const data = await response.json()
+        if (data?.ok !== false) {
+          publishedExams.value = Array.isArray(data.exams) ? data.exams : []
+        }
+      } catch (error: any) {
+        ElMessage.error('加载已发布考试失败：' + (error?.message || error))
+      } finally {
+        loadingPublished.value = false
+      }
+    }
+
+    const cancelExam = async (exam: any) => {
+      try {
+        await ElMessageBox.confirm(
+          `确认取消考试「${exam.exam_name}」？`,
+          '取消确认',
+          { confirmButtonText: '确定取消', cancelButtonText: '返回', type: 'warning' }
+        )
+        cancelingExam[exam.exam_id] = true
+        const response = await fetch(`${MCQ_BASE_URL}/exam/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exam_id: exam.exam_id })
+        })
+        const data = await response.json()
+        if (data?.ok) {
+          ElMessage.success('已取消考试')
+          loadPublishedExams()
+        } else {
+          throw new Error(data?.msg || '取消失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('取消失败：' + (error?.message || error))
+        }
+      } finally {
+        cancelingExam[exam.exam_id] = false
+      }
+    }
+
+    const getExamStatusType = (status: string) => {
+      const map: Record<string, string> = { pending: 'warning', active: 'success', ended: 'info', cancelled: 'danger' }
+      return map[status] || 'info'
+    }
+
+    const getExamStatusText = (status: string) => {
+      const map: Record<string, string> = { pending: '未开始', active: '进行中', ended: '已结束', cancelled: '已取消' }
+      return map[status] || status
     }
 
     const normalizeRole = (role?: string) => (role || '').toLowerCase()
@@ -3104,6 +3540,7 @@ export default defineComponent({
       loadPaperList()  // 加载试卷管理列表
       loadUsers()
       loadPendingUsers()
+      loadPublishedExams()  // 加载已发布考试列表
       checkPendingTask()  // 检查是否有未完成的异步解析任务
     })
 
@@ -3133,6 +3570,7 @@ export default defineComponent({
       // 试卷生成相关
       questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage,
+      singleScore, multiScore, indeterminateScore,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
       paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
@@ -3148,7 +3586,12 @@ export default defineComponent({
       paperUploadRef, paperPreviewVisible, uploadedPaperTitle, uploadedPaperItems,
       editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
       hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
-      toggleEditPaperItem, deletePaperItem, saveUploadedPaper
+      toggleEditPaperItem, deletePaperItem, saveUploadedPaper,
+      // 考试发布相关
+      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam,
+      publishExam, loadPublishedExams, cancelExam, getExamStatusType, getExamStatusText, Bell,
+      // 成绩统计相关
+      gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats
     }
   }
 })
@@ -3629,4 +4072,152 @@ export default defineComponent({
   margin-top: 8px;
 }
 
+/* 成绩统计面板样式 */
+.grades-stats-panel {
+  margin-top: 20px;
+}
+
+.stats-card {
+  height: 100%;
+}
+
+.stats-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.stats-icon {
+  color: #667eea;
+  font-size: 18px;
+}
+
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stats-overview .stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.stats-overview .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.stats-overview .stat-value.highlight {
+  color: #667eea;
+}
+
+.stats-overview .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.score-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dist-label {
+  width: 60px;
+  font-size: 13px;
+  color: #4b5563;
+  flex-shrink: 0;
+}
+
+.dist-bar-wrapper {
+  flex: 1;
+  height: 18px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dist-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.dist-count {
+  width: 90px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rank-info {
+  padding: 8px 0;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.rank-item.best {
+  background: linear-gradient(135deg, rgba(103, 194, 58, 0.1) 0%, rgba(103, 194, 58, 0.05) 100%);
+}
+
+.rank-item.worst {
+  background: linear-gradient(135deg, rgba(245, 108, 108, 0.1) 0%, rgba(245, 108, 108, 0.05) 100%);
+}
+
+.rank-icon {
+  font-size: 28px;
+}
+
+.rank-content {
+  flex: 1;
+}
+
+.rank-title {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rank-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.rank-name {
+  font-size: 13px;
+  color: #4b5563;
+  margin-top: 2px;
+}
+
+.score-pass {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.score-fail {
+  color: #f56c6c;
+  font-weight: 600;
+}
 </style>

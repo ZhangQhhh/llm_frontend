@@ -269,7 +269,7 @@
                     <el-option label="通用识别" value="universal" />
                     <el-option label="文档识别" value="document" />
                     <el-option label="手写识别" value="handwritten" />
-                    <el-option label="身份证" value="idcard" />
+                    <!-- <el-option label="身份证" value="idcard" /> -->
                   </el-select>
                   <input
                     ref="ocrFileInputRef"
