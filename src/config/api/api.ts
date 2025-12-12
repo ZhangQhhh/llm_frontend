@@ -122,6 +122,15 @@ export const API_ENDPOINTS = {
     DAILY: `/qa_logs/daily`,           // GET 获取某天的所有日志记录
     DETAIL: `/qa_logs/detail`,         // GET 获取单条日志详情
     DATES: `/qa_logs/dates`,           // GET 获取有日志的日期列表
+  },
+  // 知识库管理API（使用llmHttp）
+  KNOWLEDGE_BASE: {
+    UPLOAD: `/api/knowledge/upload`,           // POST 上传文件
+    LIST_FILES: `/api/knowledge/list_files`,   // GET 列出文件
+    DELETE_FILE: `/api/knowledge/delete_file`, // POST 删除文件
+    UPDATE_STATUS: `/api/knowledge/update_status`, // GET 查询更新状态
+    IS_UPDATING: `/api/knowledge/is_updating`, // GET 快速检查更新中
+    REBUILD: `/api/knowledge/rebuild`,         // POST 手动触发重建
   }
 };
 

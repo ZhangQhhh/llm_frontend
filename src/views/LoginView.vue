@@ -259,11 +259,14 @@ export default defineComponent({
 
     // 状态
     const isLogin = ref(true);
-    const rememberMe = ref(false);
+    
+    // 记住我功能：从 localStorage 恢复
+    const savedUsername = localStorage.getItem('remembered_username');
+    const rememberMe = ref(!!savedUsername);
 
-    // 登录表单
+    // 登录表单：如果有保存的用户名则自动填充
     const loginForm = ref({
-      username: '',
+      username: savedUsername || '',
       password: ''
     });
     const loginLoading = ref(false);
@@ -300,6 +303,14 @@ export default defineComponent({
         password: loginForm.value.password,
         success: () => {
           loginLoading.value = false;
+          
+          // 处理"记住我"功能
+          if (rememberMe.value) {
+            localStorage.setItem('remembered_username', loginForm.value.username);
+          } else {
+            localStorage.removeItem('remembered_username');
+          }
+          
           // 获取用户信息
           store.dispatch('getinfo', {
             success: () => {

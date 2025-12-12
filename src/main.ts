@@ -26,7 +26,13 @@ if (token) {
   store.dispatch('getinfo', {
     success: () => {
       console.log('用户信息已恢复')
-      initSessionWatch(token, (store.state as any).user?.id)
+      // 延迟启动 WebSocket 监听，确保状态完全恢复
+      setTimeout(() => {
+        const userId = (store.state as any).user?.id
+        if (userId) {
+          initSessionWatch(token, userId)
+        }
+      }, 500)
     },
     error: () => {
       // token 可能已过期，清除它
@@ -38,7 +44,6 @@ if (token) {
 
 // 🔥 监听 localStorage 变化，实时同步 token 状态
 // 注意：这个事件只在同一浏览器的不同标签页之间触发
-// 对于同一页面内的 localStorage 修改，我们需要额外处理
 window.addEventListener('storage', (e) => {
   if (e.key === 'jwt_token' && !e.newValue) {
     // token 被删除了，清除 Vuex 状态
@@ -46,20 +51,5 @@ window.addEventListener('storage', (e) => {
     store.commit('logout')
   }
 })
-
-// 🔥 重写 localStorage.removeItem 方法，捕获同一页面内的删除操作
-const originalRemoveItem = localStorage.removeItem.bind(localStorage)
-localStorage.removeItem = function(key: string) {
-  // 先执行原始的删除操作
-  const result = originalRemoveItem(key)
-  
-  // 如果删除的是 jwt_token，同步清除 Vuex 状态
-  if (key === 'jwt_token' && (store.state as any).user?.is_login) {
-    console.warn('检测到 token 被删除，清除用户状态')
-    store.commit('logout')
-  }
-  
-  return result
-}
 
 createApp(App).use(store).use(router).use(ElementPlus).mount('#app')

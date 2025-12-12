@@ -25,29 +25,7 @@ function fixGBKEncoding(str: string): string {
       bytes.push(str.charCodeAt(i) & 0xFF);
     }
 
-    // 方法1: 尝试使用 XLSX 内置的 codepage
-    try {
-      const xlsxCptable = (XLSX as any).cptable;
-      if (xlsxCptable && xlsxCptable[936]) {
-        let decoded: string | undefined;
-        
-        // 尝试不同的调用方式
-        if (typeof xlsxCptable[936].dec === 'function') {
-          decoded = xlsxCptable[936].dec(bytes);
-        } else if (typeof xlsxCptable.utils?.decode === 'function') {
-          decoded = xlsxCptable.utils.decode(936, bytes);
-        }
-        
-        if (decoded && typeof decoded === 'string' && !decoded.includes('�') && decoded !== str) {
-          console.log(`[编码修复] GBK 修复成功: "${str}" -> "${decoded}"`);
-          return decoded;
-        }
-      }
-    } catch (e) {
-      console.warn('[编码修复] XLSX codepage 解码失败:', e);
-    }
-
-    // 方法2: 尝试使用导入的 cptable
+    // 方法1: 尝试使用导入的 cptable
     try {
       if (cptable && (cptable as any)[936]) {
         const cp936 = (cptable as any)[936];
@@ -68,7 +46,7 @@ function fixGBKEncoding(str: string): string {
       console.warn('[编码修复] cptable 解码失败:', e);
     }
 
-    // 方法3: 尝试作为 UTF-8 重新解码
+    // 方法2: 尝试作为 UTF-8 重新解码
     try {
       const uint8Array = new Uint8Array(bytes);
       const decoded = new TextDecoder('utf-8', { fatal: false }).decode(uint8Array);
