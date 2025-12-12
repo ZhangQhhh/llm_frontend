@@ -2953,6 +2953,9 @@ export default defineComponent({
         .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
         .replace(/未找到高相关性资料[，,]基于通用知识回答[.…]*\s*/g, '')
         .replace(/正在使用精准检索分析[.…]*\s*/g, '')
+        // 清理残留的孤立 ** 符号
+        .replace(/^\s*\*\*\s*$/gm, '')
+        .replace(/\*\*(?=\s*$)/gm, '')
       return renderMarkdown(cleaned)
     }
     const createPaper = async () => {
