@@ -513,11 +513,7 @@ import { ElMessage } from 'element-plus';
 import {
    Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-<<<<<<< HEAD
-    Sunny, Setting, Monitor
-=======
-    Sunny, Setting, TrophyBase
->>>>>>> f28aa0b297030861668d484841fadc065c5617cc
+    Sunny, Setting, Monitor, TrophyBase
   } from '@element-plus/icons-vue';
 import {
   sendStreamChatRequest,
@@ -551,11 +547,7 @@ export default defineComponent({
   components: {
      Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
-<<<<<<< HEAD
-    Sunny, Setting, Monitor
-=======
-    Sunny, Setting, TrophyBase
->>>>>>> f28aa0b297030861668d484841fadc065c5617cc
+    Sunny, Setting, Monitor, TrophyBase
   },
   setup() {
     const store = useStore();
@@ -594,7 +586,9 @@ export default defineComponent({
     const mcqStrategy = ref('auto');  // 策略选择：auto(自动判断)、SIMPLE_LOOKUP、COMPLEX_VALIDATION
     const mcqResults = ref<any[]>([]);  // 存储每个选项的结果
     const activeTab = ref('0');  // 当前激活的标签页
-<<<<<<< HEAD
+    const summarizing = ref(false);  // 答案归纳中的loading状态
+    const summaryResult = ref<{ final_answer: string; justification: string; summary_block: string } | null>(null);  // 答案归纳结果
+    const lastMcqData = ref<{ stem: string; options: { [key: string]: string } } | null>(null);  // 保存最后一次的选择题数据
     
     // 简洁模式（低配电脑推荐）
     const liteMode = ref(localStorage.getItem('qa-lite-mode') === 'true');
@@ -603,10 +597,6 @@ export default defineComponent({
       liteMode.value = !liteMode.value;
       localStorage.setItem('qa-lite-mode', String(liteMode.value));
     };
-=======
-    const summarizing = ref(false);  // 答案归纳中的loading状态
-    const summaryResult = ref<{ final_answer: string; justification: string; summary_block: string } | null>(null);  // 答案归纳结果
-    const lastMcqData = ref<{ stem: string; options: { [key: string]: string } } | null>(null);  // 保存最后一次的选择题数据
 
     // 计算属性：判断所有选项是否都已完成验证
     const allOptionsCompleted = computed(() => {
@@ -623,7 +613,6 @@ export default defineComponent({
         }, 500);
       }
     });
->>>>>>> f28aa0b297030861668d484841fadc065c5617cc
 
     // 监听选择题模式切换
     const handleMcqModeChange = (val: boolean) => {
@@ -3122,7 +3111,6 @@ export default defineComponent({
   animation: aiBreath 3s ease-in-out infinite;
 }
 
-<<<<<<< HEAD
 /* ========== 简洁模式切换按钮 ========== */
 .lite-mode-toggle {
   position: fixed;
@@ -3542,7 +3530,8 @@ export default defineComponent({
   color: var(--lite-primary) !important;
   background: var(--lite-bg-card) !important;
   border: 1px solid var(--lite-border) !important;
-=======
+}
+
 /* ========== 答案归纳结果样式 ========== */
 .summary-result-section {
   padding: 1rem 1.5rem 1.5rem;
@@ -3621,6 +3610,5 @@ export default defineComponent({
 .mcq-results-card .card-header .actions {
   display: flex;
   gap: 0.5rem;
->>>>>>> f28aa0b297030861668d484841fadc065c5617cc
 }
 </style>
