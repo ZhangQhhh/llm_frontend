@@ -111,6 +111,11 @@ export default {
       state.policeId = user.policeId || null;
       state.idCardNumber = user.idCardNumber || null;
       state.hasChangedName = user.hasChangedName;
+      // 同步用户信息到 localStorage（供 http 拦截器使用）
+      localStorage.setItem('multi_turn_chat_user', JSON.stringify({
+        username: user.username,
+        role: user.role
+      }));
     },
     // [10] 为 token 参数添加类型
     updateToken(state: UserState, token: string) {
@@ -127,6 +132,8 @@ export default {
       state.policeId = null;
       state.idCardNumber = null;
       state.hasChangedName = undefined;
+      // 清除 localStorage 中的用户信息
+      localStorage.removeItem('multi_turn_chat_user');
     },
     // 更新用户名
     updateUsername(state: UserState, username: string) {
