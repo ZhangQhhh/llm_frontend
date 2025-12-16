@@ -1283,7 +1283,7 @@ export default defineComponent({
       questions.value.forEach(q => {
         const answer = answersState.value[q.qid]
         let labels: string[] = []
-        if (q.qtype === 'multi') {
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
           labels = Array.isArray(answer) ? answer : []
         } else {
           labels = answer ? [answer] : []
