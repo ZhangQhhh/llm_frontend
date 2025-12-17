@@ -1,5 +1,14 @@
 import llmHttp from '@/config/api/llmHttp';
 import { API_ENDPOINTS } from '@/config/api/api';
+import { isMockEnabled } from '@/mocks/mockService';
+import {
+  mockListFiles,
+  mockUploadFile,
+  mockDeleteFile,
+  mockGetUpdateStatus,
+  mockIsUpdating,
+  mockTriggerRebuild,
+} from '@/mocks/knowledgeBaseMocks';
 
 // 知识库类型定义
 export interface KBFile {
@@ -86,6 +95,11 @@ export const setKBPassword = (password: string): void => {
 
 // 列出文件
 export const listFiles = async (kbType: string = 'general'): Promise<KBListResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockListFiles(kbType);
+  }
+  
   const response = await llmHttp.get(API_ENDPOINTS.KNOWLEDGE_BASE.LIST_FILES, {
     params: { kb: kbType }
   });
@@ -99,6 +113,11 @@ export const uploadFile = async (
   autoRebuild: boolean = true,
   kbPassword: string
 ): Promise<KBUploadResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockUploadFile(file, kbType, autoRebuild, kbPassword);
+  }
+  
   const formData = new FormData();
   formData.append('file', file);
   formData.append('kb', kbType);
@@ -119,6 +138,11 @@ export const deleteFile = async (
   kbType: string = 'general',
   kbPassword: string
 ): Promise<KBDeleteResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockDeleteFile(fileName, kbType, kbPassword);
+  }
+  
   const response = await llmHttp.post(
     API_ENDPOINTS.KNOWLEDGE_BASE.DELETE_FILE,
     { kb: kbType, file_name: fileName },
@@ -133,6 +157,11 @@ export const deleteFile = async (
 
 // 查询更新状态
 export const getUpdateStatus = async (kbType?: string): Promise<KBStatusResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockGetUpdateStatus(kbType);
+  }
+  
   const response = await llmHttp.get(API_ENDPOINTS.KNOWLEDGE_BASE.UPDATE_STATUS, {
     params: kbType ? { kb: kbType } : {}
   });
@@ -141,6 +170,11 @@ export const getUpdateStatus = async (kbType?: string): Promise<KBStatusResponse
 
 // 快速检查是否更新中
 export const isUpdating = async (kbType?: string): Promise<KBIsUpdatingResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockIsUpdating(kbType);
+  }
+  
   const response = await llmHttp.get(API_ENDPOINTS.KNOWLEDGE_BASE.IS_UPDATING, {
     params: kbType ? { kb: kbType } : {}
   });
@@ -152,6 +186,11 @@ export const triggerRebuild = async (
   kbType: string = 'general',
   kbPassword: string
 ): Promise<KBRebuildResponse> => {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockTriggerRebuild(kbType, kbPassword);
+  }
+  
   const response = await llmHttp.post(
     API_ENDPOINTS.KNOWLEDGE_BASE.REBUILD,
     { kb: kbType },

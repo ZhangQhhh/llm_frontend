@@ -1,6 +1,20 @@
 <template>
   <div class="qa-logs-page">
     <div class="container">
+      <!-- 模拟数据模式提示 -->
+      <el-alert
+        v-if="isMockMode"
+        title="模拟数据模式"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mock-alert"
+      >
+        <template #default>
+          当前处于模拟数据模式，所有数据均为模拟数据。移除 URL 中的 <code>?mock=1</code> 参数可切换回正常模式。
+        </template>
+      </el-alert>
+
       <h1 class="page-title">
         <el-icon :size="32" style="vertical-align: middle; margin-right: 0.5rem;"><Document /></el-icon>
         问答日志管理
@@ -224,8 +238,12 @@ import {
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
 import { ensureUserCacheLoaded, getUserNameById } from '@/utils/userCache';
+import { isMockEnabled } from '@/mocks/mockService';
 
 const store = useStore();
+
+// 模拟数据模式
+const isMockMode = ref(isMockEnabled());
 
 // 状态
 const loading = ref(false);
@@ -411,6 +429,18 @@ onMounted(async () => {
 .container {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.mock-alert {
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
+}
+
+.mock-alert code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 
 .page-title {

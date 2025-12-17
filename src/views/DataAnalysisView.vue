@@ -3,6 +3,20 @@
     <el-container class="main-container">
       <el-main>
         <div class="content-wrapper">
+          <!-- 模拟数据模式提示 -->
+          <el-alert
+            v-if="isMockMode"
+            title="模拟数据模式"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="mock-alert"
+          >
+            <template #default>
+              当前处于模拟数据模式，分析结果为模拟数据。移除 URL 中的 <code>?mock=1</code> 参数可切换回正常模式。
+            </template>
+          </el-alert>
+
           <!-- 主标题卡片 -->
           <el-card class="header-card glass-effect" shadow="hover">
             <div class="header-content">
@@ -243,6 +257,8 @@ import {
 import type { UploadFile } from 'element-plus';
 import http from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
+import { isMockEnabled } from '@/mocks/mockService';
+import { mockGenerateReportResponse } from '@/mocks/dataAnalysisMocks';
 
 interface FormData {
   previousFile: File | null;
@@ -255,6 +271,7 @@ const form = ref<FormData>({
 });
 
 const loading = ref(false);
+const isMockMode = ref(isMockEnabled());
 const previousUploadRef = ref();
 const currentUploadRef = ref();
 const activeCollapse = ref(['1']);
@@ -389,24 +406,34 @@ const handleGenerate = async () => {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('previousYearFile', form.value.previousFile);
-  formData.append('currentYearFile', form.value.currentFile);
-
   loading.value = true;
 
   try {
-    const response = await http.post(
-      API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
-      formData,
-      {
-        responseType: 'blob',
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        timeout: 900000 // 15分钟超时，分析需要较长时间
-      }
-    );
+    let response;
+    
+    // 模拟数据模式
+    if (isMockEnabled()) {
+      response = await mockGenerateReportResponse(
+        form.value.previousFile,
+        form.value.currentFile
+      );
+    } else {
+      const formData = new FormData();
+      formData.append('previousYearFile', form.value.previousFile);
+      formData.append('currentYearFile', form.value.currentFile);
+
+      response = await http.post(
+        API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
+        formData,
+        {
+          responseType: 'blob',
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 900000 // 15分钟超时，分析需要较长时间
+        }
+      );
+    }
 
     // 获取文件名
     const contentDisposition = response.headers['content-disposition'];
@@ -429,7 +456,7 @@ const handleGenerate = async () => {
     window.URL.revokeObjectURL(url);
 
     ElMessage.success({
-      message: '数据分析完成！报告已自动下载',
+      message: isMockEnabled() ? '模拟数据分析完成！报告已自动下载' : '数据分析完成！报告已自动下载',
       duration: 3000
     });
   } catch (error: any) {
@@ -492,6 +519,18 @@ const handleReset = () => {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+}
+
+.mock-alert {
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
+}
+
+.mock-alert code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 
 .glass-effect {

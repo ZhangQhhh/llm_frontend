@@ -19,13 +19,14 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 // 恢复登录状态
 const token = localStorage.getItem('jwt_token')
 if (token) {
+  console.log('[Auth] 检测到本地 token，尝试恢复登录状态...')
   // 恢复 token 到 store
   store.commit('updateToken', token)
   
   // 获取用户信息
   store.dispatch('getinfo', {
     success: () => {
-      console.log('用户信息已恢复')
+      console.log('[Auth] 用户信息已恢复')
       // 延迟启动 WebSocket 监听，确保状态完全恢复
       setTimeout(() => {
         const userId = (store.state as any).user?.id
@@ -34,12 +35,15 @@ if (token) {
         }
       }, 500)
     },
-    error: () => {
+    error: (err: any) => {
       // token 可能已过期，清除它
+      console.error('[Auth] 恢复登录状态失败，清除 token:', err)
       localStorage.removeItem('jwt_token')
       store.commit('logout')
     }
   })
+} else {
+  console.log('[Auth] 未检测到本地 token，用户未登录')
 }
 
 // 🔥 监听 localStorage 变化，实时同步 token 状态
