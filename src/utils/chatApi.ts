@@ -5,6 +5,12 @@
 import { API_ENDPOINTS } from '@/config/api/api';
 import http from '@/config/api/http';
 import llmHttp from '@/config/api/llmHttp';
+import { isMockEnabled } from '@/mocks/mockService';
+import {
+  mockGetQALogsByDate,
+  mockGetQALogDetail,
+  mockGetQALogDates,
+} from '@/mocks/qaLogsMocks';
 
 /**
  * SSE流式响应处理器
@@ -496,6 +502,11 @@ export async function getQALogsByDate(
   token: string,
   params: QALogListParams = {}
 ): Promise<QALogListResponse> {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockGetQALogsByDate(token, params) as Promise<QALogListResponse>;
+  }
+  
   const queryParams = new URLSearchParams();
   if (params.date) queryParams.append('date', params.date);
   if (params.user_id) queryParams.append('user_id', params.user_id);
@@ -521,6 +532,11 @@ export async function getQALogDetail(
   id: string,
   date?: string
 ): Promise<QALogDetail> {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockGetQALogDetail(token, id, date || new Date().toISOString().split('T')[0]) as Promise<QALogDetail>;
+  }
+  
   const queryParams = new URLSearchParams();
   queryParams.append('id', id);
   if (date) queryParams.append('date', date);
@@ -539,6 +555,11 @@ export async function getQALogDetail(
  * 获取有日志的日期列表
  */
 export async function getQALogDates(token: string): Promise<QALogDatesResponse> {
+  // 模拟数据模式
+  if (isMockEnabled()) {
+    return mockGetQALogDates(token) as Promise<QALogDatesResponse>;
+  }
+  
   const response = await llmHttp.get(API_ENDPOINTS.QA_LOGS.DATES, {
     headers: {
       'Authorization': `Bearer ${token}`

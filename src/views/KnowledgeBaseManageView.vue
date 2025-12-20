@@ -1,6 +1,20 @@
 <template>
   <div class="kb-manage-page">
     <div class="page-container">
+      <!-- 模拟数据模式提示 -->
+      <el-alert
+        v-if="isMockMode"
+        title="模拟数据模式"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mock-alert"
+      >
+        <template #default>
+          当前处于模拟数据模式，所有数据均为模拟数据。移除 URL 中的 <code>?mock=1</code> 参数可切换回正常模式。
+        </template>
+      </el-alert>
+
       <!-- 页面标题 -->
       <div class="page-header">
         <div class="header-content">
@@ -285,6 +299,7 @@ import {
   type KBFile,
   type KBStatusItem
 } from '@/utils/knowledgeBaseApi';
+import { isMockEnabled } from '@/mocks/mockService';
 
 export default defineComponent({
   name: 'KnowledgeBaseManageView',
@@ -613,7 +628,8 @@ export default defineComponent({
       getKBLabel,
       formatFileSize,
       formatDateTime,
-      formatDuration
+      formatDuration,
+      isMockMode: isMockEnabled()
     };
   }
 });
@@ -849,6 +865,18 @@ export default defineComponent({
 
 .stat-row.error .stat-value {
   color: #f56c6c;
+}
+
+.mock-alert {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.mock-alert code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 
 @media (max-width: 768px) {
