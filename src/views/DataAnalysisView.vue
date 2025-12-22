@@ -110,6 +110,78 @@
                 </div>
               </el-form-item>
 
+              <!-- 往年流量数据上传 -->
+              <el-form-item label="往年流量数据">
+                <div class="upload-section">
+                  <el-upload
+                    ref="previousTrafficUploadRef"
+                    class="upload-area"
+                    drag
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    :on-change="handlePreviousTrafficFileChange"
+                    accept=".xlsx,.xls"
+                  >
+                    <div class="upload-content">
+                      <el-icon class="upload-icon" :size="50">
+                        <FolderOpened />
+                      </el-icon>
+                      <div class="upload-text">
+                        <p class="primary-text">点击或拖拽上传往年流量数据</p>
+                        <p class="secondary-text">仅支持 .xlsx 格式</p>
+                      </div>
+                    </div>
+                  </el-upload>
+
+                  <!-- 文件信息显示 -->
+                  <transition name="el-zoom-in-top">
+                    <div v-if="form.previousTrafficFile" class="file-info">
+                      <el-tag type="success" size="large" closable @close="clearPreviousTrafficFile">
+                        <el-icon><DocumentChecked /></el-icon>
+                        {{ form.previousTrafficFile.name }}
+                        <span class="file-size">{{ formatFileSize(form.previousTrafficFile.size) }}</span>
+                      </el-tag>
+                    </div>
+                  </transition>
+                </div>
+              </el-form-item>
+
+              <!-- 今年流量数据上传 -->
+              <el-form-item label="今年流量数据">
+                <div class="upload-section">
+                  <el-upload
+                    ref="currentTrafficUploadRef"
+                    class="upload-area"
+                    drag
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    :on-change="handleCurrentTrafficFileChange"
+                    accept=".xlsx,.xls"
+                  >
+                    <div class="upload-content">
+                      <el-icon class="upload-icon" :size="50">
+                        <FolderOpened />
+                      </el-icon>
+                      <div class="upload-text">
+                        <p class="primary-text">点击或拖拽上传今年流量数据</p>
+                        <p class="secondary-text">仅支持 .xlsx 格式</p>
+                      </div>
+                    </div>
+                  </el-upload>
+
+                  <!-- 文件信息显示 -->
+                  <transition name="el-zoom-in-top">
+                    <div v-if="form.currentTrafficFile" class="file-info">
+                      <el-tag type="success" size="large" closable @close="clearCurrentTrafficFile">
+                        <el-icon><DocumentChecked /></el-icon>
+                        {{ form.currentTrafficFile.name }}
+                        <span class="file-size">{{ formatFileSize(form.currentTrafficFile.size) }}</span>
+                      </el-tag>
+                    </div>
+                  </transition>
+                </div>
+              </el-form-item>
+
               <!-- 操作按钮 -->
               <el-form-item>
                 <div class="action-buttons">
@@ -192,6 +264,28 @@
                     </el-step>
                     <el-step>
                       <template #icon>
+                        <el-icon :size="24"><Upload /></el-icon>
+                      </template>
+                      <template #title>
+                        <span class="step-title">上传往年流量数据</span>
+                      </template>
+                      <template #description>
+                        <span class="step-desc">选择往年的流量数据文件</span>
+                      </template>
+                    </el-step>
+                    <el-step>
+                      <template #icon>
+                        <el-icon :size="24"><Upload /></el-icon>
+                      </template>
+                      <template #title>
+                        <span class="step-title">上传今年流量数据</span>
+                      </template>
+                      <template #description>
+                        <span class="step-desc">选择今年的流量数据文件</span>
+                      </template>
+                    </el-step>
+                    <el-step>
+                      <template #icon>
                         <el-icon :size="24"><DataAnalysis /></el-icon>
                       </template>
                       <template #title>
@@ -223,9 +317,10 @@
                     </h4>
                     <ul class="tips-list">
                       <li>请确保上传的 Excel 文件格式正确，包含完整的数据字段</li>
-                      <li>往年数据和今年数据的表格结构应保持一致</li>
+                      <li>需要上传四个文件：往年数据、今年数据、往年流量数据、今年流量数据</li>
+                      <li>往年数据和今年数据的表格结构应保持一致，流量数据同理</li>
                       <li>文件大小建议不超过 20MB，以确保处理速度</li>
-                      <li>分析结果将在页面中显示</li>
+                      <li>分析结果将自动下载为 Word 文档</li>
                     </ul>
                   </div>
                 </div>
@@ -263,17 +358,23 @@ import { mockGenerateReportResponse } from '@/mocks/dataAnalysisMocks';
 interface FormData {
   previousFile: File | null;
   currentFile: File | null;
+  previousTrafficFile: File | null;
+  currentTrafficFile: File | null;
 }
 
 const form = ref<FormData>({
   previousFile: null,
-  currentFile: null
+  currentFile: null,
+  previousTrafficFile: null,
+  currentTrafficFile: null
 });
 
 const loading = ref(false);
 const isMockMode = ref(isMockEnabled());
 const previousUploadRef = ref();
 const currentUploadRef = ref();
+const previousTrafficUploadRef = ref();
+const currentTrafficUploadRef = ref();
 const activeCollapse = ref(['1']);
 const router = useRouter();
 
@@ -281,13 +382,17 @@ const router = useRouter();
 const currentStep = computed(() => {
   if (!form.value.previousFile) return 0;
   if (!form.value.currentFile) return 1;
-  if (loading.value) return 2;
-  return 3;
+  if (!form.value.previousTrafficFile) return 2;
+  if (!form.value.currentTrafficFile) return 3;
+  if (loading.value) return 4;
+  return 5;
 });
 
 // 是否可以生成报告
 const canGenerate = computed(() => {
-  return form.value.previousFile && form.value.currentFile && !loading.value;
+  return form.value.previousFile && form.value.currentFile && 
+         form.value.previousTrafficFile && form.value.currentTrafficFile && 
+         !loading.value;
 });
 
 // 检查文件格式
@@ -390,6 +495,64 @@ const clearCurrentFile = () => {
   ElMessage.info('已清除今年数据文件');
 };
 
+// 处理往年流量数据文件变化
+const handlePreviousTrafficFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+  
+  const isValid = await checkFileFormat(file);
+  if (!isValid) {
+    if (previousTrafficUploadRef.value) {
+      previousTrafficUploadRef.value.clearFiles();
+    }
+    return;
+  }
+  
+  form.value.previousTrafficFile = file;
+  ElMessage.success({
+    message: `已选择往年流量数据: ${file.name}`,
+    duration: 2000
+  });
+};
+
+// 处理今年流量数据文件变化
+const handleCurrentTrafficFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+  
+  const isValid = await checkFileFormat(file);
+  if (!isValid) {
+    if (currentTrafficUploadRef.value) {
+      currentTrafficUploadRef.value.clearFiles();
+    }
+    return;
+  }
+  
+  form.value.currentTrafficFile = file;
+  ElMessage.success({
+    message: `已选择今年流量数据: ${file.name}`,
+    duration: 2000
+  });
+};
+
+// 清除往年流量文件
+const clearPreviousTrafficFile = () => {
+  form.value.previousTrafficFile = null;
+  if (previousTrafficUploadRef.value) {
+    previousTrafficUploadRef.value.clearFiles();
+  }
+  ElMessage.info('已清除往年流量数据文件');
+};
+
+// 清除今年流量文件
+const clearCurrentTrafficFile = () => {
+  form.value.currentTrafficFile = null;
+  if (currentTrafficUploadRef.value) {
+    currentTrafficUploadRef.value.clearFiles();
+  }
+  ElMessage.info('已清除今年流量数据文件');
+};
+
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
@@ -401,8 +564,9 @@ const formatFileSize = (bytes: number): string => {
 
 // 生成报告
 const handleGenerate = async () => {
-  if (!form.value.previousFile || !form.value.currentFile) {
-    ElMessage.warning('请先上传两个数据文件');
+  if (!form.value.previousFile || !form.value.currentFile || 
+      !form.value.previousTrafficFile || !form.value.currentTrafficFile) {
+    ElMessage.warning('请先上传所有四个数据文件');
     return;
   }
 
@@ -421,6 +585,8 @@ const handleGenerate = async () => {
       const formData = new FormData();
       formData.append('previousYearFile', form.value.previousFile);
       formData.append('currentYearFile', form.value.currentFile);
+      formData.append('previousYearTrafficFile', form.value.previousTrafficFile);
+      formData.append('currentYearTrafficFile', form.value.currentTrafficFile);
 
       response = await http.post(
         API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
@@ -475,11 +641,19 @@ const handleGenerate = async () => {
 const handleReset = () => {
   form.value.previousFile = null;
   form.value.currentFile = null;
+  form.value.previousTrafficFile = null;
+  form.value.currentTrafficFile = null;
   if (previousUploadRef.value) {
     previousUploadRef.value.clearFiles();
   }
   if (currentUploadRef.value) {
     currentUploadRef.value.clearFiles();
+  }
+  if (previousTrafficUploadRef.value) {
+    previousTrafficUploadRef.value.clearFiles();
+  }
+  if (currentTrafficUploadRef.value) {
+    currentTrafficUploadRef.value.clearFiles();
   }
   ElMessage.info('已重置所有文件');
 };
