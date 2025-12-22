@@ -115,7 +115,7 @@ export const API_ENDPOINTS = {
   },
   LLM_SUMMARY:{
     DOX_SUMMARY:`/entry-exit/generate-full-report`,
-    MAX_SUMMARY:`/entryExit/summary-entrance`
+    MAX_SUMMARY:`/entryExit/summary-entrance-comprehensive`
   },
   // 问答日志相关API（使用llmHttp，baseURL已包含/api前缀）
   QA_LOGS: {
