@@ -249,14 +249,39 @@
                   <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
                     <el-checkbox v-model="selectedQuestions" :value="q.qid" />
                     <span><strong>{{ (idx + 1) + (page-1)*pageSize }}.</strong> {{ q.stem }}</span>
+                    <el-tag v-if="q.has_images" type="info" size="small" effect="plain">📷 含图片</el-tag>
                   </div>
                   <el-tag v-if="q.ai_generated_answer" type="warning" size="small" style="margin-right: 6px;" effect="plain">
                     🤖 AI答案待校对
                   </el-tag>
                   <el-tag :type="getStatusTagType(q.status)" size="small">{{ getStatusText(q.status) }}</el-tag>
                 </div>
+                <!-- 题干图片 -->
+                <div v-if="q.stem_images && q.stem_images.length > 0" class="q-stem-images">
+                  <img
+                    v-for="(img, imgIdx) in q.stem_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    :alt="'题干图片' + (imgIdx + 1)"
+                    class="q-image"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </div>
                 <div class="q-options">
-                  <div v-for="opt in q.options" :key="opt.label">{{ opt.label }}. {{ opt.text }}</div>
+                  <div v-for="opt in q.options" :key="opt.label" class="q-option-item">
+                    <span>{{ opt.label }}. {{ opt.text }}</span>
+                    <!-- 选项图片 -->
+                    <div v-if="opt.images && opt.images.length > 0" class="q-option-images">
+                      <img
+                        v-for="(img, imgIdx) in opt.images"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        :alt="'选项' + opt.label + '图片' + (imgIdx + 1)"
+                        class="q-image q-option-image"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div class="q-actions">
                   <!-- 查看解析：保持不变 -->
@@ -337,30 +362,96 @@
                       />
                     </el-form-item>
 
-                    <!-- 2. 选项（和题干同宽，自适应高度） -->
-                    <el-form-item label="选项">
-                      <div class="opts-grid">
-                        <div
-                          v-for="k in editOptionKeys"
-                          :key="k"
-                          class="opt-row"
-                        >
-                          <span class="opt-label">{{ k }}.</span>
-                          <el-input
-                            class="opt-input"
-                            v-model="editBuf.options[k]"
-                            type="textarea"
-                            :autosize="{ minRows: 1, maxRows: 4 }"
+                    <!-- 1.5 题干图片编辑 -->
+                    <el-form-item label="题干图片">
+                      <div class="edit-images-grid">
+                        <div v-for="(img, imgIdx) in editBuf.stem_images" :key="imgIdx" class="edit-image-item">
+                          <img
+                            :src="'data:' + img.content_type + ';base64,' + img.base64"
+                            :alt="'题干图片' + (imgIdx + 1)"
+                            class="edit-image-preview"
+                            @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
                           />
                           <el-button
                             type="danger"
                             :icon="Close"
                             circle
                             size="small"
-                            class="opt-remove-btn"
-                            @click="removeOption(k)"
-                            title="删除此选项"
+                            class="edit-image-remove"
+                            @click="removeStemImage(imgIdx)"
+                            title="删除此图片"
                           />
+                        </div>
+                        <div class="edit-image-add" @click="triggerStemImageUpload">
+                          <el-icon :size="24"><Plus /></el-icon>
+                          <span>添加图片</span>
+                        </div>
+                      </div>
+                      <input
+                        id="stem-image-input"
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        @change="onStemImageSelected"
+                      />
+                    </el-form-item>
+
+                    <!-- 2. 选项（和题干同宽，自适应高度） -->
+                    <el-form-item label="选项">
+                      <div class="opts-grid">
+                        <div
+                          v-for="k in editOptionKeys"
+                          :key="k"
+                          class="opt-row-wrapper"
+                        >
+                          <div class="opt-row">
+                            <span class="opt-label">{{ k }}.</span>
+                            <el-input
+                              class="opt-input"
+                              v-model="editBuf.options[k]"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 4 }"
+                            />
+                            <el-button
+                              type="danger"
+                              :icon="Close"
+                              circle
+                              size="small"
+                              class="opt-remove-btn"
+                              @click="removeOption(k)"
+                              title="删除此选项"
+                            />
+                          </div>
+                          <!-- 选项图片编辑 -->
+                          <div class="opt-images-row">
+                            <div class="edit-images-grid">
+                              <div
+                                v-for="(img, imgIdx) in (editBuf.option_images[k] || [])"
+                                :key="imgIdx"
+                                class="edit-image-item"
+                              >
+                                <img
+                                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                  :alt="'选项' + k + '图片' + (imgIdx + 1)"
+                                  class="edit-image-preview"
+                                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                                />
+                                <el-button
+                                  type="danger"
+                                  :icon="Close"
+                                  circle
+                                  size="small"
+                                  class="edit-image-remove"
+                                  @click="removeOptionImage(k, imgIdx)"
+                                  title="删除此图片"
+                                />
+                              </div>
+                              <div class="edit-image-add edit-image-add-small" @click="triggerOptionImageUpload(k)">
+                                <el-icon :size="16"><Plus /></el-icon>
+                                <span>图片</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         <div class="opt-actions">
                           <el-button
@@ -374,6 +465,14 @@
                           <span class="opt-hint">（支持 A-H，最少1个选项）</span>
                         </div>
                       </div>
+                      <!-- 选项图片上传input -->
+                      <input
+                        id="option-image-input"
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        @change="onOptionImageSelected"
+                      />
                     </el-form-item>
 
                     <!-- 3. 答案 -->
@@ -392,9 +491,42 @@
                         :autosize="{ minRows: 3, maxRows: 10 }"
                       />
                     </el-form-item>
+
+                    <!-- 4.5 解析图片编辑 -->
+                    <el-form-item label="解析图片">
+                      <div class="edit-images-grid">
+                        <div v-for="(img, imgIdx) in editBuf.analysis_images" :key="imgIdx" class="edit-image-item">
+                          <img
+                            :src="'data:' + img.content_type + ';base64,' + img.base64"
+                            :alt="'解析图片' + (imgIdx + 1)"
+                            class="edit-image-preview"
+                            @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                          />
+                          <el-button
+                            type="danger"
+                            :icon="Close"
+                            circle
+                            size="small"
+                            class="edit-image-remove"
+                            @click="removeAnalysisImage(imgIdx)"
+                            title="删除此图片"
+                          />
+                        </div>
+                        <div class="edit-image-add" @click="triggerAnalysisImageUpload">
+                          <el-icon :size="24"><Plus /></el-icon>
+                          <span>添加图片</span>
+                        </div>
+                      </div>
+                      <input
+                        id="analysis-image-input"
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        @change="onAnalysisImageSelected"
+                      />
+                    </el-form-item>
                   </el-form>
                 </div>
-
 
                 <div v-if="showingAnalysis[q.qid]" class="q-analysis">
                   <!-- 复杂验证策略：显示Tab切换 -->
@@ -418,6 +550,21 @@
 
                     <!-- 根据Tab显示对应解析内容 -->
                     <div class="q-analysis-text" v-html="processAnalysisText(getAnalysisForTab(q.qid, q.analysis, analysisActiveTab[q.qid] || 'all'))">
+                    </div>
+
+                    <!-- 解析图片 -->
+                    <div v-if="q.analysis_images && q.analysis_images.length > 0" class="q-analysis-images">
+                      <div class="analysis-images-title">解析配图：</div>
+                      <div class="q-stem-images">
+                        <img
+                          v-for="(img, imgIdx) in q.analysis_images"
+                          :key="imgIdx"
+                          :src="'data:' + img.content_type + ';base64,' + img.base64"
+                          :alt="'解析图片' + (imgIdx + 1)"
+                          class="q-image"
+                          @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                        />
+                      </div>
                     </div>
 
                     <!-- 参考资料：根据Tab过滤 -->
@@ -481,6 +628,21 @@
                   <!-- 简单查找策略：直接显示全部 -->
                   <template v-else>
                     <div class="q-analysis-text" v-html="processAnalysisText(q.analysis)">
+                    </div>
+
+                    <!-- 解析图片 -->
+                    <div v-if="q.analysis_images && q.analysis_images.length > 0" class="q-analysis-images">
+                      <div class="analysis-images-title">解析配图：</div>
+                      <div class="q-stem-images">
+                        <img
+                          v-for="(img, imgIdx) in q.analysis_images"
+                          :key="imgIdx"
+                          :src="'data:' + img.content_type + ';base64,' + img.base64"
+                          :alt="'解析图片' + (imgIdx + 1)"
+                          class="q-image"
+                          @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                        />
+                      </div>
                     </div>
 
                     <!-- 参考资料折叠块 -->
@@ -578,9 +740,45 @@
 
                 <div style="margin: 10px 0;">
                   <div><strong>题目：</strong>{{ q.stem }}</div>
+                  <!-- 题干图片 -->
+                  <div v-if="q.stem_images && q.stem_images.length > 0" class="q-stem-images">
+                    <img
+                      v-for="(img, imgIdx) in q.stem_images"
+                      :key="imgIdx"
+                      :src="'data:' + img.content_type + ';base64,' + img.base64"
+                      :alt="'题干图片' + (imgIdx + 1)"
+                      class="q-image"
+                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                    />
+                  </div>
                   <div class="q-options">
                     <div v-for="opt in q.options" :key="opt.label">
                       {{ opt.label }}. {{ opt.text }}
+                      <!-- 选项图片 -->
+                      <div v-if="opt.images && opt.images.length > 0" class="q-option-images">
+                        <img
+                          v-for="(img, imgIdx) in opt.images"
+                          :key="imgIdx"
+                          :src="'data:' + img.content_type + ';base64,' + img.base64"
+                          :alt="opt.label + '选项图片' + (imgIdx + 1)"
+                          class="q-image"
+                          @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 解析图片 -->
+                  <div v-if="q.analysis_images && q.analysis_images.length > 0" class="q-analysis-images" style="margin-top: 8px;">
+                    <div style="font-size: 12px; color: #999;">解析配图：</div>
+                    <div class="q-stem-images">
+                      <img
+                        v-for="(img, imgIdx) in q.analysis_images"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        :alt="'解析图片' + (imgIdx + 1)"
+                        class="q-image"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
                     </div>
                   </div>
                   <div style="margin-top: 8px; color: #666; font-size: 13px;">
@@ -670,10 +868,13 @@
                       <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ multiApprovedCount }}</span>
                     </span>
-                    <span>
-                      <span style="margin-right: 4px;">不定项</span>
-                      <el-input-number v-model="randomIndeterminateCount" :min="0" :max="singleApprovedCount + multiApprovedCount" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                      <span style="margin-right: 4px;">不定项：</span>
+                      <span>单选</span>
+                      <el-input-number v-model="randomIndeterminateSingleCount" :min="0" :max="singleApprovedCount" size="small" style="width: 70px;" />
+                      <span>多选</span>
+                      <el-input-number v-model="randomIndeterminateMultiCount" :min="0" :max="multiApprovedCount" size="small" style="width: 70px;" />
+                      <span style="color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
                     </span>
                   </div>
                 </el-form-item>
@@ -790,10 +991,34 @@
                       </el-tag>
                       <span>{{ idx + 1 }}. {{ q.stem }}</span>
                     </div>
+                    <!-- 题干图片 -->
+                    <div v-if="q.stem_images && q.stem_images.length > 0" class="q-stem-images" style="margin: 6px 0;">
+                      <img
+                        v-for="(img, imgIdx) in q.stem_images"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        :alt="'题干图片' + (imgIdx + 1)"
+                        class="q-image"
+                        style="max-height: 80px;"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </div>
                     <div class="paper-question-options">
-                      <span v-for="opt in q.options" :key="opt.label" class="paper-question-opt">
+                      <div v-for="opt in q.options" :key="opt.label" class="paper-question-opt">
                         {{ opt.label }}. {{ opt.text }}
-                      </span>
+                        <!-- 选项图片 -->
+                        <template v-if="opt.images && opt.images.length > 0">
+                          <template v-for="(img, imgIdx) in opt.images" :key="imgIdx">
+                            <img
+                              :src="'data:' + img.content_type + ';base64,' + img.base64"
+                              :alt="opt.label + '选项图片'"
+                              class="q-image"
+                              style="max-height: 60px; margin-left: 4px; vertical-align: middle;"
+                              @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                            />
+                          </template>
+                        </template>
+                      </div>
                     </div>
                     <div class="paper-question-answer" :class="{ 'no-answer': !q.answer || !q.answer.trim() }">
                       {{ q.answer && q.answer.trim() ? `答案：${q.answer}` : '⚠️ 无答案（考试系统无法判分）' }}
@@ -811,7 +1036,6 @@
                   <div>
                     <input ref="paperUploadRef" type="file" accept=".docx,.txt" style="display:none" @change="onPickPaperFile" />
                     <el-button size="small" type="success" @click="triggerPickPaperFile" :icon="Upload">上传试卷</el-button>
-                    <el-button size="small" @click="loadPaperList" :loading="loadingPaperList" :icon="Refresh">刷新</el-button>
                     <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份</span>
                   </div>
                 </div>
@@ -819,6 +1043,15 @@
               <el-table :data="paperList" stripe border style="width: 100%">
                 <el-table-column prop="title" label="试卷名称" min-width="200" />
                 <el-table-column prop="paper_id" label="文件名" min-width="250" />
+                <el-table-column label="练习可见" width="120">
+                  <template #default="{ row }">
+                    <el-switch
+                      v-model="row.visible"
+                      :loading="togglingVisibility[row.paper_id]"
+                      @change="togglePaperVisibility(row)"
+                    />
+                  </template>
+                </el-table-column>
                 <el-table-column label="操作" width="200" fixed="right">
                   <template #default="{ row }">
                     <el-button size="small" @click="downloadPaper(row.paper_id)">下载</el-button>
@@ -847,6 +1080,27 @@
                     </el-tag>
                   </el-form-item>
                 </el-form>
+                <el-form :inline="true" style="margin-top: 8px;">
+                  <el-form-item label="分数设置">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                      <span style="display: flex; align-items: center;">
+                        <span style="margin-right: 6px;">单选</span>
+                        <el-input-number v-model="uploadedSingleScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
+                        <span style="margin-left: 4px;">分</span>
+                      </span>
+                      <span style="display: flex; align-items: center;">
+                        <span style="margin-right: 6px;">多选</span>
+                        <el-input-number v-model="uploadedMultiScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
+                        <span style="margin-left: 4px;">分</span>
+                      </span>
+                      <span style="display: flex; align-items: center;">
+                        <span style="margin-right: 6px;">不定项</span>
+                        <el-input-number v-model="uploadedIndeterminateScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
+                        <span style="margin-left: 4px;">分</span>
+                      </span>
+                    </div>
+                  </el-form-item>
+                </el-form>
               </div>
               
               <div style="max-height: 500px; overflow-y: auto;">
@@ -864,6 +1118,7 @@
                     <el-tag v-if="hasParseIssue(item)" type="danger" size="small">需检查</el-tag>
                     <el-tag v-if="!item.answer" type="warning" size="small">缺少答案</el-tag>
                     <el-tag v-if="getOptionsCount(item) < 2" type="warning" size="small">选项不足</el-tag>
+                    <el-tag v-if="item.has_images" type="info" size="small">📷 图片题</el-tag>
                     <el-button
                       size="small"
                       type="primary"
@@ -886,15 +1141,44 @@
                   <!-- 预览模式 -->
                   <div v-if="editingPaperItemIdx !== idx" class="preview-content">
                     <div class="preview-stem">{{ item.stem || '（题干为空）' }}</div>
+                    <!-- 题干图片 -->
+                    <div v-if="item.stem_images && item.stem_images.length > 0" class="q-stem-images" style="margin: 6px 0;">
+                      <img
+                        v-for="(img, imgIdx) in item.stem_images"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        :alt="'题干图片' + (imgIdx + 1)"
+                        class="q-image"
+                        style="max-height: 100px;"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </div>
                     <div class="preview-options">
-                      <!-- eslint-disable-next-line vue/no-use-v-if-with-v-for -->
-                      <span v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" v-if="item.options && item.options[k]" class="preview-opt">
-                        {{ k }}. {{ item.options[k] }}
-                      </span>
+                      <template v-for="k in ['A','B','C','D','E','F','G','H']" :key="k">
+                        <div v-if="(item.options && item.options[k] !== undefined) || (item.option_images && item.option_images[k] && item.option_images[k].length > 0)" class="preview-opt-item">
+                          <span class="preview-opt">{{ k }}. {{ item.options[k] || '' }}</span>
+                          <!-- 纯图片选项提示 -->
+                          <span v-if="!item.options[k] && item.option_images && item.option_images[k] && item.option_images[k].length > 0" style="color: #909399; font-size: 12px;">(图片选项)</span>
+                          <!-- 选项图片 -->
+                          <template v-if="item.option_images && item.option_images[k] && item.option_images[k].length > 0">
+                            <img
+                              v-for="(img, imgIdx) in item.option_images[k]"
+                              :key="imgIdx"
+                              :src="'data:' + img.content_type + ';base64,' + img.base64"
+                              :alt="k + '选项图片'"
+                              class="q-image"
+                              style="max-height: 60px; margin-left: 6px; vertical-align: middle;"
+                              @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                            />
+                          </template>
+                        </div>
+                      </template>
                     </div>
                     <div class="preview-answer" :class="{ 'no-answer': !item.answer }">
                       {{ item.answer ? `答案：${item.answer}` : '⚠️ 缺少答案' }}
                     </div>
+                    <!-- 图片题标记 -->
+                    <el-tag v-if="item.has_images" type="info" size="small" style="margin-top: 4px;">📷 含图片</el-tag>
                   </div>
                   
                   <!-- 编辑模式 -->
@@ -902,12 +1186,43 @@
                     <el-form label-width="60px" size="small">
                       <el-form-item label="题干">
                         <el-input v-model="item.stem" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
+                        <!-- 题干图片 -->
+                        <div style="margin-top: 8px;">
+                          <span style="color: #909399; font-size: 12px;">题干图片：</span>
+                          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; align-items: center;">
+                            <div v-for="(img, imgIdx) in (item.stem_images || [])" :key="imgIdx" class="editable-image-wrapper">
+                              <img
+                                :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                class="q-image"
+                                style="max-height: 80px; cursor: pointer;"
+                                @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                              />
+                              <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete" @click="deleteUploadedItemImage(idx, 'stem', imgIdx)" />
+                            </div>
+                            <el-button size="small" type="primary" plain :icon="Plus" @click="triggerUploadItemImage(idx, 'stem')">添加</el-button>
+                          </div>
+                        </div>
                       </el-form-item>
                       <el-form-item label="选项">
                         <div style="width: 100%;">
-                          <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="display: flex; align-items: center; margin-bottom: 4px;">
-                            <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
-                            <el-input v-model="item.options[k]" placeholder="留空则不显示此选项" style="flex: 1;" />
+                          <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center;">
+                              <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
+                              <el-input v-model="item.options[k]" placeholder="留空则不显示此选项" style="flex: 1;" />
+                              <el-button size="small" type="primary" plain :icon="Plus" style="margin-left: 4px;" @click="triggerUploadItemImage(idx, 'option', k)">图</el-button>
+                            </div>
+                            <!-- 选项图片 -->
+                            <div v-if="item.option_images && item.option_images[k] && item.option_images[k].length > 0" style="margin-left: 24px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                              <div v-for="(img, imgIdx) in item.option_images[k]" :key="imgIdx" class="editable-image-wrapper">
+                                <img
+                                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                  class="q-image"
+                                  style="max-height: 60px; cursor: pointer;"
+                                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                                />
+                                <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete" @click="deleteUploadedItemImage(idx, 'option', imgIdx, k)" />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </el-form-item>
@@ -916,6 +1231,22 @@
                       </el-form-item>
                       <el-form-item label="解析">
                         <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
+                        <!-- 解析图片 -->
+                        <div style="margin-top: 8px;">
+                          <span style="color: #909399; font-size: 12px;">解析图片：</span>
+                          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; align-items: center;">
+                            <div v-for="(img, imgIdx) in (item.analysis_images || [])" :key="imgIdx" class="editable-image-wrapper">
+                              <img
+                                :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                class="q-image"
+                                style="max-height: 60px; cursor: pointer;"
+                                @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                              />
+                              <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete" @click="deleteUploadedItemImage(idx, 'analysis', imgIdx)" />
+                            </div>
+                            <el-button size="small" type="primary" plain :icon="Plus" @click="triggerUploadItemImage(idx, 'analysis')">添加</el-button>
+                          </div>
+                        </div>
                       </el-form-item>
                     </el-form>
                   </div>
@@ -936,17 +1267,22 @@
         <el-tab-pane label="成绩导出" name="export">
           <div class="tab-content">
             <div class="action-bar">
-              <el-select v-model="selectedExportPaper" placeholder="选择试卷" style="width: 300px" @change="loadGradesStats">
-                <el-option v-for="paper in exportPapers" :key="paper.paper_id" :label="paper.title" :value="paper.paper_id" />
+              <el-select v-model="selectedExportExam" placeholder="选择考试场次" style="width: 400px" @change="onExportExamChange">
+                <el-option 
+                  v-for="exam in publishedExams" 
+                  :key="exam.exam_id" 
+                  :label="`${exam.exam_name} (${exam.paper_title})`" 
+                  :value="exam.exam_id"
+                />
               </el-select>
-              <el-button @click="loadExportPapers" :loading="loadingExportPapers">刷新</el-button>
-              <el-button type="primary" @click="exportZip" :loading="exportingZip">导出ZIP</el-button>
-              <el-button @click="exportDocx" :loading="exportingDocx">导出DOCX</el-button>
+              <el-button @click="loadPublishedExams" :loading="loadingPublished">刷新</el-button>
+              <el-button type="primary" @click="exportZip" :loading="exportingZip" :disabled="!selectedExportExam">导出ZIP</el-button>
+              <el-button @click="exportDocx" :loading="exportingDocx" :disabled="!selectedExportExam">导出DOCX</el-button>
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
             
             <!-- 成绩统计图表 -->
-            <div v-if="selectedExportPaper && gradesStats" class="grades-stats-panel">
+            <div v-if="selectedExportExam && gradesStats" class="grades-stats-panel">
               <el-row :gutter="20">
                 <!-- 总体概览 -->
                 <el-col :span="8">
@@ -1152,7 +1488,7 @@
                 <el-table-column label="参与人数" width="100">
                   <template #default="{ row }">{{ row.participant_count || 0 }}</template>
                 </el-table-column>
-                <el-table-column label="操作" width="120" fixed="right">
+                <el-table-column label="操作" width="160" fixed="right">
                   <template #default="{ row }">
                     <el-button
                       v-if="row.status === 'pending' || row.status === 'active'"
@@ -1165,13 +1501,21 @@
                       取消
                     </el-button>
                     <el-button
-                      v-else
+                      v-else-if="row.status === 'ended' || row.status === 'cancelled'"
                       type="info"
                       size="small"
                       plain
                       disabled
                     >
                       已结束
+                    </el-button>
+                    <el-button
+                      type="danger"
+                      size="small"
+                      @click="deleteExam(row)"
+                      :loading="deletingExam[row.exam_id]"
+                    >
+                      删除
                     </el-button>
                   </template>
                 </el-table-column>
@@ -1181,7 +1525,7 @@
         </el-tab-pane>
       </el-tabs>
 
-      <el-card class="user-management-card" shadow="never">
+      <el-card v-if="activeTab === 'approval' || activeTab === 'password'" class="user-management-card" shadow="never">
         <template #header>
           <div class="card-header">
             <span>用户账号管理</span>
@@ -1273,6 +1617,13 @@
           </el-table>
         </div>
       </el-card>
+
+      <!-- 图片预览对话框 -->
+      <el-dialog v-model="previewImageVisible" title="图片预览" width="80%" :close-on-click-modal="true">
+        <div style="text-align: center;">
+          <img :src="previewImageUrl" style="max-width: 100%; max-height: 70vh;" />
+        </div>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -1281,22 +1632,32 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
 import { renderMarkdown } from '@/utils/markdown'
 
+interface QuestionImage {
+  filename: string
+  base64: string
+  ext: string
+  content_type: string
+}
+
 interface Question {
   qid: string
   stem: string
-  options: Array<{ label: string; text: string }>
+  options: Array<{ label: string; text: string; images?: QuestionImage[] }>
   answer: string
   analysis: string
   status: string
   ai_generated_answer?: boolean  // 标记答案是否由 AI 生成（需人工校对）
   deleted_at?: string
   deleted_by?: string
+  has_images?: boolean  // 是否包含图片
+  stem_images?: QuestionImage[]  // 题干图片
+  analysis_images?: QuestionImage[]  // 解析图片
 }
 
 interface Paper {
@@ -1307,7 +1668,7 @@ interface Paper {
 export default defineComponent({
   name: 'AdminView',
   // eslint-disable-next-line vue/no-unused-components
-  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List },
+  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
@@ -1328,11 +1689,21 @@ export default defineComponent({
     // ======= 题库管理（MCQ） =======
     const uploadRef = ref<any>(null)
     const uploadFile = ref<File | null>(null)
-    const normalizeOptions = (opts: any): Array<{ label: string; text: string }> => {
-      const out: Array<{ label: string; text: string }> = []
+    const normalizeOptions = (opts: any, optionImages?: Record<string, QuestionImage[]>): Array<{ label: string; text: string; images?: QuestionImage[] }> => {
+      const out: Array<{ label: string; text: string; images?: QuestionImage[] }> = []
       const o = opts || {}
+      const imgMap = optionImages || {}
       for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
-        if (o[k]) out.push({ label: k, text: o[k] })
+        // 有文本或有图片的选项都要显示
+        const hasText = o[k] !== undefined && o[k] !== null && o[k] !== ''
+        const hasImages = imgMap[k] && imgMap[k].length > 0
+        if (hasText || hasImages) {
+          const item: { label: string; text: string; images?: QuestionImage[] } = { label: k, text: o[k] || '' }
+          if (hasImages) {
+            item.images = imgMap[k]
+          }
+          out.push(item)
+        }
       }
       return out
     }
@@ -1546,7 +1917,7 @@ export default defineComponent({
     const rowRegenLoading = reactive<Record<string, boolean>>({})
     const deletingQuestion = reactive<Record<string, boolean>>({})
     const editingId = ref<string | null>(null)
-    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{} })
+    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{}, stem_images: [], option_images: {}, analysis_images: [] })
     const counterMsg = ref('')
 
     // 批量选择相关
@@ -1591,8 +1962,10 @@ export default defineComponent({
     const paperList = ref<Paper[]>([])
     const loadingPaperList = ref(false)
     const deletingPaper = reactive<Record<string, boolean>>({})
+    const togglingVisibility = reactive<Record<string, boolean>>({})
     const exportPapers = ref<Paper[]>([])
     const selectedExportPaper = ref('')
+    const selectedExportExam = ref('')
     const loadingExportPapers = ref(false)
     const exportingZip = ref(false)
     const exportingDocx = ref(false)
@@ -1606,12 +1979,15 @@ export default defineComponent({
 
     // 试卷生成模式
     const paperGenerateMode = ref<'manual' | 'random'>('manual')
-    
+
     // 随机抽取配置
     const randomSingleCount = ref(5)
     const randomMultiCount = ref(5)
-    const randomIndeterminateCount = ref(0)
-    
+    const randomIndeterminateSingleCount = ref(0)  // 不定项中的单选数量
+    const randomIndeterminateMultiCount = ref(0)   // 不定项中的多选数量
+    // 兼容旧代码：计算总不定项数量
+    const randomIndeterminateCount = computed(() => randomIndeterminateSingleCount.value + randomIndeterminateMultiCount.value)
+
     // 计算题库中各类型的题目数量
     const singleApprovedCount = computed(() => {
       return approvedQuestions.value.filter(q => !isMultiChoice(q)).length
@@ -1619,12 +1995,12 @@ export default defineComponent({
     const multiApprovedCount = computed(() => {
       return approvedQuestions.value.filter(q => isMultiChoice(q)).length
     })
-    
+
     // 不定项配置（手动模式下使用）
     const enableIndeterminate = ref(false)
     const indeterminateMode = ref<'select' | 'count'>('select')
-    const indeterminateSingleCount = ref(5)
-    const indeterminateMultiCount = ref(5)
+    const indeterminateSingleCount = ref(0)
+    const indeterminateMultiCount = ref(0)
     const indeterminateTotalCount = ref(10)
     const selectedIndeterminateQuestions = ref<string[]>([])
 
@@ -1645,6 +2021,10 @@ export default defineComponent({
     const uploadedPaperItems = ref<any[]>([])
     const editingPaperItemIdx = ref<number | null>(null)
     const savingUploadedPaper = ref(false)
+    // 上传试卷分数配置
+    const uploadedSingleScore = ref(1)
+    const uploadedMultiScore = ref(5)
+    const uploadedIndeterminateScore = ref(5)
 
     // ======= 考试发布相关 =======
     const publishForm = reactive({
@@ -1659,6 +2039,7 @@ export default defineComponent({
     const publishedExams = ref<any[]>([])
     const loadingPublished = ref(false)
     const cancelingExam = reactive<Record<string, boolean>>({})
+    const deletingExam = reactive<Record<string, boolean>>({})
 
     // ======= 成绩统计相关 =======
     const gradesStats = ref<any>(null)
@@ -1849,13 +2230,26 @@ export default defineComponent({
 
         const items = Array.isArray(j.items) ? j.items : []
 
-        // 2）对齐 qa_public.html：把 answer 也带上
-        const upsertPayload = items.map((x: any) => ({
-          stem: x.stem || '',
-          options: x.options || {},
-          answer: (x.answer || '').toString().toUpperCase(),
-          explain: x.explain_original || '',
-        }))
+        // 2）对齐 qa_public.html：把 answer 也带上，同时保留图片数据
+        const upsertPayload = items.map((x: any) => {
+          const item: any = {
+            stem: x.stem || '',
+            options: x.options || {},
+            answer: (x.answer || '').toString().toUpperCase(),
+            explain: x.explain_original || '',
+          }
+          // 如果有图片数据，一并传递
+          if (x.stem_images && x.stem_images.length > 0) {
+            item.stem_images = x.stem_images
+          }
+          if (x.option_images && Object.keys(x.option_images).length > 0) {
+            item.option_images = x.option_images
+          }
+          if (x.analysis_images && x.analysis_images.length > 0) {
+            item.analysis_images = x.analysis_images
+          }
+          return item
+        })
 
         // 3）检查重复题目
         uploadMessage.value = '检查重复题目中…'
@@ -1964,16 +2358,19 @@ export default defineComponent({
 
         const bankItems = Array.isArray(saved.items) ? saved.items : []
 
-        // 6）映射成前端 Question 时，记得带上 answer
+        // 6）映射成前端 Question 时，记得带上 answer 和图片数据
         questions.value = bankItems.map((it: any): Question => {
           const status = it.status || ((it.explain || '').trim() ? 'draft' : 'none')
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
-            options: normalizeOptions(it.options),
+            options: normalizeOptions(it.options, it.option_images),
             answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
+            has_images: Boolean(it.has_images),
+            stem_images: it.stem_images || [],
+            analysis_images: it.analysis_images || [],
           }
         })
 
@@ -2301,11 +2698,14 @@ export default defineComponent({
           return {
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
-            options: normalizeOptions(it.options),
+            options: normalizeOptions(it.options, it.option_images),
             answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status,
-            ai_generated_answer: Boolean(it.ai_generated_answer),  // AI 生成的答案标记
+            ai_generated_answer: Boolean(it.ai_generated_answer),
+            has_images: Boolean(it.has_images),
+            stem_images: it.stem_images || [],
+            analysis_images: it.analysis_images || [],
           }
         })
       } catch (error: any) {
@@ -2315,11 +2715,18 @@ export default defineComponent({
       }
     }
 
-
     const toggleAnalysis = (qid: string) => {
       const next = !showingAnalysis[qid]
       showingAnalysis[qid] = next
       if (next) loadSources(qid)
+    }
+
+    // 图片预览
+    const previewImageUrl = ref('')
+    const previewImageVisible = ref(false)
+    const previewImage = (src: string) => {
+      previewImageUrl.value = src
+      previewImageVisible.value = true
     }
 
     const approveQuestion = async (qid: string) => {
@@ -2519,12 +2926,15 @@ export default defineComponent({
           deletedQuestions.value = (data.items || []).map((it: any): Question => ({
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
-            options: normalizeOptions(it.options),
+            options: normalizeOptions(it.options, it.option_images),
             answer: (it.answer || '').toString().toUpperCase(),
             analysis: it.explain || '',
             status: it.status || 'deleted',
             deleted_at: it.deleted_at || '',
-            deleted_by: it.deleted_by || ''
+            deleted_by: it.deleted_by || '',
+            has_images: Boolean(it.has_images),
+            stem_images: it.stem_images || [],
+            analysis_images: it.analysis_images || [],
           }))
           recycleMessage.value = `共 ${deletedQuestions.value.length} 个已删除题目`
         } else {
@@ -2805,6 +3215,19 @@ export default defineComponent({
         map[o.label] = o.text
       })
       editBuf.options = { ...map }
+      
+      // 加载图片数据
+      editBuf.stem_images = JSON.parse(JSON.stringify(row.stem_images || []))
+      // 从选项中提取图片
+      const optImgs: Record<string, any[]> = {}
+      ;(row.options || []).forEach((o: any) => {
+        if (o.images && o.images.length > 0) {
+          optImgs[o.label] = JSON.parse(JSON.stringify(o.images))
+        }
+      })
+      editBuf.option_images = optImgs
+      // 加载解析图片
+      editBuf.analysis_images = JSON.parse(JSON.stringify(row.analysis_images || []))
     }
 
     const cancelEdit = () => {
@@ -2814,18 +3237,33 @@ export default defineComponent({
     const saveRow = async (row: any) => {
       if (!isEditing(row.qid)) return
       try {
-        // 1) 把当前编辑缓冲区打包发给后端（注意带上 answer）
-        const payload = {
-          items: [
-            {
-              id: row.qid,
-              stem: editBuf.stem,
-              options: { ...editBuf.options },
-              answer: (editBuf.answer || '').toUpperCase(),
-              explain: editBuf.explain,
-            },
-          ],
+        // 1) 把当前编辑缓冲区打包发给后端（注意带上 answer 和图片）
+        const itemData: any = {
+          id: row.qid,
+          stem: editBuf.stem,
+          options: { ...editBuf.options },
+          answer: (editBuf.answer || '').toUpperCase(),
+          explain: editBuf.explain,
         }
+        
+        // 添加图片数据
+        if (editBuf.stem_images && editBuf.stem_images.length > 0) {
+          itemData.stem_images = editBuf.stem_images
+        } else {
+          itemData.stem_images = []  // 明确传递空数组表示删除所有图片
+        }
+        if (editBuf.option_images && Object.keys(editBuf.option_images).length > 0) {
+          itemData.option_images = editBuf.option_images
+        } else {
+          itemData.option_images = {}
+        }
+        if (editBuf.analysis_images && editBuf.analysis_images.length > 0) {
+          itemData.analysis_images = editBuf.analysis_images
+        } else {
+          itemData.analysis_images = []
+        }
+        
+        const payload = { items: [itemData] }
 
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
@@ -2930,6 +3368,191 @@ export default defineComponent({
       delete editBuf.options[key]
     }
 
+    // 删除题干图片
+    const removeStemImage = (imgIdx: number) => {
+      if (editBuf.stem_images && editBuf.stem_images.length > imgIdx) {
+        editBuf.stem_images.splice(imgIdx, 1)
+      }
+    }
+
+    // 删除选项图片
+    const removeOptionImage = (label: string, imgIdx: number) => {
+      if (editBuf.option_images && editBuf.option_images[label] && editBuf.option_images[label].length > imgIdx) {
+        editBuf.option_images[label].splice(imgIdx, 1)
+        if (editBuf.option_images[label].length === 0) {
+          delete editBuf.option_images[label]
+        }
+      }
+    }
+
+    // 删除解析图片
+    const removeAnalysisImage = (imgIdx: number) => {
+      if (editBuf.analysis_images && editBuf.analysis_images.length > imgIdx) {
+        editBuf.analysis_images.splice(imgIdx, 1)
+      }
+    }
+
+    // 题干图片上传
+    const triggerStemImageUpload = () => {
+      const input = document.getElementById('stem-image-input') as HTMLInputElement
+      input?.click()
+    }
+    
+    const onStemImageSelected = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const file = input?.files?.[0]
+      if (!file) return
+      
+      // 检查文件类型
+      if (!file.type.startsWith('image/')) {
+        ElMessage.warning('请选择图片文件')
+        return
+      }
+      
+      // 检查文件大小（限制5MB）
+      if (file.size > 5 * 1024 * 1024) {
+        ElMessage.warning('图片大小不能超过5MB')
+        return
+      }
+      
+      try {
+        // 读取文件并转换为base64
+        const base64 = await fileToBase64(file)
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+        
+        // 添加到编辑缓冲区
+        if (!editBuf.stem_images) {
+          editBuf.stem_images = []
+        }
+        editBuf.stem_images.push({
+          filename: file.name,
+          base64: base64,
+          ext: ext,
+          content_type: file.type,
+        })
+        
+        ElMessage.success('图片已添加')
+      } catch (e: any) {
+        ElMessage.error('图片读取失败：' + (e?.message || e))
+      } finally {
+        // 清空input以便再次选择同一文件
+        if (input) input.value = ''
+      }
+    }
+    
+    // 将文件转换为base64（不含data:前缀）
+    const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          // 移除 "data:image/xxx;base64," 前缀
+          const base64 = result.split(',')[1]
+          resolve(base64)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    }
+
+    // 选项图片上传
+    let currentOptionLabel = ''
+    
+    const triggerOptionImageUpload = (label: string) => {
+      currentOptionLabel = label
+      const input = document.getElementById('option-image-input') as HTMLInputElement
+      input?.click()
+    }
+    
+    const onOptionImageSelected = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const file = input?.files?.[0]
+      if (!file || !currentOptionLabel) return
+      
+      // 检查文件类型
+      if (!file.type.startsWith('image/')) {
+        ElMessage.warning('请选择图片文件')
+        return
+      }
+      
+      // 检查文件大小（限制5MB）
+      if (file.size > 5 * 1024 * 1024) {
+        ElMessage.warning('图片大小不能超过5MB')
+        return
+      }
+      
+      try {
+        // 读取文件并转换为base64
+        const base64 = await fileToBase64(file)
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+        
+        // 添加到编辑缓冲区
+        if (!editBuf.option_images) {
+          editBuf.option_images = {}
+        }
+        if (!editBuf.option_images[currentOptionLabel]) {
+          editBuf.option_images[currentOptionLabel] = []
+        }
+        editBuf.option_images[currentOptionLabel].push({
+          filename: file.name,
+          base64: base64,
+          ext: ext,
+          content_type: file.type,
+        })
+        
+        ElMessage.success(`选项${currentOptionLabel}图片已添加`)
+      } catch (e: any) {
+        ElMessage.error('图片读取失败：' + (e?.message || e))
+      } finally {
+        // 清空input以便再次选择同一文件
+        if (input) input.value = ''
+        currentOptionLabel = ''
+      }
+    }
+
+    // 解析图片上传
+    const triggerAnalysisImageUpload = () => {
+      const input = document.getElementById('analysis-image-input') as HTMLInputElement
+      input?.click()
+    }
+    
+    const onAnalysisImageSelected = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const file = input?.files?.[0]
+      if (!file) return
+      
+      if (!file.type.startsWith('image/')) {
+        ElMessage.warning('请选择图片文件')
+        return
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        ElMessage.warning('图片大小不能超过5MB')
+        return
+      }
+      
+      try {
+        const base64 = await fileToBase64(file)
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+        
+        if (!editBuf.analysis_images) {
+          editBuf.analysis_images = []
+        }
+        editBuf.analysis_images.push({
+          filename: file.name,
+          base64: base64,
+          ext: ext,
+          content_type: file.type,
+        })
+        
+        ElMessage.success('解析图片已添加')
+      } catch (e: any) {
+        ElMessage.error('图片读取失败：' + (e?.message || e))
+      } finally {
+        if (input) input.value = ''
+      }
+    }
+
     const pagedQuestions = computed(() => {
       const start = (page.value - 1) * pageSize.value
       return (filteredQuestions.value || []).slice(start, start + pageSize.value)
@@ -2980,7 +3603,8 @@ export default defineComponent({
         requestBody.random_mode = {
           single_count: randomSingleCount.value,
           multi_count: randomMultiCount.value,
-          indeterminate_count: randomIndeterminateCount.value
+          indeterminate_single_count: randomIndeterminateSingleCount.value,
+          indeterminate_multi_count: randomIndeterminateMultiCount.value
         }
       } else {
         // 手动选择模式
@@ -3058,16 +3682,51 @@ export default defineComponent({
     const loadPaperList = async () => {
       loadingPaperList.value = true
       try {
-        const r = await fetch(`${MCQ_BASE_URL}/bank/papers`, { method: 'GET', cache: 'no-store' })
+        // 管理端获取全部试卷（包含可见性状态）
+        const r = await fetch(`${MCQ_BASE_URL}/papers/list_open?visible_only=false`, { method: 'GET', cache: 'no-store' })
         const j = await r.json()
-        if (!j || j.ok === false) {
+        if (Array.isArray(j)) {
+          paperList.value = j
+        } else if (j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
+        } else {
+          paperList.value = []
         }
-        paperList.value = Array.isArray(j.papers) ? j.papers : []
       } catch (error: any) {
         ElMessage.error('加载试卷列表失败：' + (error?.message || error))
       } finally {
         loadingPaperList.value = false
+      }
+    }
+
+    // 切换试卷练习可见性
+    const togglePaperVisibility = async (row: any) => {
+      const paperId = row.paper_id
+      const visible = row.visible
+      togglingVisibility[paperId] = true
+      try {
+        const userStr = localStorage.getItem('multi_turn_chat_user')
+        const user = userStr ? JSON.parse(userStr) : {}
+        const r = await fetch(`${MCQ_BASE_URL}/papers/visibility`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Role': user.role || '',
+            'X-User-Name': encodeURIComponent(user.username || '')
+          },
+          body: JSON.stringify({ paper_id: paperId, visible: visible })
+        })
+        const j = await r.json()
+        if (!j?.ok) {
+          // 恢复原状态
+          row.visible = !visible
+          throw new Error(j?.msg || '设置失败')
+        }
+        ElMessage.success(visible ? '试卷已开放练习' : '试卷已隐藏')
+      } catch (error: any) {
+        ElMessage.error('设置可见性失败：' + (error?.message || error))
+      } finally {
+        togglingVisibility[paperId] = false
       }
     }
 
@@ -3122,12 +3781,16 @@ export default defineComponent({
       return false
     }
 
-    // 获取有效选项数量
+    // 获取有效选项数量（包括纯图片选项）
     const getOptionsCount = (item: any): number => {
       if (!item.options) return 0
       let count = 0
+      const optionImages = item.option_images || {}
       for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
-        if (item.options[k] && item.options[k].trim()) count++
+        // 选项有文本 或 有图片，都算有效选项
+        const hasText = item.options[k] !== undefined && item.options[k] !== null
+        const hasImages = optionImages[k] && optionImages[k].length > 0
+        if (hasText || hasImages) count++
       }
       return count
     }
@@ -3161,13 +3824,20 @@ export default defineComponent({
           return
         }
         
-        // 确保每个item的options是对象格式，保留qtype
+        // 确保每个item的options是对象格式，保留qtype和图片数据
         uploadedPaperItems.value = items.map((x: any) => ({
           stem: x.stem || '',
           options: x.options || {},
           answer: (x.answer || '').toString().toUpperCase(),
           explain: x.explain_original || '',
           qtype: x.qtype || '',  // 保留题目类型（single/multi/indeterminate）
+          // 图片数据
+          stem_images: x.stem_images || [],
+          option_images: x.option_images || {},
+          analysis_images: x.analysis_images || [],
+          has_images: Boolean(x.has_images || (x.stem_images && x.stem_images.length > 0) || 
+                              (x.option_images && Object.keys(x.option_images).length > 0) ||
+                              (x.analysis_images && x.analysis_images.length > 0)),
         }))
         
         // 从文件名提取标题
@@ -3219,6 +3889,102 @@ export default defineComponent({
       }).catch(() => {})
     }
 
+    // 删除上传试卷题目中的图片
+    const deleteUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string) => {
+      const item = uploadedPaperItems.value[itemIdx]
+      if (!item) return
+      
+      if (type === 'stem') {
+        if (item.stem_images && item.stem_images[imgIdx]) {
+          item.stem_images.splice(imgIdx, 1)
+          updateItemHasImages(item)
+          ElMessage.success('图片已删除')
+        }
+      } else if (type === 'option' && optionKey) {
+        if (item.option_images && item.option_images[optionKey] && item.option_images[optionKey][imgIdx]) {
+          item.option_images[optionKey].splice(imgIdx, 1)
+          if (item.option_images[optionKey].length === 0) {
+            delete item.option_images[optionKey]
+          }
+          updateItemHasImages(item)
+          ElMessage.success('图片已删除')
+        }
+      } else if (type === 'analysis') {
+        if (item.analysis_images && item.analysis_images[imgIdx]) {
+          item.analysis_images.splice(imgIdx, 1)
+          updateItemHasImages(item)
+          ElMessage.success('图片已删除')
+        }
+      }
+    }
+
+    // 更新题目的has_images标记
+    const updateItemHasImages = (item: any) => {
+      item.has_images = Boolean(
+        (item.stem_images && item.stem_images.length > 0) ||
+        (item.option_images && Object.keys(item.option_images).some(k => item.option_images[k]?.length > 0)) ||
+        (item.analysis_images && item.analysis_images.length > 0)
+      )
+    }
+
+    // 图片上传状态
+    const pendingImageUpload = ref<{ itemIdx: number; type: 'stem' | 'option' | 'analysis'; optionKey?: string } | null>(null)
+
+    // 触发上传图片
+    const triggerUploadItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', optionKey?: string) => {
+      pendingImageUpload.value = { itemIdx, type, optionKey }
+      // 创建临时input
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/*'
+      input.onchange = (e) => handleItemImageUpload(e as any)
+      input.click()
+    }
+
+    // 处理图片上传
+    const handleItemImageUpload = async (evt: Event) => {
+      const input = evt.target as HTMLInputElement
+      const file = input?.files?.[0]
+      if (!file || !pendingImageUpload.value) return
+      
+      const { itemIdx, type, optionKey } = pendingImageUpload.value
+      const item = uploadedPaperItems.value[itemIdx]
+      if (!item) return
+      
+      try {
+        // 读取图片为base64
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1]
+          const imgData = {
+            base64,
+            content_type: file.type || 'image/png',
+            filename: file.name
+          }
+          
+          if (type === 'stem') {
+            if (!item.stem_images) item.stem_images = []
+            item.stem_images.push(imgData)
+          } else if (type === 'option' && optionKey) {
+            if (!item.option_images) item.option_images = {}
+            if (!item.option_images[optionKey]) item.option_images[optionKey] = []
+            item.option_images[optionKey].push(imgData)
+          } else if (type === 'analysis') {
+            if (!item.analysis_images) item.analysis_images = []
+            item.analysis_images.push(imgData)
+          }
+          
+          updateItemHasImages(item)
+          ElMessage.success('图片已添加')
+        }
+        reader.readAsDataURL(file)
+      } catch (e: any) {
+        ElMessage.error('图片读取失败：' + (e?.message || e))
+      } finally {
+        pendingImageUpload.value = null
+      }
+    }
+
     // 保存上传的试卷
     const saveUploadedPaper = async () => {
       if (!uploadedPaperTitle.value.trim()) {
@@ -3239,7 +4005,12 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: uploadedPaperTitle.value.trim(),
-            items: validItems
+            items: validItems,
+            score_config: {
+              single: uploadedSingleScore.value,
+              multi: uploadedMultiScore.value,
+              indeterminate: uploadedIndeterminateScore.value
+            }
           })
         })
         const j = await r.json()
@@ -3284,13 +4055,16 @@ export default defineComponent({
       }
     }
     const exportZip = async () => {
-      if (!selectedExportPaper.value) {
-        return ElMessage.warning('请选择试卷')
+      if (!selectedExportExam.value) {
+        return ElMessage.warning('请选择考试场次')
       }
       exportingZip.value = true
       exportMessage.value = '正在生成ZIP压缩包...'
       try {
-        const url = `${MCQ_BASE_URL}/grades/export_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        let url = `${MCQ_BASE_URL}/grades/export_zip?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        if (selectedExportExam.value) {
+          url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
+        }
         const response = await fetch(url)
         if (!response.ok) {
           const error = await response.json().catch(() => ({ msg: '导出失败' }))
@@ -3306,22 +4080,27 @@ export default defineComponent({
         document.body.removeChild(a)
         window.URL.revokeObjectURL(downloadUrl)
         exportMessage.value = '导出成功！'
+        exportingZip.value = false
         setTimeout(() => { exportMessage.value = '' }, 3000)
       } catch (error: any) {
         exportMessage.value = '导出失败：' + (error?.message || error)
         ElMessage.error('导出失败：' + (error?.message || error))
+      } finally {
         exportingZip.value = false
       }
     }
 
     const exportDocx = async () => {
-      if (!selectedExportPaper.value) {
-        return ElMessage.warning('请选择试卷')
+      if (!selectedExportExam.value) {
+        return ElMessage.warning('请选择考试场次')
       }
       exportingDocx.value = true
       exportMessage.value = '正在生成成绩汇总表...'
       try {
-        const url = `${MCQ_BASE_URL}/grades/export_summary_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        let url = `${MCQ_BASE_URL}/grades/export_summary_docx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        if (selectedExportExam.value) {
+          url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
+        }
         const response = await fetch(url)
         if (!response.ok) {
           const error = await response.json().catch(() => ({ msg: '导出失败' }))
@@ -3347,14 +4126,32 @@ export default defineComponent({
     }
 
     // ========== 成绩统计相关函数 ==========
-    const loadGradesStats = async () => {
-      if (!selectedExportPaper.value) {
+    // 选择考试场次时触发
+    const onExportExamChange = (examId: string) => {
+      selectedExportExam.value = examId
+      // 找到对应的考试，获取paper_id
+      const exam = publishedExams.value.find((e: any) => e.exam_id === examId)
+      if (exam) {
+        selectedExportPaper.value = exam.paper_id
+        loadGradesStats(exam.paper_id, examId)
+      } else {
+        gradesStats.value = null
+      }
+    }
+
+    const loadGradesStats = async (paperId?: string, examId?: string) => {
+      const pId = paperId || selectedExportPaper.value
+      const eId = examId || selectedExportExam.value
+      if (!pId) {
         gradesStats.value = null
         return
       }
       loadingGradesStats.value = true
       try {
-        const url = `${MCQ_BASE_URL}/grades/stats?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        let url = `${MCQ_BASE_URL}/grades/stats?paper_id=${encodeURIComponent(pId)}`
+        if (eId) {
+          url += `&exam_id=${encodeURIComponent(eId)}`
+        }
         const response = await fetch(url)
         const data = await response.json()
         if (data?.ok !== false) {
@@ -3480,6 +4277,41 @@ export default defineComponent({
         }
       } finally {
         cancelingExam[exam.exam_id] = false
+      }
+    }
+
+    const deleteExam = async (exam: any) => {
+      try {
+        await ElMessageBox.confirm(
+          `确认删除考试「${exam.exam_name}」？此操作不可恢复！`,
+          '删除确认',
+          { confirmButtonText: '确定删除', cancelButtonText: '返回', type: 'warning' }
+        )
+        deletingExam[exam.exam_id] = true
+        const userStr = localStorage.getItem('multi_turn_chat_user')
+        const user = userStr ? JSON.parse(userStr) : {}
+        const response = await fetch(`${MCQ_BASE_URL}/exam/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Role': user.role || '',
+            'X-User-Name': encodeURIComponent(user.username || '')
+          },
+          body: JSON.stringify({ exam_id: exam.exam_id })
+        })
+        const data = await response.json()
+        if (data?.ok) {
+          ElMessage.success('已删除考试')
+          loadPublishedExams()
+        } else {
+          throw new Error(data?.msg || '删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败：' + (error?.message || error))
+        }
+      } finally {
+        deletingExam[exam.exam_id] = false
       }
     }
 
@@ -3693,13 +4525,15 @@ export default defineComponent({
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,
       rejectingAll,page,pageSize,rowRegenLoading,deletingQuestion,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
-      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,removeStemImage,removeOptionImage,removeAnalysisImage,triggerStemImageUpload,onStemImageSelected,triggerOptionImageUpload,onOptionImageSelected,triggerAnalysisImageUpload,onAnalysisImageSelected,
       // 任务控制相关
       currentTaskId, currentTaskStatus, stoppingTask, resumingTask, isTaskRunning, canResumeTask, stopTask, resumeTask,
       sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
       processAnalysisText,
       // 解析Tab切换相关
       analysisActiveTab, isComplexValidation, getAnalysisForTab, getSourcesForTab, getAvailableTabs,
+      // 图片预览相关
+      previewImageUrl, previewImageVisible, previewImage,
       // 批量选择相关
       selectedQuestions, selectAll, toggleSelectAll, batchDelete,
       // 回收站相关
@@ -3713,11 +4547,11 @@ export default defineComponent({
       singleScore, multiScore, indeterminateScore,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
-      paperList, loadingPaperList, deletingPaper, loadPaperList, downloadPaper, deletePaper,
-      exportPapers, selectedExportPaper, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
+      paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility,
+      exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
       userSearch, users, loadingUsers, actionLoadingId,
       // 试卷生成模式
-      paperGenerateMode, randomSingleCount, randomMultiCount, randomIndeterminateCount,
+      paperGenerateMode, randomSingleCount, randomMultiCount, randomIndeterminateSingleCount, randomIndeterminateMultiCount, randomIndeterminateCount,
       singleApprovedCount, multiApprovedCount,
       // 不定项配置
       enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,
@@ -3727,9 +4561,11 @@ export default defineComponent({
       editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
       hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
       toggleEditPaperItem, deletePaperItem, saveUploadedPaper,
+      deleteUploadedItemImage, triggerUploadItemImage,
+      uploadedSingleScore, uploadedMultiScore, uploadedIndeterminateScore,
       // 考试发布相关
-      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam,
-      publishExam, loadPublishedExams, cancelExam, getExamStatusType, getExamStatusText, Bell,
+      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam, deletingExam,
+      publishExam, loadPublishedExams, cancelExam, deleteExam, getExamStatusType, getExamStatusText, Bell, Plus,
       // 成绩统计相关
       gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats
     }
@@ -3802,11 +4638,121 @@ export default defineComponent({
   padding-left: 1.5rem;
   color: #4b5563;
 }
-.q-actions {
+.q-stem-images {
+  margin: 0.5rem 0 0.75rem 0;
+  padding-left: 1.5rem;
   display: flex;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  gap: 8px;
+}
+.q-analysis-images {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed #e5e7eb;
+}
+.analysis-images-title {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.q-option-item {
+  margin-bottom: 4px;
+}
+.q-option-images {
+  margin: 4px 0 8px 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.q-image {
+  max-width: 300px;
+  max-height: 200px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.q-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.q-option-image {
+  max-width: 200px;
+  max-height: 150px;
+}
+.edit-images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.edit-image-item {
+  position: relative;
+  display: inline-block;
+}
+.edit-image-preview {
+  max-width: 150px;
+  max-height: 100px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.edit-image-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+}
+.edit-image-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 80px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 6px;
+  color: #909399;
+  font-size: 12px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.edit-image-add:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+.edit-image-add-small {
+  width: 60px;
+  height: 50px;
+  font-size: 10px;
+}
+.opt-row-wrapper {
+  width: 100%;
   margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #f0f0f0;
+}
+.opt-row-wrapper:last-of-type {
+  border-bottom: none;
+}
+.opt-images-row {
+  margin-left: 30px;
+  margin-top: 6px;
+}
+.editable-image-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.editable-image-wrapper .img-delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  font-size: 10px;
 }
 .q-analysis {
   margin-top: 1rem;
@@ -3817,12 +4763,10 @@ export default defineComponent({
   white-space: pre-wrap;
   color: #374151;
 }
-
 .q-analysis-text {
   white-space: pre-wrap;
   margin-bottom: 0.5rem;
 }
-
 .analysis-tab-bar {
   margin-bottom: 12px;
   padding-bottom: 10px;

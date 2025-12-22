@@ -31,7 +31,7 @@
           <span class="muted">分钟</span>
         </div>
         
-        <el-button type="primary" @click="startExam" :disabled="!selectedPaperId || examStarted" :loading="starting" size="default">
+        <el-button type="primary" @click="startPractice" :disabled="!selectedPaperId || examStarted" :loading="starting" size="default">
           开始作答
         </el-button>
         
@@ -42,7 +42,6 @@
         
         <div class="user-actions">
           <span class="user-name">{{ username }}</span>
-          <el-button size="small" text @click="handleChangePassword">修改密码</el-button>
         </div>
       </div>
     </div>
@@ -203,16 +202,36 @@
                 <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag single">单选</span>
               </div>
+              <!-- 题干图片 -->
+              <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
+                <img
+                  v-for="(img, imgIdx) in q.stem_images"
+                  :key="imgIdx"
+                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                  class="q-image"
+                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                />
+              </div>
               <div class="opts">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  :class="['opt', { active: answersState[q.qid] === opt.label }]"
-                  @click="selectSingleOption(q.qid, opt.label)"
-                  :disabled="submitted"
-                >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                </button>
+                <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
+                  <button
+                    :class="['opt', { active: answersState[q.qid] === opt.label }]"
+                    @click="selectSingleOption(q.qid, opt.label)"
+                    :disabled="submitted"
+                  >
+                    <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                  </button>
+                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
+                    <img
+                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                      :key="imgIdx"
+                      :src="'data:' + img.content_type + ';base64,' + img.base64"
+                      class="opt-image"
+                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -228,16 +247,36 @@
                 <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag multi">多选</span>
               </div>
+              <!-- 题干图片 -->
+              <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
+                <img
+                  v-for="(img, imgIdx) in q.stem_images"
+                  :key="imgIdx"
+                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                  class="q-image"
+                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                />
+              </div>
               <div class="opts">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
-                  @click="toggleMultiOption(q.qid, opt.label)"
-                  :disabled="submitted"
-                >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                </button>
+                <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
+                  <button
+                    :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                    @click="toggleMultiOption(q.qid, opt.label)"
+                    :disabled="submitted"
+                  >
+                    <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                  </button>
+                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
+                    <img
+                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                      :key="imgIdx"
+                      :src="'data:' + img.content_type + ';base64,' + img.base64"
+                      class="opt-image"
+                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -253,16 +292,36 @@
                 <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag indeterminate">不定项</span>
               </div>
+              <!-- 题干图片 -->
+              <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
+                <img
+                  v-for="(img, imgIdx) in q.stem_images"
+                  :key="imgIdx"
+                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                  class="q-image"
+                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                />
+              </div>
               <div class="opts">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
-                  @click="toggleMultiOption(q.qid, opt.label)"
-                  :disabled="submitted"
-                >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                </button>
+                <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
+                  <button
+                    :class="['opt', { active: answersState[q.qid]?.includes(opt.label) }]"
+                    @click="toggleMultiOption(q.qid, opt.label)"
+                    :disabled="submitted"
+                  >
+                    <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                  </button>
+                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
+                    <img
+                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                      :key="imgIdx"
+                      :src="'data:' + img.content_type + ';base64,' + img.base64"
+                      class="opt-image"
+                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -402,6 +461,16 @@
                   {{ item.qtype === 'multi' ? '多选' : '单选' }}
                 </span>
               </div>
+              <!-- 题干图片 -->
+              <div v-if="item.stem_images && item.stem_images.length > 0" class="stem-images">
+                <img
+                  v-for="(img, imgIdx) in item.stem_images"
+                  :key="imgIdx"
+                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                  class="q-image"
+                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                />
+              </div>
               <div class="muted" style="margin: 8px 0">
                 标准答案：{{ item.correct_labels.join('') }}
                 ｜ 我的作答：{{ item.my_labels?.join('') || '(未作答)' }}
@@ -418,6 +487,16 @@
                   disabled
                 >
                   <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                  <!-- 选项图片 -->
+                  <span v-if="getReviewOptionImages(item, opt.label).length > 0" class="opt-images">
+                    <img
+                      v-for="(img, imgIdx) in getReviewOptionImages(item, opt.label)"
+                      :key="imgIdx"
+                      :src="'data:' + img.content_type + ';base64,' + img.base64"
+                      class="opt-image"
+                      @click.stop="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                    />
+                  </span>
                 </button>
               </div>
               <!-- 解析区域：复杂验证策略显示Tab切换 -->
@@ -444,6 +523,17 @@
                 <template v-else>
                   <div v-html="formatAnalysis(item.analysis) || '（无解析）'"></div>
                 </template>
+                <!-- 解析图片 -->
+                <div v-if="item.analysis_images && item.analysis_images.length > 0" class="analysis-images">
+                  <img
+                    v-for="(img, imgIdx) in item.analysis_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="q-image"
+                    style="max-height: 200px;"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -451,23 +541,46 @@
       </div>
     </div>
 
-    <!-- 修改密码对话框 -->
-    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="400px">
-      <el-form :model="passwordForm" label-width="80px">
-        <el-form-item label="旧密码">
-          <el-input v-model="passwordForm.oldPassword" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="新密码">
-          <el-input v-model="passwordForm.newPassword" type="password" show-password />
-        </el-form-item>
-      </el-form>
+    <!-- 图片预览对话框 -->
+    <el-dialog v-model="previewImageVisible" title="图片预览" width="auto" :close-on-click-modal="true">
+      <div style="text-align: center;">
+        <img :src="previewImageUrl" style="max-width: 90vw; max-height: 80vh;" />
+      </div>
+    </el-dialog>
+
+    <!-- 防作弊警告对话框 -->
+    <el-dialog
+      v-model="switchWarningVisible"
+      title="⚠️ 切屏警告"
+      width="400px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+    >
+      <div style="text-align: center; padding: 20px 0;">
+        <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+        <p style="font-size: 16px; color: #f56c6c; font-weight: bold; margin-bottom: 12px;">
+          检测到您离开了考试页面！
+        </p>
+        <p style="font-size: 14px; color: #606266; margin-bottom: 8px;">
+          当前已切屏 <span style="color: #f56c6c; font-weight: bold;">{{ switchCount }}</span> 次，
+          最多允许 <span style="font-weight: bold;">{{ maxSwitchCount }}</span> 次
+        </p>
+        <p style="font-size: 13px; color: #909399;">
+          再切屏 {{ maxSwitchCount - switchCount }} 次系统将自动提交试卷
+        </p>
+      </div>
       <template #footer>
-        <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="changePassword" :loading="changingPassword">
-          确定
+        <el-button type="primary" @click="closeSwitchWarning" style="width: 100%;">
+          我知道了，继续作答
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 考试中切屏次数显示 -->
+    <div v-if="examStarted && !submitted && switchCount > 0" class="switch-count-badge">
+      ⚠️ 已切屏 {{ switchCount }}/{{ maxSwitchCount }} 次
+    </div>
   </div>
 </template>
 
@@ -502,11 +615,19 @@ const API_ENDPOINTS = {
   }
 }
 
+interface ImageData {
+  base64: string
+  content_type: string
+  filename?: string
+}
+
 interface Question {
   qid: string
   stem: string
   qtype: string
-  options: Array<{ label: string; text: string }>
+  options: Array<{ label: string; text: string; images?: ImageData[] }>
+  stem_images?: ImageData[]
+  option_images?: Record<string, ImageData[]>
 }
 
 interface Paper {
@@ -531,6 +652,7 @@ interface ReviewItem extends Question {
   my_labels?: string[]
   analysis: string
   is_correct: boolean
+  analysis_images?: ImageData[]
 }
 
 interface ReviewData {
@@ -557,6 +679,7 @@ export default defineComponent({
     const attemptId = ref('')
     const leftSeconds = ref(0)
     const timerHandle = ref<number | null>(null)
+    const isPracticeMode = ref(true)  // 是否为练习模式（默认是练习）
 
     // 答题相关
     const answersState = ref<Record<string, any>>({})
@@ -582,6 +705,14 @@ export default defineComponent({
     const exportingWrong = ref(false)
     const exportMessage = ref('')
     const scoreChartRef = ref<HTMLCanvasElement | null>(null)
+
+    // ======= 防作弊相关 =======
+    const switchCount = ref(0)  // 切屏次数
+    const maxSwitchCount = 3    // 最大允许切屏次数
+    const switchWarningVisible = ref(false)  // 警告弹窗
+    const lastSwitchTime = ref('')  // 最后一次切屏时间
+    const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
+    const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
 
     // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
     const analysisActiveTab = reactive<Record<number, string>>({})
@@ -662,13 +793,41 @@ export default defineComponent({
       return optionAnalyses[tab] || '（无该选项解析）'
     }
 
-    // 修改密码
-    const passwordDialogVisible = ref(false)
-    const passwordForm = ref({
-      oldPassword: '',
-      newPassword: ''
-    })
-    const changingPassword = ref(false)
+    // 图片预览
+    const previewImageVisible = ref(false)
+    const previewImageUrl = ref('')
+    const previewImage = (url: string) => {
+      previewImageUrl.value = url
+      previewImageVisible.value = true
+    }
+
+    // 获取选项图片（兼容两种数据格式）
+    const getOptionImages = (q: Question, label: string): ImageData[] => {
+      // 方式1: option_images 对象格式
+      if (q.option_images && q.option_images[label]) {
+        return q.option_images[label]
+      }
+      // 方式2: options 数组中的 images 字段
+      const opt = q.options.find(o => o.label === label)
+      if (opt && opt.images) {
+        return opt.images
+      }
+      return []
+    }
+
+    // 获取解析区域的选项图片（用于ReviewItem）
+    const getReviewOptionImages = (item: ReviewItem, label: string): ImageData[] => {
+      // 方式1: option_images 对象格式
+      if (item.option_images && item.option_images[label]) {
+        return item.option_images[label]
+      }
+      // 方式2: options 数组中的 images 字段
+      const opt = item.options.find(o => o.label === label)
+      if (opt && opt.images) {
+        return opt.images
+      }
+      return []
+    }
 
     // 考试通知相关
     const publishedExams = ref<any[]>([])
@@ -1014,7 +1173,8 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             attempt_id: attemptId.value,
-            answers
+            answers,
+            switch_count: switchCount.value  // 同时保存切屏次数
           })
         })
         
@@ -1066,7 +1226,11 @@ export default defineComponent({
 
     // 检查是否有未完成的考试
     const checkInProgressExam = async () => {
-      const studentId = store.state.user.username || 'anonymous'
+      const studentId = store.state.user.username
+      // 未登录用户不检查进度（避免 anonymous 用户互相恢复进度）
+      if (!studentId) {
+        return
+      }
       try {
         const url = `${API_ENDPOINTS.EXAM.PROGRESS}?student_id=${encodeURIComponent(studentId)}`
         const data = await mcqFetch(url)
@@ -1114,6 +1278,12 @@ export default defineComponent({
       })
       answersState.value = newAnswersState
       
+      // 恢复切屏次数（防作弊）
+      switchCount.value = progressData.switch_count || 0
+      lastSwitchTimestamp.value = 0
+      switchLogs.value = []
+      switchWarningVisible.value = false
+      
       examStarted.value = true
       currentPage.value = 1
       submitted.value = false
@@ -1124,7 +1294,10 @@ export default defineComponent({
       startTimer()
       startAutoSave()
       
-      ElMessage.success('已恢复考试进度')
+      const resumeMsg = progressData.switch_count > 0 
+        ? `已恢复考试进度（已切屏 ${progressData.switch_count} 次）`
+        : '已恢复考试进度'
+      ElMessage.success(resumeMsg)
     }
 
     // 页面关闭前警告
@@ -1136,6 +1309,63 @@ export default defineComponent({
         e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
         return e.returnValue
       }
+    }
+
+    // ======= 防作弊检测函数 =======
+    const formatTime = () => {
+      return new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    }
+
+    // 统一的切屏处理函数（带防抖）
+    const handleSwitchDetected = (type: string) => {
+      // 只在考试进行中且未提交时检测
+      if (!examStarted.value || submitted.value) return
+      
+      // 防抖：1秒内的多次触发只算一次
+      const now = Date.now()
+      if (now - lastSwitchTimestamp.value < 1000) return
+      lastSwitchTimestamp.value = now
+      
+      const time = formatTime()
+      switchCount.value++
+      lastSwitchTime.value = time
+      switchLogs.value.push({ time, type })
+      
+      if (switchCount.value >= maxSwitchCount) {
+        // 达到最大次数，自动提交
+        ElMessage.error(`检测到第${switchCount.value}次切屏，系统将自动提交试卷！`)
+        submitExam()
+      } else {
+        // 显示警告
+        switchWarningVisible.value = true
+        ElMessage.warning(`警告：检测到切屏（第${switchCount.value}/${maxSwitchCount}次），请专注作答！`)
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleSwitchDetected('切换标签页/最小化')
+      }
+    }
+
+    const handleWindowBlur = () => {
+      // 如果页面已经隐藏，不重复计数（visibilitychange已处理）
+      if (document.hidden) return
+      handleSwitchDetected('切换到其他应用')
+    }
+
+    // 重置防作弊状态（开始新考试时调用）
+    const resetAntiCheat = () => {
+      switchCount.value = 0
+      lastSwitchTime.value = ''
+      switchLogs.value = []
+      switchWarningVisible.value = false
+      lastSwitchTimestamp.value = 0
+    }
+
+    // 关闭切屏警告弹窗
+    const closeSwitchWarning = () => {
+      switchWarningVisible.value = false
     }
 
     const loadPapers = async () => {
@@ -1183,13 +1413,18 @@ export default defineComponent({
       return 'active'
     }
 
-    // 进入已发布的考试
+    // 进入已发布的考试（正式考试模式，不可重复进入）
+    const currentExamId = ref('')  // 当前考试ID
     const enterPublishedExam = async (exam: any) => {
       enteringExam.value = exam.exam_id
       try {
         // 设置试卷和时长
         selectedPaperId.value = exam.paper_id
         durationMin.value = exam.duration_min
+        
+        // 设置为正式考试模式（不可重复进入，成绩计入导出）
+        isPracticeMode.value = false
+        currentExamId.value = exam.exam_id  // 记录考试ID
         
         // 直接开始考试
         await startExam()
@@ -1200,23 +1435,38 @@ export default defineComponent({
       }
     }
 
+    // 开始练习（练习模式，可重复进入，成绩不计入导出）
+    const startPractice = () => {
+      isPracticeMode.value = true
+      currentExamId.value = ''  // 练习模式没有考试ID
+      startExam()
+    }
+
     const startExam = async () => {
       if (!selectedPaperId.value) {
         ElMessage.warning('请选择试卷')
         return
       }
+      // 检查用户是否已登录
+      const username = store.state.user.username
+      if (!username) {
+        ElMessage.warning('请先登录后再开始考试')
+        return
+      }
       starting.value = true
       try {
-        // 开始考试
+        // 开始考试 - username 就是登录时输入的警号
         const startData = await mcqFetch(API_ENDPOINTS.EXAM.START, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             paper_id: selectedPaperId.value,
             duration_sec: durationMin.value * 60,
-            student_id: store.state.user.username || 'anonymous',
-            student_name: store.state.user.username || 'anonymous',
-            police_id: store.state.user.policeId || ''
+            student_id: username,
+            student_name: username,
+            police_id: username,  // username 就是警号
+            is_practice: isPracticeMode.value,  // 练习模式可重复进入，正式考试只能一次
+            exam_id: currentExamId.value  // 发布的考试ID（正式考试时传入）
           })
         })
 
@@ -1244,6 +1494,9 @@ export default defineComponent({
         submitted.value = false
         gradeReport.value = null
         reviewData.value = null
+
+        // 重置防作弊状态
+        resetAntiCheat()
 
         // 启动倒计时和自动保存
         startTimer()
@@ -1283,7 +1536,7 @@ export default defineComponent({
       questions.value.forEach(q => {
         const answer = answersState.value[q.qid]
         let labels: string[] = []
-        if (q.qtype === 'multi') {
+        if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
           labels = Array.isArray(answer) ? answer : []
         } else {
           labels = answer ? [answer] : []
@@ -1481,46 +1734,6 @@ export default defineComponent({
       }
     }
 
-    const handleChangePassword = () => {
-      passwordDialogVisible.value = true
-      passwordForm.value = { oldPassword: '', newPassword: '' }
-    }
-
-    const changePassword = async () => {
-      if (!passwordForm.value.newPassword) {
-        ElMessage.warning('新密码不可为空')
-        return
-      }
-      changingPassword.value = true
-      try {
-        // 注意：修改密码走 /api 路径，不是 MCQ 接口
-        const resp = await fetch(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            old_password: passwordForm.value.oldPassword,
-            new_password: passwordForm.value.newPassword
-          })
-        })
-        const data = await resp.json()
-
-        if (data.ok) {
-          ElMessage.success('修改成功，请重新登录')
-          passwordDialogVisible.value = false
-          store.dispatch('logout')
-          setTimeout(() => {
-            window.location.href = '/login'
-          }, 1000)
-        } else {
-          throw new Error(data.detail || '修改失败')
-        }
-      } catch (error: any) {
-        ElMessage.error('修改失败：' + (error.message || '未知错误'))
-      } finally {
-        changingPassword.value = false
-      }
-    }
-
     onMounted(() => {
       loadPapers()
       loadPublishedExams()  // 加载考试通知
@@ -1528,12 +1741,18 @@ export default defineComponent({
       checkInProgressExam()
       // 添加页面关闭前警告
       window.addEventListener('beforeunload', handleBeforeUnload)
+      // 添加防作弊检测
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      window.addEventListener('blur', handleWindowBlur)
     })
 
     onUnmounted(() => {
       stopTimer()
       stopAutoSave()
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      // 移除防作弊检测
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleWindowBlur)
     })
 
     return {
@@ -1573,10 +1792,13 @@ export default defineComponent({
       exportMessage,
       exportWrongReport,
       scoreChartRef,
-      passwordDialogVisible,
-      passwordForm,
-      changingPassword,
+      previewImageVisible,
+      previewImageUrl,
+      previewImage,
+      getOptionImages,
+      getReviewOptionImages,
       loadPapers,
+      startPractice,
       startExam,
       submitExam,
       exportReport,
@@ -1594,8 +1816,6 @@ export default defineComponent({
       analysisActiveTab, isComplexValidation, getAnalysisForTab, loadPerOption,
       toggleMultiOption,
       selectSingleOption,
-      handleChangePassword,
-      changePassword,
       lastSaveTime,
       savingProgress,
       saveProgress,
@@ -1606,6 +1826,11 @@ export default defineComponent({
       loadPublishedExams,
       getExamStatus,
       enterPublishedExam,
+      // 防作弊相关
+      switchCount,
+      maxSwitchCount,
+      switchWarningVisible,
+      closeSwitchWarning,
       // Icons
       Bell,
       Refresh,
@@ -1856,6 +2081,28 @@ export default defineComponent({
   position: sticky;
   top: 90px;
   align-self: start;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 自定义滚动条 */
+.side::-webkit-scrollbar {
+  width: 6px;
+}
+
+.side::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 3px;
+}
+
+.side::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.4);
+  border-radius: 3px;
+}
+
+.side::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.6);
 }
 
 .card {
@@ -2049,6 +2296,66 @@ export default defineComponent({
 .tag.indeterminate {
   background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
   color: #fff;
+}
+
+/* 题干图片 */
+.stem-images {
+  margin: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.q-image {
+  max-width: 400px;
+  max-height: 300px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  pointer-events: auto;  /* 确保图片可点击 */
+}
+
+.q-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+}
+
+/* 选项包装器 */
+.opt-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 选项图片（按钮外部） */
+.opt-images-outer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 24px;
+}
+
+/* 选项图片（旧版兼容） */
+.opt-images {
+  display: block;
+  margin-top: 8px;
+}
+
+.opt-image {
+  max-width: 200px;
+  max-height: 150px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 6px;
+  margin-right: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  pointer-events: auto;  /* 确保图片可点击，即使父元素disabled */
+}
+
+.opt-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
 }
 
 /* 选项 */
@@ -2275,6 +2582,15 @@ export default defineComponent({
   color: #cbd5e1;
   line-height: 1.8;
   position: relative;
+}
+
+.analysis-images {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(102, 126, 234, 0.3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .analysis::before {
@@ -2725,5 +3041,27 @@ export default defineComponent({
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* 防作弊切屏次数提示 */
+.switch-count-badge {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  background: linear-gradient(135deg, #f56c6c, #e74c3c);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.4);
+  z-index: 1000;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
 </style>
