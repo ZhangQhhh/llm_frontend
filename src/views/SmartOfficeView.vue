@@ -219,7 +219,7 @@
                   <template #prefix><el-icon><Cpu /></el-icon></template>
                   <el-option label="Qwen (通用)" value="qwen3-32b" />
                   <el-option label="Qwen (增强)" value="qwen2025" />
-                  <el-option label="DeepSeek-R1" value="deepseek" />
+                  <el-option label="DeepSeekv3_2" value="deepseek" />
                 </el-select>
               </div>
             </div>

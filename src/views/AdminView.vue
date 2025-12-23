@@ -1903,7 +1903,7 @@ export default defineComponent({
     const llmOptions = ref([
       { value: 'qwen3-32b',     label: 'Qwen (通用) ' },
       { value: 'qwen2025',      label: 'Qwen (增强)' },
-      { value: 'deepseek',      label: 'DeepSeek-R1' },
+      { value: 'deepseek',      label: 'DeepSeekv3_2' },
       //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
       //{ value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
