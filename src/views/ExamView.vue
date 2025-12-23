@@ -2526,9 +2526,11 @@ export default defineComponent({
 
 .qgrid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
   gap: 8px;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .qcell {
@@ -2893,7 +2895,7 @@ export default defineComponent({
   }
   
   .qgrid {
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
   }
   
   .stats-overview {
