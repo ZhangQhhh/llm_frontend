@@ -77,7 +77,7 @@
                     <template #prefix><el-icon><Cpu /></el-icon></template>
                     <el-option label="Qwen (通用)" value="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
-                    <el-option label="DeepSeek-R1" value="deepseek" />
+                    <el-option label="DeepSeekv3_2" value="deepseek" />
                     <!-- <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" /> -->
                   </el-select>
 
@@ -388,62 +388,66 @@
                           </el-tooltip>
                           <el-tag v-if="ref.canAnswer" type="success" size="small" effect="dark">引用</el-tag>
                         </div>
-                        <!-- 检索来源标签 -->
-                        <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="ref-sources">
-                          <el-tag
-                            v-for="(source, idx) in ref.retrievalSources"
-                            :key="idx"
-                            size="small"
-                            :type="source === 'vector' ? 'primary' : 'success'"
-                            effect="dark"
-                          >
-                            {{ source === 'vector' ? ' 向量检索' : ' 关键词检索' }}
-                          </el-tag>
-                        </div>
+                        
+                        <!-- Debug模式下才显示详细信息 -->
+                        <template v-if="isDebugMode">
+                          <!-- 检索来源标签 -->
+                          <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="ref-sources">
+                            <el-tag
+                              v-for="(source, idx) in ref.retrievalSources"
+                              :key="idx"
+                              size="small"
+                              :type="source === 'vector' ? 'primary' : 'success'"
+                              effect="dark"
+                            >
+                              {{ source === 'vector' ? ' 向量检索' : ' 关键词检索' }}
+                            </el-tag>
+                          </div>
 
-                        <div class="ref-scores">
-                          <el-tag v-if="ref.initialScore !== undefined && ref.initialScore !== 0" size="small" type="info" effect="plain">
-                            初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
-                          </el-tag>
-                          <el-tag v-if="ref.rerankedScore !== undefined && ref.rerankedScore !== 0" size="small" type="warning" effect="plain">
-                            重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
-                          </el-tag>
-                          <el-tag v-if="ref.vectorScore !== undefined && ref.vectorScore !== 0" size="small" type="info" effect="plain">
-                            向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
-                            <span v-if="ref.vectorRank">(#{{ ref.vectorRank }})</span>
-                          </el-tag>
-                          <el-tag v-if="ref.bm25Score !== undefined && ref.bm25Score !== 0" size="small" type="success" effect="plain">
-                            BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
-                            <span v-if="ref.bm25Rank">(#{{ ref.bm25Rank }})</span>
-                          </el-tag>
-                          <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
-                        </div>
+                          <div class="ref-scores">
+                            <el-tag v-if="ref.initialScore !== undefined && ref.initialScore !== 0" size="small" type="info" effect="plain">
+                              初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
+                            </el-tag>
+                            <el-tag v-if="ref.rerankedScore !== undefined && ref.rerankedScore !== 0" size="small" type="warning" effect="plain">
+                              重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
+                            </el-tag>
+                            <el-tag v-if="ref.vectorScore !== undefined && ref.vectorScore !== 0" size="small" type="info" effect="plain">
+                              向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                              <span v-if="ref.vectorRank">(#{{ ref.vectorRank }})</span>
+                            </el-tag>
+                            <el-tag v-if="ref.bm25Score !== undefined && ref.bm25Score !== 0" size="small" type="success" effect="plain">
+                              BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                              <span v-if="ref.bm25Rank">(#{{ ref.bm25Rank }})</span>
+                            </el-tag>
+                            <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
+                          </div>
 
-                        <!-- 匹配关键词 -->
-                        <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="ref-keywords">
-                          <span class="keywords-label">🏷️ 匹配关键词:</span>
-                          <el-tag
-                            v-for="(keyword, idx) in ref.matchedKeywords"
-                            :key="idx"
-                            size="small"
-                            type="warning"
-                            effect="plain"
-                          >
-                            {{ keyword }}
-                          </el-tag>
-                        </div>
-                        <div class="ref-content-wrapper">
-                          <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
-                          <el-button
-                            text
-                            type="primary"
-                            size="small"
-                            class="expand-btn"
-                            @click="toggleRefExpand(idx)"
-                          >
-                            {{ ref.expanded ? '收起' : '展开全文' }}
-                          </el-button>
-                        </div>
+                          <!-- 匹配关键词 -->
+                          <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="ref-keywords">
+                            <span class="keywords-label">🏷️ 匹配关键词:</span>
+                            <el-tag
+                              v-for="(keyword, idx) in ref.matchedKeywords"
+                              :key="idx"
+                              size="small"
+                              type="warning"
+                              effect="plain"
+                            >
+                              {{ keyword }}
+                            </el-tag>
+                          </div>
+                          <div class="ref-content-wrapper">
+                            <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
+                            <el-button
+                              text
+                              type="primary"
+                              size="small"
+                              class="expand-btn"
+                              @click="toggleRefExpand(idx)"
+                            >
+                              {{ ref.expanded ? '收起' : '展开全文' }}
+                            </el-button>
+                          </div>
+                        </template>
                       </div>
                     </div>
                   </el-scrollbar>
@@ -551,6 +555,11 @@ export default defineComponent({
   },
   setup() {
     const store = useStore();
+
+    // Debug模式检测（通过URL路径判断）
+    const isDebugMode = computed(() => {
+      return window.location.pathname.includes('/debug');
+    });
 
     // 状态
     const question = ref('');
@@ -1394,7 +1403,9 @@ export default defineComponent({
       summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
       renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange,
-      liteMode, toggleLiteMode
+      liteMode, toggleLiteMode,
+      // Debug模式
+      isDebugMode
     };
   }
 });
