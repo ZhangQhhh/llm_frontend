@@ -1464,7 +1464,7 @@ export default defineComponent({
             duration_sec: durationMin.value * 60,
             student_id: username,
             student_name: username,
-            police_id: username,  // username 就是警号
+            police_id: store.state.user.policeId || username,  // 优先使用用户设置的警号
             is_practice: isPracticeMode.value,  // 练习模式可重复进入，正式考试只能一次
             exam_id: currentExamId.value  // 发布的考试ID（正式考试时传入）
           })

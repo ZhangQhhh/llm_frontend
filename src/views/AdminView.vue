@@ -2686,7 +2686,8 @@ export default defineComponent({
     const loadQuestions = async () => {
       loadingQuestions.value = true
       try {
-        const r = await fetch(`${MCQ_BASE_URL}/bank/list`, { method: 'GET' })
+        // 不分页(page=0)，加载图片数据
+        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true`, { method: 'GET' })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
@@ -3203,7 +3204,25 @@ export default defineComponent({
       return cleaned.trim()
     }
 
-    const editRow = (row: any) => {
+    // 按需加载题目图片
+    const loadQuestionImages = async (qid: string): Promise<any> => {
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/images/${encodeURIComponent(qid)}`)
+        const j = await r.json()
+        if (j?.ok) {
+          return {
+            stem_images: j.stem_images || [],
+            option_images: j.option_images || {},
+            analysis_images: j.analysis_images || []
+          }
+        }
+      } catch (e) {
+        console.warn('加载图片失败', e)
+      }
+      return { stem_images: [], option_images: {}, analysis_images: [] }
+    }
+
+    const editRow = async (row: any) => {
       editingId.value = row.qid
       editBuf.stem = row.stem || ''
       editBuf.answer = row.answer || ''
@@ -3216,7 +3235,21 @@ export default defineComponent({
       })
       editBuf.options = { ...map }
       
-      // 加载图片数据
+      // 按需加载图片数据（如果题目有图片但尚未加载）
+      if (row.has_images && (!row.stem_images || row.stem_images.length === 0)) {
+        const imgData = await loadQuestionImages(row.qid)
+        row.stem_images = imgData.stem_images
+        row.analysis_images = imgData.analysis_images
+        // 合并选项图片到选项中
+        if (imgData.option_images) {
+          (row.options || []).forEach((o: any) => {
+            if (imgData.option_images[o.label]) {
+              o.images = imgData.option_images[o.label]
+            }
+          })
+        }
+      }
+      
       editBuf.stem_images = JSON.parse(JSON.stringify(row.stem_images || []))
       // 从选项中提取图片
       const optImgs: Record<string, any[]> = {}
