@@ -41,6 +41,15 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/knowledge-qa/debug',
+    name: 'knowledge-qa-debug',
+    component: KnowledgeQAView,
+    meta: { 
+      requiresAuth: true,
+      title: '知识问答 (Debug模式)' 
+    }
+  },
+  {
     path: '/conversation',
     name: 'conversation',
     component: ConversationView,
