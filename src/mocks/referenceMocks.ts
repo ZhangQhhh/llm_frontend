@@ -18,7 +18,7 @@ export interface SubQuestionsData {
 
 const BASE_REFERENCES: ReferenceSource[] = [
   {
-    id: 'DOC-001',
+    id: '1',
     fileName: '边检政策手册-2024.pdf',
     content: '对持旅游签证入境的旅客，需要重点核查停留目的、停留时间以及与申报计划的一致性，必要时可要求补充财务证明。',
     initialScore: 0.86,
@@ -39,7 +39,7 @@ const BASE_REFERENCES: ReferenceSource[] = [
     }
   },
   {
-    id: 'DOC-017',
+    id: '2',
     fileName: '出入境风险排查指南.docx',
     content: '旅客宣称访问亲友但无法提供具体地址、联系方式或邀请函内容模糊时，需关注是否存在超范围停留或非法就业风险。',
     initialScore: 0.78,
@@ -55,12 +55,12 @@ const BASE_REFERENCES: ReferenceSource[] = [
     }
   },
   {
-    id: 'DOC-032',
+    id: '3',
     fileName: '签证核验要点.xlsx',
     content: '申根短期签证通常对应 90/180 原则，核验时需确认护照上既往入境章，确保累计停留时间没有超限。',
     initialScore: 0.65,
     rerankedScore: 0.74,
-    canAnswer: true,
+    canAnswer: false,
     retrievalSources: ['keyword'],
     bm25Score: 23.1234,
     bm25Rank: 1,
@@ -72,7 +72,7 @@ const BASE_REFERENCES: ReferenceSource[] = [
     }
   },
   {
-    id: 'DOC-044',
+    id: '4',
     fileName: '国际航班口岸检查手册.pdf',
     content: '当旅客提供的资金证明与其行程安排明显不匹配时，可参考"资金不足核查流程"，包括二次询问和银行流水核验。',
     initialScore: 0.54,
@@ -91,6 +91,114 @@ const BASE_REFERENCES: ReferenceSource[] = [
       bm25_rank: 5,
       bm25_score: 15.2
     }
+  },
+  {
+    id: '5',
+    fileName: '入境审查标准操作流程.pdf',
+    content: '对于持短期签证入境的旅客，应核查其返程机票、住宿预订以及足够的旅行资金，确保符合入境条件。',
+    initialScore: 0.72,
+    rerankedScore: 0.81,
+    canAnswer: true,
+    retrievalSources: ['vector'],
+    vectorScore: 0.8123,
+    vectorRank: 3,
+    metadata: {
+      retrieval_sources: ['vector'],
+      vector_rank: 3,
+      vector_score: 0.81
+    }
+  },
+  {
+    id: '6',
+    fileName: '边检业务规范汇编.docx',
+    content: '旅客入境时如发现签证类型与入境目的不符，应详细询问并记录，必要时可拒绝入境或限制停留期限。',
+    initialScore: 0.68,
+    rerankedScore: 0.75,
+    canAnswer: false,
+    retrievalSources: ['keyword'],
+    bm25Score: 19.8765,
+    bm25Rank: 2,
+    matchedKeywords: ['签证类型', '入境目的', '询问'],
+    metadata: {
+      retrieval_sources: ['keyword'],
+      bm25_rank: 2,
+      bm25_score: 19.8
+    }
+  },
+  {
+    id: '7',
+    fileName: '申根签证管理规定.pdf',
+    content: '申根区成员国实行统一的签证政策，持申根签证可在申根区内自由流动，但需遵守90/180天的停留限制。',
+    initialScore: 0.81,
+    rerankedScore: 0.89,
+    canAnswer: true,
+    retrievalSources: ['vector', 'keyword'],
+    vectorScore: 0.8934,
+    bm25Score: 21.3456,
+    vectorRank: 2,
+    bm25Rank: 1,
+    matchedKeywords: ['申根签证', '90/180', '停留限制'],
+    metadata: {
+      retrieval_sources: ['vector', 'keyword'],
+      vector_rank: 2,
+      vector_score: 0.89,
+      bm25_rank: 1,
+      bm25_score: 21.3
+    }
+  },
+  {
+    id: '8',
+    fileName: '旅客资金证明审核指引.xlsx',
+    content: '旅客应提供与停留期限相匹配的资金证明，一般要求每天不低于50欧元或等值货币，可通过现金、银行卡或旅行支票形式持有。',
+    initialScore: 0.59,
+    rerankedScore: 0.67,
+    canAnswer: false,
+    retrievalSources: ['vector'],
+    vectorScore: 0.6734,
+    vectorRank: 5,
+    metadata: {
+      retrieval_sources: ['vector'],
+      vector_rank: 5,
+      vector_score: 0.67
+    }
+  },
+  {
+    id: '9',
+    fileName: '非法就业风险识别手册.pdf',
+    content: '旅客持旅游签证入境但携带大量工作相关物品、无法说明详细行程或频繁短期往返时，应警惕非法就业风险。',
+    initialScore: 0.76,
+    rerankedScore: 0.84,
+    canAnswer: true,
+    retrievalSources: ['vector', 'keyword'],
+    vectorScore: 0.8412,
+    bm25Score: 17.6543,
+    vectorRank: 3,
+    bm25Rank: 4,
+    matchedKeywords: ['旅游签证', '非法就业', '行程'],
+    metadata: {
+      retrieval_sources: ['vector', 'keyword'],
+      vector_rank: 3,
+      vector_score: 0.84,
+      bm25_rank: 4,
+      bm25_score: 17.6
+    }
+  },
+  {
+    id: '10',
+    fileName: '边检执法记录规范.docx',
+    content: '对旅客进行询问和检查时，应详细记录询问内容、旅客回答以及检查结果，确保执法过程有据可查。',
+    initialScore: 0.48,
+    rerankedScore: 0.53,
+    canAnswer: false,
+    retrievalSources: ['keyword'],
+    bm25Score: 12.3456,
+    bm25Rank: 7,
+    matchedKeywords: ['询问', '检查', '记录'],
+    metadata: {
+      retrieval_sources: ['keyword'],
+      bm25_rank: 7,
+      bm25_score: 12.3
+    }
   }
 ];
 
@@ -100,11 +208,13 @@ const DEFAULT_ANSWER =
 ## 一、入境目的核查
 
 1. **确认入境目的与签证类型是否一致**
-   - 特别是访问亲友与旅游签证之间是否存在描述冲突
+   根据[业务规定 1]，对持旅游签证入境的旅客，需要重点核查停留目的、停留时间以及与申报计划的一致性。特别需要注意：
+   - 访问亲友与旅游签证之间是否存在描述冲突
    - 核查旅客提供的邀请函、联系方式等证明材料
    - 如无法提供具体地址或联系方式，需进一步询问
 
 2. **评估访问理由的合理性**
+   参考[业务规定 2]的风险排查指引，当旅客宣称访问亲友但无法提供具体地址、联系方式或邀请函内容模糊时，需关注是否存在超范围停留或非法就业风险。应当：
    - 了解与被访者的关系及联系频率
    - 确认是否有既往访问记录
    - 核实被访者的身份信息
@@ -112,36 +222,38 @@ const DEFAULT_ANSWER =
 ## 二、停留时间核查
 
 3. **根据 90/180 原则核查护照上的出入境记录**
+   依据[业务规定 7]，申根区成员国实行统一的签证政策，持申根签证可在申根区内自由流动，但需遵守90/180天的停留限制。核查时应：
    - 确保总停留期没有超限
    - 计算过去180天内的累计停留天数
    - 使用申根计算器辅助核算
 
 4. **核对行程安排**
-   - 确认预订的住宿信息
-   - 核查返程机票或后续行程
+   按照[业务规定 5]的标准操作流程，对于持短期签证入境的旅客，应核查：
+   - 返程机票预订情况
+   - 住宿预订信息
    - 评估停留时间与申报目的是否匹配
 
 ## 三、资金证明核查
 
-5. **结合现有资金证明，参照《资金不足核查流程》评估其停留安排是否可信**
+5. **评估旅客的资金准备情况**
+   根据[业务规定 1]，必要时可要求补充财务证明。应当：
    - 核查银行流水或存款证明
    - 评估资金来源的合理性
    - 确认资金是否足以覆盖预计停留期间的开支
 
-6. **必要时启动补充询问流程**
-   - 要求提供额外的财务证明
-   - 进行二次询问，了解详细情况
-   - 记录询问过程和结果
-
 ## 四、风险评估
 
-根据以上核查结果，综合评估以下风险：
-- 超范围停留风险
-- 非法就业风险
-- 滞留不归风险
-- 其他违规风险
+6. **综合评估潜在风险**
+   参考[业务规定 9]，旅客持旅游签证入境但无法说明详细行程时，应警惕非法就业风险。需要综合评估：
+   - 超范围停留风险
+   - 非法就业风险
+   - 滞留不归风险
+   - 其他违规风险
 
-如发现明显异常，应按规定上报并采取相应措施。`;
+如发现明显异常，应按规定上报并采取相应措施。
+
+---
+**说明**：本回答引用了业务规定 1、2、5、7、9 共5条参考文献。`;
 
 const DEFAULT_THINKING =
 `<think>让我来分析这个问题...
