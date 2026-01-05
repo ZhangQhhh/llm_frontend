@@ -215,6 +215,15 @@ const routes: Array<RouteRecordRaw> = [
       requiresSuperAdmin: true,
       title: '知识库管理'
     }
+  },
+  {
+    path: '/video-center',
+    name: 'video-center',
+    component: () => import('../views/VideoCenterView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '视频中心'
+    }
   }
 ]
 
@@ -274,9 +283,10 @@ router.beforeEach(async (to, from, next) => {
   const isLoggedIn = (store.state as any).user.is_login
   const isAdmin = store.getters.isAdmin
   const isSuperAdmin = store.getters.isSuperAdmin
+  const isBjzxAdmin = store.getters.isBjzxAdmin
   
-  // 检查是否需要管理员权限
-  if (to.meta.requiresAdmin && !isAdmin) {
+  // 检查是否需要管理员权限（管理员或边检智学管理员都可以访问）
+  if (to.meta.requiresAdmin && !isAdmin && !isBjzxAdmin) {
     ElMessage.error('无权访问，需要管理员权限')
     next({ name: 'home' })
     return

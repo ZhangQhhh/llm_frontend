@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
     DOWNGRADE_ADMIN: `/api/admin/downgrade-admin/`,
     RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
     UPGRADE_ADMIN: `/api/admin/upgrade-admin/`,
+    SET_BJZX_ADMIN: `/api/admin/users/set-bjzx-admin/`,  // 设置边检智学管理员
   },
   USER: {
     LOGIN: `/user/account/token/`,
@@ -131,6 +132,16 @@ export const API_ENDPOINTS = {
     UPDATE_STATUS: `/knowledge/update_status`, // GET 查询更新状态
     IS_UPDATING: `/knowledge/is_updating`, // GET 快速检查更新中
     REBUILD: `/knowledge/rebuild`,         // POST 手动触发重建
+  },
+  // 视频中心API（使用llmHttp，baseURL已包含/api前缀）
+  VIDEOS: {
+    LIST: `/videos/list`,                              // GET 获取视频列表
+    UPLOAD: `/videos/upload`,                          // POST 上传视频
+    INFO: (videoId: string) => `/videos/${videoId}/info`,       // GET 获取视频信息
+    DOWNLOAD: (videoId: string) => `/videos/${videoId}/download`, // GET 下载视频
+    STREAM: (videoId: string) => `/videos/${videoId}/stream`,    // GET 流式播放
+    DELETE: (videoId: string) => `/videos/${videoId}/delete`,    // POST 删除视频
+    UPDATE: (videoId: string) => `/videos/${videoId}/update`,    // POST 更新视频信息
   }
 };
 

@@ -216,7 +216,10 @@
                           <div class="admin-email">{{ admin.email || '未填写邮箱' }}</div>
                         </div>
                       </div>
-                      <el-tag type="success" effect="plain">管理员</el-tag>
+                      <div class="admin-tags">
+                        <el-tag v-if="admin.role?.toLowerCase() === 'admin'" type="success" effect="plain">管理员</el-tag>
+                        <el-tag v-if="admin.isBjzxAdmin" type="primary" effect="plain">边检智学管理员</el-tag>
+                      </div>
                     </div>
                     <el-descriptions :column="1" size="small" class="admin-meta">
                       <el-descriptions-item label="创建时间">
@@ -307,6 +310,64 @@
                   <el-button 
                     @click="resetUpgradeForm" 
                     :disabled="upgrading"
+                  >
+                    重置
+                  </el-button>
+                </el-space>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <!-- 提升用户为边检智学管理员 -->
+          <el-card class="card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>提升用户为边检智学管理员</span>
+                <el-tag type="success" effect="plain">权限提升</el-tag>
+              </div>
+            </template>
+
+            <el-alert
+              title="提示"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            >
+              输入现有用户的用户名，将其设置为边检智学管理员（可访问边检智学相关功能）
+            </el-alert>
+
+            <el-form
+              ref="bjzxUpgradeFormRef"
+              :model="bjzxUpgradeForm"
+              :rules="bjzxUpgradeRules"
+              label-width="100px"
+              status-icon
+            >
+              <el-form-item label="用户名" prop="username">
+                <el-input 
+                  v-model="bjzxUpgradeForm.username" 
+                  placeholder="请输入要提升的用户名"
+                  clearable
+                >
+                  <template #prefix>
+                    <el-icon><User /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              <el-form-item>
+                <el-space>
+                  <el-button 
+                    type="success" 
+                    @click="handleBjzxUpgrade" 
+                    :loading="bjzxUpgrading"
+                    icon="Top"
+                  >
+                    设为边检智学管理员
+                  </el-button>
+                  <el-button 
+                    @click="resetBjzxUpgradeForm" 
+                    :disabled="bjzxUpgrading"
                   >
                     重置
                   </el-button>
@@ -457,6 +518,7 @@ interface AdminUser {
   create_at?: string
   createAt?: string
   status?: string
+  isBjzxAdmin?: boolean
 }
 
 export default defineComponent({
@@ -495,6 +557,13 @@ export default defineComponent({
     const upgradeFormRef = ref<FormInstance>()
     const upgrading = ref(false)
     const upgradeForm = reactive({
+      username: ''
+    })
+
+    // 提升用户为边检智学管理员相关状态
+    const bjzxUpgradeFormRef = ref<FormInstance>()
+    const bjzxUpgrading = ref(false)
+    const bjzxUpgradeForm = reactive({
       username: ''
     })
 
@@ -565,6 +634,13 @@ export default defineComponent({
     })
 
     const upgradeRules = reactive<FormRules>({
+      username: [
+        { required: true, message: '请输入用户名', trigger: 'blur' },
+        { min: 2, message: '用户名至少 2 个字符', trigger: 'blur' }
+      ]
+    })
+
+    const bjzxUpgradeRules = reactive<FormRules>({
       username: [
         { required: true, message: '请输入用户名', trigger: 'blur' },
         { min: 2, message: '用户名至少 2 个字符', trigger: 'blur' }
@@ -807,6 +883,51 @@ export default defineComponent({
       upgradeFormRef.value?.resetFields()
     }
 
+    const resetBjzxUpgradeForm = () => {
+      bjzxUpgradeFormRef.value?.resetFields()
+    }
+
+    const handleBjzxUpgrade = async () => {
+      if (!bjzxUpgradeFormRef.value) return
+      const valid = await bjzxUpgradeFormRef.value.validate().catch(() => false)
+      if (!valid) return
+
+      try {
+        await ElMessageBox.confirm(
+          `确定要将用户【${bjzxUpgradeForm.username}】设置为边检智学管理员吗？`,
+          '确认操作',
+          {
+            type: 'warning',
+            confirmButtonText: '确定',
+            cancelButtonText: '取消'
+          }
+        )
+
+        bjzxUpgrading.value = true
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.SET_BJZX_ADMIN), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: bjzxUpgradeForm.username,
+            isBjzxAdmin: true
+          })
+        })
+
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success(`已成功将用户【${bjzxUpgradeForm.username}】设置为边检智学管理员`)
+          resetBjzxUpgradeForm()
+          loadAdmins()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '设置失败，请稍后重试')
+        }
+      } catch (error: any) {
+        if (error === 'cancel') return
+        ElMessage.error(error?.message || '设置失败，请稍后重试')
+      } finally {
+        bjzxUpgrading.value = false
+      }
+    }
+
     const handleUpgrade = async () => {
       if (!upgradeFormRef.value) return
       const valid = await upgradeFormRef.value.validate().catch(() => false)
@@ -923,7 +1044,14 @@ export default defineComponent({
       handleUpgrade,
       resetUpgradeForm,
       formatDate,
-      maskIdCard
+      maskIdCard,
+      // 边检智学管理员相关
+      bjzxUpgradeFormRef,
+      bjzxUpgradeForm,
+      bjzxUpgradeRules,
+      bjzxUpgrading,
+      handleBjzxUpgrade,
+      resetBjzxUpgradeForm
     }
   }
 })
@@ -1051,8 +1179,15 @@ export default defineComponent({
 .admin-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
+}
+
+.admin-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
 }
 
 .admin-identity {

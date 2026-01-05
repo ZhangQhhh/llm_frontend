@@ -9,7 +9,7 @@
 
       <el-tabs v-model="activeTab" type="border-card">
         <!-- 账号审核 -->
-        <el-tab-pane label="账号审核" name="approval">
+        <el-tab-pane v-if="showAdminTabs" label="账号审核" name="approval">
           <div class="tab-content">
             <div class="action-bar">
               <el-button type="primary" @click="loadPendingUsers" :loading="loadingPending" :icon="Refresh">
@@ -74,7 +74,7 @@
         </el-tab-pane>
 
         <!-- 密码管理 -->
-        <el-tab-pane label="密码管理" name="password">
+        <el-tab-pane v-if="showAdminTabs" label="密码管理" name="password">
           <div class="tab-content">
             <el-form label-width="100px">
               <el-form-item label="修改密码">
@@ -92,7 +92,7 @@
         </el-tab-pane>
 
         <!-- ==================== 题库管理（MCQ 对接） ==================== -->
-        <el-tab-pane label="题库管理" name="questions">
+        <el-tab-pane v-if="showBjzxTabs" label="题库管理" name="questions">
           <div class="tab-content mcq-tab-content">
 
             <!-- 顶部工具栏 -->
@@ -684,7 +684,7 @@
         </el-tab-pane>
 
         <!-- 回收站 -->
-        <el-tab-pane label="回收站" name="recycle">
+        <el-tab-pane v-if="showBjzxTabs" label="回收站" name="recycle">
           <div class="tab-content">
             <!-- 工具栏 -->
             <div class="action-bar">
@@ -812,7 +812,7 @@
         </el-tab-pane>
 
         <!-- 试卷管理 -->
-        <el-tab-pane label="试卷管理" name="papers">
+        <el-tab-pane v-if="showBjzxTabs" label="试卷管理" name="papers">
           <div class="tab-content">
             <!-- 生成试卷区域 -->
             <el-card shadow="never" style="margin-bottom: 20px;">
@@ -861,12 +861,12 @@
                     <span>
                       <span style="margin-right: 4px;">单选</span>
                       <el-input-number v-model="randomSingleCount" :min="0" :max="singleApprovedCount" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ singleApprovedCount }}</span>
+                      <span style="margin-left: 4px;">题</span>
                     </span>
                     <span>
                       <span style="margin-right: 4px;">多选</span>
                       <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px; color: #909399; font-size: 12px;">/ {{ multiApprovedCount }}</span>
+                      <span style="margin-left: 4px;">题</span>
                     </span>
                     <span style="display: flex; align-items: center; gap: 8px;">
                       <span style="margin-right: 4px;">不定项：</span>
@@ -1264,7 +1264,7 @@
         </el-tab-pane>
 
         <!-- 成绩导出 -->
-        <el-tab-pane label="成绩导出" name="export">
+        <el-tab-pane v-if="showBjzxTabs" label="成绩导出" name="export">
           <div class="tab-content">
             <div class="action-bar">
               <el-select v-model="selectedExportExam" placeholder="选择考试场次" style="width: 400px" @change="onExportExamChange">
@@ -1398,7 +1398,7 @@
         </el-tab-pane>
         
         <!-- 考试发布 -->
-        <el-tab-pane label="考试发布" name="publish">
+        <el-tab-pane v-if="showBjzxTabs" label="考试发布" name="publish">
           <div class="tab-content">
             <!-- 发布考试表单 -->
             <el-card shadow="never" style="margin-bottom: 20px;">
@@ -1633,7 +1633,7 @@ import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus } from '@element-plus/icons-vue'
-import { RoleNames, UserRole } from '@/config/permissions'
+import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
 import { renderMarkdown } from '@/utils/markdown'
@@ -1673,6 +1673,12 @@ export default defineComponent({
     const store = useStore()
     const username = computed(() => store.state.user.username)
     const userRole = computed(() => store.getters.userRole)
+    const isBjzxAdmin = computed(() => store.state.user.isBjzxAdmin || false)
+    
+    // Tab权限控制
+    const showAdminTabs = computed(() => canAccessAdminTabs(userRole.value))
+    const showBjzxTabs = computed(() => canAccessBjzxTabs(userRole.value, isBjzxAdmin.value))
+    
     const roleText = computed(() => {
       const role = userRole.value as UserRole
       return role ? RoleNames[role] : '普通用户'
@@ -2122,7 +2128,7 @@ export default defineComponent({
 
     const userSearch = ref('')
     interface ManagedUser {
-      id?: string
+      id?: string | number
       username: string
       email?: string
       role?: string
@@ -2131,11 +2137,11 @@ export default defineComponent({
 
     const users = ref<ManagedUser[]>([])
     const loadingUsers = ref(false)
-    const actionLoadingId = ref<string | null>(null)
+    const actionLoadingId = ref<string | number | null>(null)
     const pendingUsers = ref<ManagedUser[]>([])
     const loadingPending = ref(false)
-    const approvalLoadingId = ref<string | null>(null)
-    const rejectLoadingId = ref<string | null>(null)
+    const approvalLoadingId = ref<string | number | null>(null)
+    const rejectLoadingId = ref<string | number | null>(null)
 
 
     const getStatusTagType = (status: string) => {
@@ -4538,17 +4544,24 @@ export default defineComponent({
     }
 
     onMounted(() => {
-      loadQuestions()
-      loadExportPapers()
-      loadPaperList()  // 加载试卷管理列表
-      loadUsers()
-      loadPendingUsers()
-      loadPublishedExams()  // 加载已发布考试列表
-      checkPendingTask()  // 检查是否有未完成的异步解析任务
+      // 边检智学管理员相关数据
+      if (showBjzxTabs.value) {
+        loadQuestions()
+        loadExportPapers()
+        loadPaperList()  // 加载试卷管理列表
+        loadPublishedExams()  // 加载已发布考试列表
+        checkPendingTask()  // 检查是否有未完成的异步解析任务
+      }
+      // 管理员相关数据（用户管理等）
+      if (showAdminTabs.value) {
+        loadUsers()
+        loadPendingUsers()
+      }
     })
 
     return {
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
+      showAdminTabs, showBjzxTabs,
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,

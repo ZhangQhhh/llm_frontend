@@ -23,6 +23,21 @@ llmHttp.interceptors.request.use(
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        // 添加用户角色信息（用于视频中心等功能的权限校验）
+        const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+        if (userStr && config.headers) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user.role) {
+                    config.headers['X-User-Role'] = user.role;
+                }
+                if (user.username) {
+                    config.headers['X-User-Name'] = encodeURIComponent(user.username);
+                }
+            } catch (e) {
+                // ignore parse error
+            }
+        }
         return config;
     },
     (error: AxiosError) => {

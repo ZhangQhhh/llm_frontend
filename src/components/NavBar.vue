@@ -43,7 +43,7 @@
                 <el-icon><User /></el-icon>
                 <span>{{ username }}</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin" command="admin">
+              <el-dropdown-item v-if="isAdmin || isBjzxAdmin" command="admin">
                 <el-icon><Setting /></el-icon>
                 <span>管理中心</span>
               </el-dropdown-item>
@@ -66,6 +66,10 @@
               <el-dropdown-item v-if="isAdmin" command="feedback">
                 <el-icon><ChatLineSquare /></el-icon>
                 <span>反馈管理</span>
+              </el-dropdown-item>
+              <el-dropdown-item command="video-center">
+                <el-icon><VideoCamera /></el-icon>
+                <span>视频中心</span>
               </el-dropdown-item>
               <el-dropdown-item divided command="profile">
                 <el-icon><Setting /></el-icon>
@@ -123,7 +127,8 @@ import {
   DocumentCopy,
   Document,
   DataBoard,
-  FolderOpened
+  FolderOpened,
+  VideoCamera
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 
@@ -138,7 +143,8 @@ export default defineComponent({
     DocumentCopy,
     Document,
     DataBoard,
-    FolderOpened
+    FolderOpened,
+    VideoCamera
   },
   setup() {
     const store = useStore()
@@ -152,18 +158,24 @@ export default defineComponent({
     const userRole = computed(() => store.getters.userRole)
     const isAdmin = computed(() => store.getters.isAdmin)
     const isSuperAdmin = computed(() => store.getters.isSuperAdmin)
+    const isBjzxAdmin = computed(() => store.getters.isBjzxAdmin)
 
     // 角色标签类型
     const roleTagType = computed(() => {
       const role = userRole.value
       if (role === UserRole.SUPER_ADMIN) return 'danger'
       if (role === UserRole.ADMIN) return 'warning'
+      if (isBjzxAdmin.value) return 'success'
       return 'info'
     })
 
     // 角色文本
     const roleText = computed(() => {
       const role = userRole.value as UserRole
+      // 如果是边检智学管理员但不是管理员角色，显示边检智学管理员
+      if (isBjzxAdmin.value && role !== UserRole.ADMIN && role !== UserRole.SUPER_ADMIN) {
+        return '边检智学管理员'
+      }
       return role ? RoleNames[role] : '普通用户'
     })
 
@@ -199,6 +211,8 @@ export default defineComponent({
         router.push('/qa-logs')
       } else if (command === 'knowledge-base') {
         router.push('/knowledge-base')
+      } else if (command === 'video-center') {
+        router.push('/video-center')
       }
     }
 
@@ -209,6 +223,7 @@ export default defineComponent({
       userPhoto,
       isAdmin,
       isSuperAdmin,
+      isBjzxAdmin,
       roleTagType,
       roleText,
       navigateTo,

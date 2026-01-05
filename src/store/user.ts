@@ -15,6 +15,7 @@ interface UserInfo {
   policeId?: string | null;
   idCardNumber?: string | null;
   hasChangedName?: boolean;  // 是否已修改过用户名
+  isBjzxAdmin?: boolean;  // 是否为边检智学管理员
 }
 
 // [3] 定义 Vuex state 的完整形状
@@ -74,6 +75,7 @@ const state: UserState = {
   policeId: null,
   idCardNumber: null,
   hasChangedName: undefined,  // 是否已修改过用户名
+  isBjzxAdmin: false,  // 是否为边检智学管理员
 };
 
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
@@ -94,6 +96,10 @@ export default {
     isSuperAdmin(state: UserState): boolean {
       return isSuperAdmin(state.role as UserRole);
     },
+    // 检查是否为边检智学管理员
+    isBjzxAdmin(state: UserState): boolean {
+      return state.isBjzxAdmin || false;
+    },
     // 检查特定权限
     hasPermission: (state: UserState) => (permission: string) => {
       return hasPermission(state.role as UserRole, permission as any);
@@ -111,10 +117,12 @@ export default {
       state.policeId = user.policeId || null;
       state.idCardNumber = user.idCardNumber || null;
       state.hasChangedName = user.hasChangedName;
+      state.isBjzxAdmin = user.isBjzxAdmin || false;
       // 同步用户信息到 localStorage（供 http 拦截器使用）
       localStorage.setItem('multi_turn_chat_user', JSON.stringify({
         username: user.username,
-        role: user.role
+        role: user.role,
+        isBjzxAdmin: user.isBjzxAdmin || false
       }));
     },
     // [10] 为 token 参数添加类型
@@ -132,6 +140,7 @@ export default {
       state.policeId = null;
       state.idCardNumber = null;
       state.hasChangedName = undefined;
+      state.isBjzxAdmin = false;
       // 清除 localStorage 中的用户信息
       localStorage.removeItem('multi_turn_chat_user');
     },
@@ -225,6 +234,7 @@ export default {
             policeId: userInfo.policeId || null,
             idCardNumber: userInfo.idCardNumber || null,
             hasChangedName: userInfo.hasChangedName ?? false,  // 默认为 false
+            isBjzxAdmin: userInfo.isBjzxAdmin ?? false,  // 默认为 false
             is_login: true,
           };
 

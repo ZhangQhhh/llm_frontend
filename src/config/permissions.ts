@@ -56,3 +56,13 @@ export function isAdmin(role: UserRole | null): boolean {
 export function isSuperAdmin(role: UserRole | null): boolean {
   return role === UserRole.SUPER_ADMIN;
 }
+
+// 检查是否可访问管理员Tab（账号审核、密码管理）
+export function canAccessAdminTabs(role: UserRole | null): boolean {
+  return role === UserRole.SUPER_ADMIN || role === UserRole.ADMIN;
+}
+
+// 检查是否可访问边检智学Tab（题库管理、回收站、试卷管理、成绩导出、考试发布）
+export function canAccessBjzxTabs(role: UserRole | null, isBjzxAdmin: boolean): boolean {
+  return role === UserRole.SUPER_ADMIN || isBjzxAdmin === true;
+}
