@@ -46,6 +46,87 @@
       </div>
     </div>
 
+    <!-- 随机练习面板（已隐藏） -->
+    <div v-if="false && !examStarted" class="practice-panel">
+      <div class="practice-header">
+        <el-icon class="practice-icon"><Reading /></el-icon>
+        <span>随机练习</span>
+        <el-tag type="success" size="small" effect="plain">从题库抽题</el-tag>
+      </div>
+      <div class="practice-content">
+        <div class="practice-config">
+          <div class="config-row">
+            <div class="config-item">
+              <label>单选题数量</label>
+              <el-input-number v-model="practiceConfig.singleCount" :min="0" :max="50" size="small" />
+            </div>
+            <div class="config-item">
+              <label>多选题数量</label>
+              <el-input-number v-model="practiceConfig.multiCount" :min="0" :max="50" size="small" />
+            </div>
+            <div class="config-item">
+              <label>不定项数量</label>
+              <el-input-number v-model="practiceConfig.indeterminateCount" :min="0" :max="50" size="small" />
+            </div>
+            <div class="config-item">
+              <label>练习时长（分钟）</label>
+              <el-input-number v-model="practiceConfig.duration" :min="5" :max="180" size="small" />
+            </div>
+          </div>
+          <div class="config-summary">
+            <span class="summary-text">
+              共 <b>{{ practiceTotalCount }}</b> 题，预计 <b>{{ practiceConfig.duration }}</b> 分钟
+            </span>
+            <el-button 
+              type="success" 
+              @click="startRandomPractice" 
+              :disabled="practiceTotalCount === 0"
+              :loading="startingPractice"
+            >
+              <el-icon><CaretRight /></el-icon>
+              开始随机练习
+            </el-button>
+          </div>
+        </div>
+        <div class="practice-tips">
+          <el-icon><InfoFilled /></el-icon>
+          <span>随机练习模式将从题库中随机抽取指定数量的题目，练习结果不计入正式成绩。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 错题本面板（已隐藏） -->
+    <div v-if="false && !examStarted" class="wrong-book-panel">
+      <div class="wrong-book-header">
+        <el-icon class="wrong-book-icon"><Collection /></el-icon>
+        <span>我的错题本</span>
+        <el-tag type="danger" size="small" effect="plain">{{ wrongBookTotal }} 题</el-tag>
+        <el-button size="small" text @click="loadWrongBook" :loading="loadingWrongBook" style="margin-left: auto;">
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </div>
+      <div class="wrong-book-content">
+        <div v-if="wrongBookTotal === 0" class="wrong-book-empty">
+          <el-empty description="错题本为空，完成考试后可收录错题" :image-size="80" />
+        </div>
+        <div v-else class="wrong-book-info">
+          <div class="wrong-book-stats">
+            <span>共收录 <b>{{ wrongBookTotal }}</b> 道错题</span>
+          </div>
+          <div class="wrong-book-actions">
+            <el-button type="primary" @click="openWrongBook">
+              <el-icon><View /></el-icon>
+              查看错题
+            </el-button>
+            <el-button type="warning" @click="startWrongBookPractice" :loading="startingPractice" :disabled="wrongBookTotal === 0">
+              <el-icon><CaretRight /></el-icon>
+              错题练习
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 考试通知面板 -->
     <div v-if="publishedExams.length > 0 && !examStarted" class="notification-panel">
       <div class="notification-header">
@@ -446,6 +527,15 @@
             >
               导出错题报告（DOCX）
             </el-button>
+            <el-button 
+              type="danger" 
+              @click="saveToWrongBook" 
+              :loading="savingToWrongBook"
+              :disabled="wrongQuestions.length === 0"
+            >
+              <el-icon><Collection /></el-icon>
+              收录到错题本（{{ wrongQuestions.length }}题）
+            </el-button>
             <span class="muted">{{ exportMessage }}</span>
           </div>
         </div>
@@ -581,6 +671,100 @@
     <div v-if="examStarted && !submitted && switchCount > 0" class="switch-count-badge">
       ⚠️ 已切屏 {{ switchCount }}/{{ maxSwitchCount }} 次
     </div>
+
+    <!-- 错题本对话框 -->
+    <el-dialog
+      v-model="wrongBookVisible"
+      title="📚 我的错题本"
+      width="900px"
+      :close-on-click-modal="true"
+    >
+      <div class="wrong-book-dialog">
+        <div v-if="loadingWrongBook" class="loading-wrap">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <span>加载中...</span>
+        </div>
+        <div v-else-if="wrongBook.length === 0" class="empty-wrap">
+          <el-empty description="错题本为空" />
+        </div>
+        <div v-else class="wrong-list">
+          <div v-for="(q, idx) in wrongBook" :key="q.qid" class="wrong-item">
+            <div class="wrong-header">
+              <span class="wrong-num">{{ idx + 1 }}</span>
+              <span class="wrong-stem" v-html="formatText(q.stem)"></span>
+              <el-tag size="small" :type="q.qtype === 'multi' ? 'danger' : 'primary'">
+                {{ q.qtype === 'multi' ? '多选' : (q.qtype === 'indeterminate' ? '不定项' : '单选') }}
+              </el-tag>
+              <el-button 
+                size="small" 
+                type="success" 
+                text
+                @click="removeFromWrongBook([q.qid])"
+                title="已掌握，从错题本移除"
+              >
+                <el-icon><Delete /></el-icon>
+                已掌握
+              </el-button>
+            </div>
+            <!-- 题干图片 -->
+            <div v-if="q.stem_images && q.stem_images.length > 0" class="wrong-images">
+              <img
+                v-for="(img, imgIdx) in q.stem_images"
+                :key="'stem-' + imgIdx"
+                :src="'data:' + img.content_type + ';base64,' + img.base64"
+                class="wrong-img"
+                @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+              />
+            </div>
+            <div class="wrong-options">
+              <div v-for="opt in q.options" :key="opt.label" class="wrong-opt">
+                <span :class="{ 'correct-label': q.answer.includes(opt.label), 'my-wrong': q.my_answer?.includes(opt.label) && !q.answer.includes(opt.label) }">
+                  {{ opt.label }}. {{ opt.text }}
+                </span>
+                <!-- 选项图片 -->
+                <div v-if="q.option_images && q.option_images[opt.label] && q.option_images[opt.label].length > 0" class="opt-images">
+                  <img
+                    v-for="(img, imgIdx) in q.option_images[opt.label]"
+                    :key="'opt-' + opt.label + '-' + imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="wrong-img small"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="wrong-answer-info">
+              <span class="correct-answer">正确答案：{{ q.answer }}</span>
+              <span class="my-answer">我的答案：{{ q.my_answer?.join('') || '未作答' }}</span>
+              <span class="review-info" v-if="q.review_count > 0">已复习 {{ q.review_count }} 次</span>
+            </div>
+            <div v-if="q.explain" class="wrong-explain">
+              <div class="explain-label">解析：</div>
+              <div v-html="formatAnalysis(q.explain)"></div>
+              <!-- 解析图片 -->
+              <div v-if="q.analysis_images && q.analysis_images.length > 0" class="wrong-images">
+                <img
+                  v-for="(img, imgIdx) in q.analysis_images"
+                  :key="'analysis-' + imgIdx"
+                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                  class="wrong-img"
+                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="wrong-book-footer">
+          <span class="wrong-total">共 {{ wrongBook.length }} 道错题</span>
+          <el-button @click="wrongBookVisible = false">关闭</el-button>
+          <el-button type="warning" @click="startWrongBookPractice" :loading="startingPractice" :disabled="wrongBook.length === 0">
+            开始错题练习
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -588,7 +772,7 @@
 import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, Refresh, Clock } from '@element-plus/icons-vue'
+import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -598,8 +782,13 @@ const API_ENDPOINTS = {
     LIST_OPEN: `${MCQ_BASE_URL}/papers/list_open`,
     VIEW: `${MCQ_BASE_URL}/papers/view`
   },
+  BANK: {
+    LIST: `${MCQ_BASE_URL}/bank/list`,
+    SAVE_PAPER: `${MCQ_BASE_URL}/bank/save_paper`
+  },
   EXAM: {
     START: `${MCQ_BASE_URL}/exam/start`,
+    START_TEMP: `${MCQ_BASE_URL}/exam/start_temp`,  // 临时练习（不生成试卷文件）
     SUBMIT: `${MCQ_BASE_URL}/exam/submit`,
     REVIEW: `${MCQ_BASE_URL}/exam/review`,
     PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
@@ -609,6 +798,13 @@ const API_ENDPOINTS = {
   STUDENT: {
     EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`,
     EXPORT_WRONG_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_wrong_report_docx`
+  },
+  WRONG_QUESTIONS: {
+    ADD: `${MCQ_BASE_URL}/wrong_questions/add`,
+    LIST: `${MCQ_BASE_URL}/wrong_questions/list`,
+    REMOVE: `${MCQ_BASE_URL}/wrong_questions/remove`,
+    MARK_REVIEWED: `${MCQ_BASE_URL}/wrong_questions/mark_reviewed`,
+    CLEAR: `${MCQ_BASE_URL}/wrong_questions/clear`
   },
   AUTH: {
     CHANGE_PASSWORD: '/api/auth/change_password'
@@ -681,6 +877,18 @@ export default defineComponent({
     const timerHandle = ref<number | null>(null)
     const isPracticeMode = ref(true)  // 是否为练习模式（默认是练习）
 
+    // 随机练习配置
+    const practiceConfig = reactive({
+      singleCount: 10,
+      multiCount: 5,
+      indeterminateCount: 0,
+      duration: 30
+    })
+    const startingPractice = ref(false)
+    const practiceTotalCount = computed(() => {
+      return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount
+    })
+
     // 答题相关
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
@@ -713,6 +921,13 @@ export default defineComponent({
     const lastSwitchTime = ref('')  // 最后一次切屏时间
     const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
     const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
+
+    // ======= 错题本相关 =======
+    const wrongBook = ref<any[]>([])  // 错题本列表
+    const wrongBookTotal = ref(0)  // 错题本总数
+    const wrongBookVisible = ref(false)  // 错题本弹窗
+    const loadingWrongBook = ref(false)  // 加载中
+    const savingToWrongBook = ref(false)  // 保存中
 
     // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
     const analysisActiveTab = reactive<Record<number, string>>({})
@@ -1442,6 +1657,165 @@ export default defineComponent({
       startExam()
     }
 
+    // 开始随机练习（从题库随机抽题）
+    const startRandomPractice = async () => {
+      // 检查用户是否已登录
+      const username = store.state.user.username
+      if (!username) {
+        ElMessage.warning('请先登录后再开始练习')
+        return
+      }
+
+      if (practiceTotalCount.value === 0) {
+        ElMessage.warning('请至少设置一种题型的数量')
+        return
+      }
+
+      startingPractice.value = true
+      try {
+        // 1. 从题库获取所有已通过的题目（包含图片数据）
+        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&include_images=true`)
+        if (!bankData.ok) {
+          throw new Error(bankData.msg || '获取题库失败')
+        }
+
+        const allQuestions = bankData.items || []
+        if (allQuestions.length === 0) {
+          ElMessage.warning('题库中暂无可用题目')
+          return
+        }
+
+        // 2. 按题型分类（只取已通过的题目）
+        const approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
+        const singleQuestions = approvedQuestions.filter((q: any) => {
+          const answer = (q.answer || '').toUpperCase()
+          return answer.length === 1
+        })
+        const multiQuestions = approvedQuestions.filter((q: any) => {
+          const answer = (q.answer || '').toUpperCase()
+          return answer.length > 1
+        })
+
+        // 3. 随机抽取指定数量的题目
+        const shuffle = (arr: any[]) => {
+          const result = [...arr]
+          for (let i = result.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[result[i], result[j]] = [result[j], result[i]]
+          }
+          return result
+        }
+
+        const selectedSingle = shuffle(singleQuestions).slice(0, practiceConfig.singleCount)
+        const selectedMulti = shuffle(multiQuestions).slice(0, practiceConfig.multiCount)
+        
+        // 不定项题目：从单选和多选中各抽一部分
+        const indeterminateSingleCount = Math.ceil(practiceConfig.indeterminateCount / 2)
+        const indeterminateMultiCount = practiceConfig.indeterminateCount - indeterminateSingleCount
+        const remainingSingle = shuffle(singleQuestions.filter((q: any) => !selectedSingle.includes(q))).slice(0, indeterminateSingleCount)
+        const remainingMulti = shuffle(multiQuestions.filter((q: any) => !selectedMulti.includes(q))).slice(0, indeterminateMultiCount)
+        const selectedIndeterminate = [...remainingSingle, ...remainingMulti]
+
+        // 4. 检查是否有足够的题目
+        const actualSingleCount = selectedSingle.length
+        const actualMultiCount = selectedMulti.length
+        const actualIndeterminateCount = selectedIndeterminate.length
+        const actualTotal = actualSingleCount + actualMultiCount + actualIndeterminateCount
+
+        if (actualTotal === 0) {
+          ElMessage.warning('题库中没有足够的已通过题目')
+          return
+        }
+
+        if (actualTotal < practiceTotalCount.value) {
+          ElMessage.info(`题库题目不足，实际抽取 ${actualTotal} 题`)
+        }
+
+        // 5. 构建临时试卷数据（包含图片）
+        const paperItems: any[] = []
+        
+        // 辅助函数：构建题目项（包含图片数据）
+        const buildPaperItem = (q: any, qtype: string) => {
+          const item: any = {
+            qid: q.qid,
+            stem: q.stem,
+            options: q.options,
+            answer: q.answer,
+            explain: q.explain || '',
+            qtype: qtype
+          }
+          // 包含图片数据
+          if (q.stem_images && q.stem_images.length > 0) {
+            item.stem_images = q.stem_images
+          }
+          if (q.option_images) {
+            item.option_images = q.option_images
+          }
+          if (q.analysis_images && q.analysis_images.length > 0) {
+            item.analysis_images = q.analysis_images
+          }
+          return item
+        }
+        
+        // 添加单选题
+        selectedSingle.forEach((q: any) => {
+          paperItems.push(buildPaperItem(q, 'single'))
+        })
+
+        // 添加多选题
+        selectedMulti.forEach((q: any) => {
+          paperItems.push(buildPaperItem(q, 'multi'))
+        })
+
+        // 添加不定项题
+        selectedIndeterminate.forEach((q: any) => {
+          paperItems.push(buildPaperItem(q, 'indeterminate'))
+        })
+
+        // 6. 直接使用临时题目数据开始练习（不保存为试卷文件）
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const practiceTitle = `随机练习_${timestamp}`
+        
+        const startResult = await mcqFetch(API_ENDPOINTS.EXAM.START_TEMP, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questions: paperItems,
+            duration_sec: practiceConfig.duration * 60,
+            student_id: username,
+            title: practiceTitle
+          })
+        })
+
+        if (!startResult.ok) {
+          throw new Error(startResult.detail || '开始练习失败')
+        }
+
+        // 7. 直接进入考试状态
+        attemptId.value = startResult.attempt_id
+        questions.value = startResult.items || []
+        leftSeconds.value = startResult.left_sec || practiceConfig.duration * 60
+        examStarted.value = true
+        isPracticeMode.value = true
+        currentExamId.value = ''
+        
+        // 初始化答案
+        answersState.value = {}
+        questions.value.forEach((q: any) => {
+          answersState.value[q.qid] = []
+        })
+        
+        // 启动倒计时
+        startTimer()
+
+      } catch (error: any) {
+        ElMessage.error('开始随机练习失败：' + (error.message || '未知错误'))
+        console.error('随机练习失败:', error)
+      } finally {
+        startingPractice.value = false
+      }
+    }
+
     const startExam = async () => {
       if (!selectedPaperId.value) {
         ElMessage.warning('请选择试卷')
@@ -1734,9 +2108,183 @@ export default defineComponent({
       }
     }
 
+    // ======= 错题本功能函数 =======
+    // 加载错题本
+    const loadWrongBook = async () => {
+      const studentId = store.state.user.username
+      if (!studentId) return
+      
+      loadingWrongBook.value = true
+      try {
+        const data = await mcqFetch(`${API_ENDPOINTS.WRONG_QUESTIONS.LIST}?student_id=${encodeURIComponent(studentId)}`)
+        if (data.ok) {
+          wrongBook.value = data.questions || []
+          wrongBookTotal.value = data.total || 0
+        }
+      } catch (error: any) {
+        console.error('加载错题本失败:', error)
+      } finally {
+        loadingWrongBook.value = false
+      }
+    }
+
+    // 保存错题到错题本
+    const saveToWrongBook = async () => {
+      const studentId = store.state.user.username
+      if (!studentId || !reviewData.value) return
+      
+      // 收集错题
+      const wrongItems = reviewData.value.items
+        .filter(item => !item.is_correct)
+        .map(item => ({
+          qid: item.qid,
+          stem: item.stem,
+          options: item.options,
+          answer: item.correct_labels.join(''),
+          explain: item.analysis || '',
+          my_answer: item.my_labels || [],
+          qtype: item.qtype,
+          stem_images: item.stem_images,
+          option_images: item.option_images,
+          analysis_images: item.analysis_images
+        }))
+      
+      if (wrongItems.length === 0) {
+        ElMessage.info('本次考试没有错题')
+        return
+      }
+      
+      savingToWrongBook.value = true
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.WRONG_QUESTIONS.ADD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: studentId,
+            questions: wrongItems
+          })
+        })
+        
+        if (data.ok) {
+          ElMessage.success(`已收录 ${data.added_count} 道错题到错题本`)
+          loadWrongBook()  // 刷新错题本
+        } else {
+          throw new Error(data.msg || '保存失败')
+        }
+      } catch (error: any) {
+        ElMessage.error('保存错题失败：' + (error.message || '未知错误'))
+      } finally {
+        savingToWrongBook.value = false
+      }
+    }
+
+    // 从错题本移除（已掌握）
+    const removeFromWrongBook = async (qids: string[]) => {
+      const studentId = store.state.user.username
+      if (!studentId || qids.length === 0) return
+      
+      try {
+        const data = await mcqFetch(API_ENDPOINTS.WRONG_QUESTIONS.REMOVE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: studentId,
+            qids
+          })
+        })
+        
+        if (data.ok) {
+          ElMessage.success(`已移除 ${data.removed_count} 道题目`)
+          loadWrongBook()
+        }
+      } catch (error: any) {
+        ElMessage.error('移除失败：' + (error.message || '未知错误'))
+      }
+    }
+
+    // 打开错题本
+    const openWrongBook = () => {
+      wrongBookVisible.value = true
+      loadWrongBook()
+    }
+
+    // 使用错题本开始练习
+    const startWrongBookPractice = async () => {
+      const studentId = store.state.user.username
+      if (!studentId) {
+        ElMessage.warning('请先登录')
+        return
+      }
+      
+      if (wrongBook.value.length === 0) {
+        ElMessage.warning('错题本为空')
+        return
+      }
+      
+      startingPractice.value = true
+      try {
+        // 构建错题练习题目数据
+        const practiceQuestions = wrongBook.value.map((q: any) => ({
+          qid: q.qid,
+          stem: q.stem,
+          options: q.options,
+          answer: q.answer,
+          explain: q.explain || '',
+          qtype: q.qtype || 'single',
+          stem_images: q.stem_images,
+          option_images: q.option_images,
+          analysis_images: q.analysis_images
+        }))
+        
+        // 直接使用临时题目数据开始练习（不保存为试卷文件）
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const practiceTitle = `错题练习_${timestamp}`
+        const durationSec = Math.max(30, wrongBook.value.length * 2) * 60  // 每题2分钟
+        
+        const startResult = await mcqFetch(API_ENDPOINTS.EXAM.START_TEMP, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questions: practiceQuestions,
+            duration_sec: durationSec,
+            student_id: studentId,
+            title: practiceTitle
+          })
+        })
+        
+        if (!startResult.ok) {
+          throw new Error(startResult.detail || '开始练习失败')
+        }
+        
+        // 直接进入考试状态
+        attemptId.value = startResult.attempt_id
+        questions.value = startResult.items || []
+        leftSeconds.value = startResult.left_sec || durationSec
+        examStarted.value = true
+        isPracticeMode.value = true
+        currentExamId.value = ''
+        wrongBookVisible.value = false
+        
+        // 初始化答案
+        answersState.value = {}
+        questions.value.forEach((q: any) => {
+          answersState.value[q.qid] = []
+        })
+        
+        // 启动倒计时
+        startTimer()
+        
+      } catch (error: any) {
+        ElMessage.error('开始错题练习失败：' + (error.message || '未知错误'))
+      } finally {
+        startingPractice.value = false
+      }
+    }
+
     onMounted(() => {
       loadPapers()
       loadPublishedExams()  // 加载考试通知
+      loadWrongBook()  // 加载错题本
       // 检查是否有未完成的考试
       checkInProgressExam()
       // 添加页面关闭前警告
@@ -1831,10 +2379,33 @@ export default defineComponent({
       maxSwitchCount,
       switchWarningVisible,
       closeSwitchWarning,
+      // 随机练习相关
+      practiceConfig,
+      practiceTotalCount,
+      startingPractice,
+      startRandomPractice,
+      // 错题本相关
+      wrongBook,
+      wrongBookTotal,
+      wrongBookVisible,
+      loadingWrongBook,
+      savingToWrongBook,
+      loadWrongBook,
+      saveToWrongBook,
+      removeFromWrongBook,
+      openWrongBook,
+      startWrongBookPractice,
       // Icons
       Bell,
       Refresh,
-      Clock
+      Clock,
+      Reading,
+      CaretRight,
+      InfoFilled,
+      Collection,
+      View,
+      Delete,
+      Loading
     }
   }
 })
@@ -1884,6 +2455,112 @@ export default defineComponent({
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(96, 165, 250, 0.2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 随机练习面板 */
+.practice-panel {
+  max-width: 1400px;
+  margin: 16px auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.practice-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-radius: 10px 10px 0 0;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-bottom: none;
+  color: #10b981;
+  font-weight: 600;
+}
+
+.practice-icon {
+  font-size: 20px;
+}
+
+.practice-content {
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 0 0 10px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-top: none;
+  padding: 20px;
+}
+
+.practice-config {
+  margin-bottom: 16px;
+}
+
+.config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-item label {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.config-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.summary-text {
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+.summary-text b {
+  color: #10b981;
+  font-size: 16px;
+}
+
+.practice-tips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(96, 165, 250, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.practice-tips .el-icon {
+  color: #60a5fa;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .config-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .config-summary {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
 }
 
 /* 考试通知面板 */
@@ -3063,5 +3740,248 @@ export default defineComponent({
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
   75% { transform: translateX(5px); }
+}
+
+/* 错题本面板 */
+.wrong-book-panel {
+  max-width: 1400px;
+  margin: 16px auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.wrong-book-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border-radius: 10px 10px 0 0;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-bottom: none;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.wrong-book-icon {
+  font-size: 20px;
+}
+
+.wrong-book-content {
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 0 0 10px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-top: none;
+  padding: 20px;
+}
+
+.wrong-book-empty {
+  padding: 20px;
+  text-align: center;
+}
+
+.wrong-book-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.wrong-book-stats {
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+.wrong-book-stats b {
+  color: #ef4444;
+  font-size: 18px;
+}
+
+.wrong-book-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 错题本对话框 */
+.wrong-book-dialog {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.loading-wrap, .empty-wrap {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.loading-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.wrong-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wrong-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.wrong-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.wrong-num {
+  background: #ef4444;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.wrong-stem {
+  flex: 1;
+  font-size: 15px;
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.wrong-options {
+  margin: 12px 0;
+  padding-left: 34px;
+}
+
+.wrong-opt {
+  padding: 6px 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.correct-label {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.my-wrong {
+  color: #ef4444;
+  text-decoration: line-through;
+}
+
+.wrong-answer-info {
+  display: flex;
+  gap: 20px;
+  padding: 10px 0;
+  margin-left: 34px;
+  font-size: 13px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.correct-answer {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.my-answer {
+  color: #ef4444;
+}
+
+.review-info {
+  color: #64748b;
+  font-style: italic;
+}
+
+.wrong-explain {
+  margin-top: 12px;
+  margin-left: 34px;
+  padding: 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.explain-label {
+  color: #667eea;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.wrong-images {
+  margin: 10px 0 10px 34px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wrong-img {
+  max-width: 300px;
+  max-height: 200px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.wrong-img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.wrong-img.small {
+  max-width: 150px;
+  max-height: 100px;
+}
+
+.opt-images {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wrong-book-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wrong-total {
+  flex: 1;
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .wrong-book-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .wrong-book-actions {
+    width: 100%;
+  }
+  
+  .wrong-book-actions .el-button {
+    flex: 1;
+  }
 }
 </style>
