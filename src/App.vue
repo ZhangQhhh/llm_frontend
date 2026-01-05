@@ -5,6 +5,7 @@
     <TourGuideButton />
     <FirstTimeGuide />
     <ChangeNameDialog />
+    <DepartmentDialog />
   </div>
 </template>
 
@@ -15,6 +16,7 @@ import NavBar from './components/NavBar.vue';
 import TourGuideButton from './components/TourGuideButton.vue';
 import FirstTimeGuide from './components/FirstTimeGuide.vue';
 import ChangeNameDialog from './components/ChangeNameDialog.vue';
+import DepartmentDialog from './components/DepartmentDialog.vue';
 import { startVersionCheck } from './utils/versionCheck';
 
 export default defineComponent({
@@ -24,6 +26,7 @@ export default defineComponent({
     TourGuideButton,
     FirstTimeGuide,
     ChangeNameDialog,
+    DepartmentDialog,
   },
   setup() {
     const route = useRoute();
