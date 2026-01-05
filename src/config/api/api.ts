@@ -142,6 +142,13 @@ export const API_ENDPOINTS = {
     STREAM: (videoId: string) => `/videos/${videoId}/stream`,    // GET 流式播放
     DELETE: (videoId: string) => `/videos/${videoId}/delete`,    // POST 删除视频
     UPDATE: (videoId: string) => `/videos/${videoId}/update`,    // POST 更新视频信息
+  },
+  // 用户部门管理API（使用http，baseURL已包含/api前缀）
+  USER_DEPARTMENT: {
+    GET_USER_DEPARTMENT: `/user/department`,           // GET 获取用户部门信息
+    UPDATE_USER_DEPARTMENT: `/user/department`,        // POST 更新用户部门
+    GET_DEPARTMENT_LIST: `/departments`,              // GET 获取部门列表
+    CHECK_DEPARTMENT_REQUIRED: `/user/department/check` // GET 检查是否需要设置部门
   }
 };
 

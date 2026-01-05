@@ -198,6 +198,15 @@
                     {{ loading ? '分析中...' : '开始分析' }}
                   </el-button>
                   <el-button
+                    type="success"
+                    size="large"
+                    @click="downloadTemplate"
+                    round
+                  >
+                    <el-icon><Download /></el-icon>
+                    示例文件下载
+                  </el-button>
+                  <el-button
                     size="large"
                     :disabled="loading"
                     @click="handleReset"
@@ -656,6 +665,48 @@ const handleReset = () => {
     currentTrafficUploadRef.value.clearFiles();
   }
   ElMessage.info('已重置所有文件');
+};
+
+// 下载示例文件
+const downloadTemplate = () => {
+  try {
+    // 使用fetch获取文件（文件现在在public目录中）
+    fetch('/ms表头.xls')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('文件不存在');
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'ms表头.xls');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        ElMessage.success({
+          message: '示例文件下载成功！',
+          duration: 2000
+        });
+      })
+      .catch(error => {
+        console.error('下载示例文件失败:', error);
+        ElMessage.error({
+          message: '示例文件下载失败，请联系管理员',
+          duration: 3000
+        });
+      });
+  } catch (error) {
+    console.error('下载示例文件失败:', error);
+    ElMessage.error({
+      message: '示例文件下载失败，请联系管理员',
+      duration: 3000
+    });
+  }
 };
 </script>
 

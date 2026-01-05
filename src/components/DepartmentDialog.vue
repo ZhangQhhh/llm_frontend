@@ -1,26 +1,26 @@
 <template>
   <el-dialog 
     v-model="showDialog" 
-    title="请修改用户名为真实姓名"
+    title="请选择您的所属部门"
     width="450px"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
   >
-    <div class="change-name-dialog">
+    <div class="department-dialog">
       <div class="dialog-header">
         <div class="notice-icon">
-          <el-icon size="40"><User /></el-icon>
+          <el-icon size="40"><OfficeBuilding /></el-icon>
         </div>
         <p class="notice-text">
-          为了更好地为您提供服务，请将用户名修改为您的<strong>真实姓名</strong>。
+          为了更好地为您提供服务，请选择您的<strong>所属部门</strong>。
         </p>
         <p class="notice-tip">
-          若当前已经是真实姓名，则再次输入即可。
+          请根据您的实际工作部门进行选择。
         </p>
         <p class="notice-warning">
           <el-icon><Warning /></el-icon>
-          注意：用户名只能修改一次，请认真填写！
+          注意：部门信息只能设置一次，请认真选择！
         </p>
       </div>
 
@@ -29,25 +29,25 @@
         :model="formData" 
         :rules="rules" 
         label-width="80px"
-        class="name-form"
+        class="department-form"
       >
         <el-form-item label="当前用户名">
           <el-input :value="currentUsername" disabled />
         </el-form-item>
-        <el-form-item label="真实姓名" prop="newName">
-          <el-input 
-            v-model="formData.newName" 
-            placeholder="请输入您的真实姓名"
-            maxlength="20"
-            show-word-limit
-          />
-        </el-form-item>
-        <el-form-item label="确认姓名" prop="confirmName">
-          <el-input 
-            v-model="formData.confirmName" 
-            placeholder="请再次输入您的真实姓名"
-            maxlength="20"
-          />
+        <el-form-item label="所属部门" prop="department">
+          <el-select 
+            v-model="formData.department" 
+            placeholder="请选择您的所属部门"
+            style="width: 100%"
+            filterable
+          >
+            <el-option
+              v-for="dept in departmentOptions"
+              :key="dept.value"
+              :label="dept.label"
+              :value="dept.value"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
 
@@ -57,7 +57,7 @@
           :loading="loading"
           @click="handleSubmit"
         >
-          确认修改
+          确认选择
         </el-button>
       </div>
     </div>
@@ -68,18 +68,32 @@
 import { defineComponent, ref, computed, watch, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
-import { User, Warning } from '@element-plus/icons-vue'
+import { OfficeBuilding, Warning } from '@element-plus/icons-vue'
 import http from '@/config/api/http'
 import { API_ENDPOINTS } from '@/config/api/api'
 
+// 部门选项
+const DEPARTMENT_OPTIONS = [
+  { label: '站领导', value: '站领导' },
+  { label: '办公室', value: '办公室' },
+  { label: '边检处', value: '边检处' },
+  { label: '政治处', value: '政治处' },
+  { label: '后勤处', value: '后勤处' },
+  { label: '执勤一队', value: '执勤一队' },
+  { label: '执勤二队', value: '执勤二队' },
+  { label: '执勤三队', value: '执勤三队' },
+  { label: '执勤四队', value: '执勤四队' },
+  { label: '执勤五队', value: '执勤五队' },
+  { label: '执勤六队', value: '执勤六队' }
+]
+
 export default defineComponent({
-  name: 'ChangeNameDialog',
+  name: 'DepartmentDialog',
   components: {
-    User,
+    OfficeBuilding,
     Warning
   },
-  emits: ['completed'],  // 定义事件
-  setup(props, { emit }) {  // 解构 emit
+  setup() {
     const store = useStore()
     const showDialog = ref(false)
     const loading = ref(false)
@@ -87,8 +101,7 @@ export default defineComponent({
     const hasChecked = ref(false)  // 是否已检查过
 
     const formData = reactive({
-      newName: '',
-      confirmName: ''
+      department: ''
     })
 
     // 获取当前用户名
@@ -97,67 +110,64 @@ export default defineComponent({
     // 获取用户是否已登录
     const isLoggedIn = computed(() => store.state.user.is_login)
 
+    // 获取用户是否已改名 - 部门弹窗依赖改名完成
+    const hasChangedName = computed(() => store.state.user.hasChangedName)
+
+    // 部门选项
+    const departmentOptions = ref(DEPARTMENT_OPTIONS)
+
     // 表单验证规则
     const rules: FormRules = {
-      newName: [
-        { required: true, message: '请输入真实姓名', trigger: 'blur' },
-        { min: 2, max: 20, message: '姓名长度应在2-20个字符之间', trigger: 'blur' },
-        { 
-          pattern: /^[\u4e00-\u9fa5a-zA-Z·]+$/, 
-          message: '姓名只能包含中文、英文字母和间隔号', 
-          trigger: 'blur' 
-        }
-      ],
-      confirmName: [
-        { required: true, message: '请再次输入真实姓名', trigger: 'blur' },
-        {
-          validator: (rule, value, callback) => {
-            if (value !== formData.newName) {
-              callback(new Error('两次输入的姓名不一致'))
-            } else {
-              callback()
-            }
-          },
-          trigger: 'blur'
-        }
+      department: [
+        { required: true, message: '请选择所属部门', trigger: 'change' }
       ]
     }
 
-    // 从后端获取用户是否已修改过用户名
-    const checkHasChangedName = async () => {
+    // 从后端获取用户是否已设置部门
+    const checkHasDepartment = async () => {
       if (hasChecked.value) return
       
+      // 确保用户已改名才检查部门
+      if (!hasChangedName.value) {
+        console.log('用户还未改名，跳过部门检查')
+        return
+      }
+      
       try {
-        const response = await http.get(API_ENDPOINTS.AUTH.USER_INFO)
-        // 后端返回 { id, username, email, hasChangedName }
-        const userInfo = response.data
+        const response = await http.get(API_ENDPOINTS.USER_DEPARTMENT.CHECK_DEPARTMENT_REQUIRED)
+        // 后端返回 { department: string | null }
+        const result = response.data
         
-        if (userInfo.hasChangedName === false) {
+        if (!result.department) {
           showDialog.value = true
         }
         
         // 更新 store 中的状态
-        store.commit('setHasChangedName', userInfo.hasChangedName)
+        if (result.department) {
+          store.commit('setDepartment', result.department)
+        }
+        
         hasChecked.value = true
       } catch (error) {
-        console.error('获取用户信息失败:', error)
+        console.error('获取用户部门信息失败:', error)
       }
     }
 
-    // 监听登录状态变化
+    // 监听登录状态和改名状态变化
     watch(
-      isLoggedIn,
-      (loggedIn) => {
-        if (loggedIn) {
-          checkHasChangedName()
-        } else {
+      [isLoggedIn, hasChangedName],
+      ([loggedIn, changedName]) => {
+        if (loggedIn && changedName) {
+          // 只有在登录状态且已改名的情况下才检查部门
+          checkHasDepartment()
+        } else if (!loggedIn) {
           hasChecked.value = false
         }
       },
       { immediate: true }
     )
 
-    // 提交修改
+    // 提交部门选择
     const handleSubmit = async () => {
       if (!formRef.value) return
 
@@ -166,31 +176,27 @@ export default defineComponent({
         
         loading.value = true
         
-        const response = await http.post(API_ENDPOINTS.AUTH.CHANGE_NAME, {
-          newUsername: formData.newName
+        const response = await http.post(API_ENDPOINTS.USER_DEPARTMENT.UPDATE_USER_DEPARTMENT, {
+          department: formData.department
         })
 
         // 后端返回 { code: 200, message: "success", data: null }
         if (response.data.code === 200) {
-          ElMessage.success('用户名修改成功！')
+          ElMessage.success('部门设置成功！')
           
-          // 更新 store 中的用户名和 hasChangedName 状态
-          store.commit('updateUsername', formData.newName)
-          store.commit('setHasChangedName', true)
+          // 更新 store 中的部门状态
+          store.commit('setDepartment', formData.department)
           
           showDialog.value = false
-          
-          // 触发改名完成事件
-          emit('completed')
         } else {
-          ElMessage.error(response.data.message || '修改失败，请稍后重试')
+          ElMessage.error(response.data.message || '设置失败，请稍后重试')
         }
       } catch (error: any) {
         if (error.response?.data?.message) {
           ElMessage.error(error.response.data.message)
         } else if (error !== 'cancel') {
           // 不是表单验证错误
-          ElMessage.error('修改失败，请稍后重试')
+          ElMessage.error('设置失败，请稍后重试')
         }
       } finally {
         loading.value = false
@@ -204,6 +210,7 @@ export default defineComponent({
       formData,
       rules,
       currentUsername,
+      departmentOptions,
       handleSubmit
     }
   }
@@ -211,7 +218,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.change-name-dialog {
+.department-dialog {
   padding: 0.5rem;
 }
 
@@ -223,7 +230,7 @@ export default defineComponent({
 .notice-icon {
   width: 70px;
   height: 70px;
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -240,7 +247,7 @@ export default defineComponent({
 }
 
 .notice-text strong {
-  color: #409eff;
+  color: #67c23a;
 }
 
 .notice-tip {
@@ -261,7 +268,7 @@ export default defineComponent({
   border-radius: 4px;
 }
 
-.name-form {
+.department-form {
   margin-top: 1.5rem;
 }
 

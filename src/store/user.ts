@@ -16,6 +16,7 @@ interface UserInfo {
   idCardNumber?: string | null;
   hasChangedName?: boolean;  // 是否已修改过用户名
   isBjzxAdmin?: boolean;  // 是否为边检智学管理员
+  department?: string | null;  // 所属部门
 }
 
 // [3] 定义 Vuex state 的完整形状
@@ -76,6 +77,7 @@ const state: UserState = {
   idCardNumber: null,
   hasChangedName: undefined,  // 是否已修改过用户名
   isBjzxAdmin: false,  // 是否为边检智学管理员
+  department: null,  // 所属部门
 };
 
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
@@ -100,6 +102,10 @@ export default {
     isBjzxAdmin(state: UserState): boolean {
       return state.isBjzxAdmin || false;
     },
+    // 检查是否已设置部门
+    hasDepartment(state: UserState): boolean {
+      return state.department !== null && state.department !== undefined;
+    },
     // 检查特定权限
     hasPermission: (state: UserState) => (permission: string) => {
       return hasPermission(state.role as UserRole, permission as any);
@@ -118,11 +124,13 @@ export default {
       state.idCardNumber = user.idCardNumber || null;
       state.hasChangedName = user.hasChangedName;
       state.isBjzxAdmin = user.isBjzxAdmin || false;
+      state.department = user.department || null;
       // 同步用户信息到 localStorage（供 http 拦截器使用）
       localStorage.setItem('multi_turn_chat_user', JSON.stringify({
         username: user.username,
         role: user.role,
-        isBjzxAdmin: user.isBjzxAdmin || false
+        isBjzxAdmin: user.isBjzxAdmin || false,
+        department: user.department || null
       }));
     },
     // [10] 为 token 参数添加类型
@@ -141,6 +149,7 @@ export default {
       state.idCardNumber = null;
       state.hasChangedName = undefined;
       state.isBjzxAdmin = false;
+      state.department = null;
       // 清除 localStorage 中的用户信息
       localStorage.removeItem('multi_turn_chat_user');
     },
@@ -151,6 +160,10 @@ export default {
     // 设置是否已修改过用户名
     setHasChangedName(state: UserState, value: boolean) {
       state.hasChangedName = value;
+    },
+    // 设置部门
+    setDepartment(state: UserState, department: string) {
+      state.department = department;
     }
   },
   actions: {  // 修改state的函数写在actions里边
