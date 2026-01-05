@@ -286,7 +286,7 @@ const saving = ref(false)
 async function loadVideos() {
   loading.value = true
   try {
-    const response = await llmHttp.get('/api/videos/list')
+    const response = await llmHttp.get('/videos/list')
     if (response.data.ok) {
       videos.value = response.data.data.videos || []
     } else {
@@ -330,7 +330,7 @@ async function handleUpload() {
   formData.append('description', uploadForm.value.description || '')
 
   try {
-    const response = await llmHttp.post('/api/videos/upload', formData, {
+    const response = await llmHttp.post('/videos/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
@@ -367,7 +367,7 @@ function openVideoPlayer(video: any) {
   // 构建流式播放URL，使用multi_turn_chat_jwt token
   const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
   const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
-  currentVideoUrl.value = `${baseUrl}/api/videos/${video.id}/stream?token=${token}`
+  currentVideoUrl.value = `${baseUrl}/videos/${video.id}/stream?token=${token}`
   playerDialogVisible.value = true
 }
 
@@ -391,7 +391,7 @@ async function downloadVideo(video: any) {
   if (!video) return
   
   try {
-    const response = await llmHttp.get(`/api/videos/${video.id}/download`, {
+    const response = await llmHttp.get(`/videos/${video.id}/download`, {
       responseType: 'blob'
     })
     
@@ -430,7 +430,7 @@ async function saveVideoInfo() {
 
   saving.value = true
   try {
-    const response = await llmHttp.post(`/api/videos/${editForm.value.id}/update`, {
+    const response = await llmHttp.post(`/videos/${editForm.value.id}/update`, {
       title: editForm.value.title,
       description: editForm.value.description
     })
@@ -463,7 +463,7 @@ async function confirmDelete(video: any) {
       }
     )
     
-    const response = await llmHttp.post(`/api/videos/${video.id}/delete`)
+    const response = await llmHttp.post(`/videos/${video.id}/delete`)
     
     if (response.data.ok) {
       ElMessage.success('删除成功')
