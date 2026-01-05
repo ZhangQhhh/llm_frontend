@@ -382,7 +382,7 @@
                         :class="{ 'is-selected': ref.canAnswer }"
                       >
                         <div class="ref-head">
-                          <span class="ref-index">#{{ ref.id }}</span>
+                          <span class="ref-index">#{{ isDebugMode ? ref.id : (idx + 1) }}</span>
                           <el-tooltip :content="ref.fileName" placement="top">
                             <span class="ref-name">{{ ref.fileName }}</span>
                           </el-tooltip>
@@ -572,10 +572,40 @@ export default defineComponent({
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
-      if (SHOW_HIDDEN_NODES) {
-        return references.value;
+      let refs = references.value;
+      
+      // 先根据环境变量过滤隐藏节点
+      if (!SHOW_HIDDEN_NODES) {
+        refs = refs.filter(ref => !ref.isHidden);
       }
-      return references.value.filter(ref => !ref.isHidden);
+      
+      // 在非debug模式下，只显示在答案中被引用的文献
+      if (!isDebugMode.value && answer.value) {
+        // 提取答案中所有的引用标记，格式如 [业务规定 1]、[业务规定 2] 等
+        const citationPattern = /\[业务规定\s*(\d+)\]/g;
+        const usedIds = new Set<string>();
+        let match;
+        
+        while ((match = citationPattern.exec(answer.value)) !== null) {
+          usedIds.add(match[1]);
+        }
+        
+        // 只保留被引用的文献
+        if (usedIds.size > 0) {
+          refs = refs.filter(ref => usedIds.has(String(ref.id)));
+        }
+      }
+      
+      return refs;
+    });
+    
+    // 创建ID映射表，用于将原始ID映射到新的序号
+    const referenceIdMap = computed(() => {
+      const map = new Map<string, number>();
+      filteredReferences.value.forEach((ref, index) => {
+        map.set(String(ref.id), index + 1);
+      });
+      return map;
     });
     const subQuestions = ref<SubQuestionsData | null>(null);
     const keywords = ref<KeywordsData | null>(null);
@@ -1395,7 +1425,7 @@ export default defineComponent({
     };
 
     return {
-      question, answer, thinking, references, filteredReferences, subQuestions, keywords,
+      question, answer, thinking, references, filteredReferences, referenceIdMap, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
