@@ -215,7 +215,7 @@
                         <span>AI正在思考中...</span>
                       </div>
                     </div>
-                    <div v-else-if="answer" class="markdown-body" v-html="renderMarkdown(answer)"></div>
+                    <div v-else-if="answer" class="markdown-body" v-html="renderMarkdown(processedAnswer)"></div>
                   </div>
 
                   <!-- 底部反馈 -->
@@ -389,65 +389,64 @@
                           <el-tag v-if="ref.canAnswer" type="success" size="small" effect="dark">引用</el-tag>
                         </div>
                         
-                        <!-- Debug模式下才显示详细信息 -->
-                        <template v-if="isDebugMode">
-                          <!-- 检索来源标签 -->
-                          <div v-if="ref.retrievalSources && ref.retrievalSources.length" class="ref-sources">
-                            <el-tag
-                              v-for="(source, idx) in ref.retrievalSources"
-                              :key="idx"
-                              size="small"
-                              :type="source === 'vector' ? 'primary' : 'success'"
-                              effect="dark"
-                            >
-                              {{ source === 'vector' ? ' 向量检索' : ' 关键词检索' }}
-                            </el-tag>
-                          </div>
+                        <!-- 检索来源标签（仅Debug模式） -->
+                        <div v-if="isDebugMode && ref.retrievalSources && ref.retrievalSources.length" class="ref-sources">
+                          <el-tag
+                            v-for="(source, idx) in ref.retrievalSources"
+                            :key="idx"
+                            size="small"
+                            :type="source === 'vector' ? 'primary' : 'success'"
+                            effect="dark"
+                          >
+                            {{ source === 'vector' ? ' 向量检索' : ' 关键词检索' }}
+                          </el-tag>
+                        </div>
 
-                          <div class="ref-scores">
-                            <el-tag v-if="ref.initialScore !== undefined && ref.initialScore !== 0" size="small" type="info" effect="plain">
-                              初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
-                            </el-tag>
-                            <el-tag v-if="ref.rerankedScore !== undefined && ref.rerankedScore !== 0" size="small" type="warning" effect="plain">
-                              重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
-                            </el-tag>
-                            <el-tag v-if="ref.vectorScore !== undefined && ref.vectorScore !== 0" size="small" type="info" effect="plain">
-                              向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
-                              <span v-if="ref.vectorRank">(#{{ ref.vectorRank }})</span>
-                            </el-tag>
-                            <el-tag v-if="ref.bm25Score !== undefined && ref.bm25Score !== 0" size="small" type="success" effect="plain">
-                              BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
-                              <span v-if="ref.bm25Rank">(#{{ ref.bm25Rank }})</span>
-                            </el-tag>
-                            <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
-                          </div>
+                        <div v-if="isDebugMode" class="ref-scores">
+                          <el-tag v-if="ref.initialScore !== undefined && ref.initialScore !== 0" size="small" type="info" effect="plain">
+                            初始: {{ typeof ref.initialScore === 'number' ? ref.initialScore.toFixed(3) : ref.initialScore }}
+                          </el-tag>
+                          <el-tag v-if="ref.rerankedScore !== undefined && ref.rerankedScore !== 0" size="small" type="warning" effect="plain">
+                            重排: {{ typeof ref.rerankedScore === 'number' ? ref.rerankedScore.toFixed(3) : ref.rerankedScore }}
+                          </el-tag>
+                          <el-tag v-if="ref.vectorScore !== undefined && ref.vectorScore !== 0" size="small" type="info" effect="plain">
+                            向量: {{ typeof ref.vectorScore === 'number' ? ref.vectorScore.toFixed(4) : ref.vectorScore }}
+                            <span v-if="ref.vectorRank">(#{{ ref.vectorRank }})</span>
+                          </el-tag>
+                          <el-tag v-if="ref.bm25Score !== undefined && ref.bm25Score !== 0" size="small" type="success" effect="plain">
+                            BM25: {{ typeof ref.bm25Score === 'number' ? ref.bm25Score.toFixed(4) : ref.bm25Score }}
+                            <span v-if="ref.bm25Rank">(#{{ ref.bm25Rank }})</span>
+                          </el-tag>
+                          <el-tag v-if="ref.isHidden" size="small" type="danger" effect="plain">隐藏</el-tag>
+                        </div>
 
-                          <!-- 匹配关键词 -->
-                          <div v-if="ref.matchedKeywords && ref.matchedKeywords.length" class="ref-keywords">
-                            <span class="keywords-label">🏷️ 匹配关键词:</span>
-                            <el-tag
-                              v-for="(keyword, idx) in ref.matchedKeywords"
-                              :key="idx"
-                              size="small"
-                              type="warning"
-                              effect="plain"
-                            >
-                              {{ keyword }}
-                            </el-tag>
-                          </div>
-                          <div class="ref-content-wrapper">
-                            <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
-                            <el-button
-                              text
-                              type="primary"
-                              size="small"
-                              class="expand-btn"
-                              @click="toggleRefExpand(idx)"
-                            >
-                              {{ ref.expanded ? '收起' : '展开全文' }}
-                            </el-button>
-                          </div>
-                        </template>
+                        <!-- 匹配关键词（仅Debug模式） -->
+                        <div v-if="isDebugMode && ref.matchedKeywords && ref.matchedKeywords.length" class="ref-keywords">
+                          <span class="keywords-label">🏷️ 匹配关键词:</span>
+                          <el-tag
+                            v-for="(keyword, idx) in ref.matchedKeywords"
+                            :key="idx"
+                            size="small"
+                            type="warning"
+                            effect="plain"
+                          >
+                            {{ keyword }}
+                          </el-tag>
+                        </div>
+
+                        <!-- 片段内容（所有模式都显示） -->
+                        <div class="ref-content-wrapper">
+                          <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
+                          <el-button
+                            text
+                            type="primary"
+                            size="small"
+                            class="expand-btn"
+                            @click="toggleRefExpand(idx)"
+                          >
+                            {{ ref.expanded ? '收起' : '展开全文' }}
+                          </el-button>
+                        </div>
                       </div>
                     </div>
                   </el-scrollbar>
@@ -579,20 +578,31 @@ export default defineComponent({
         refs = refs.filter(ref => !ref.isHidden);
       }
       
-      // 在非debug模式下，只显示在答案中被引用的文献
+      // 在非debug模式下，只显示在答案中被引用的文献，并按引用顺序排序
       if (!isDebugMode.value && answer.value) {
         // 提取答案中所有的引用标记，格式如 [业务规定 1]、[业务规定 2] 等
         const citationPattern = /\[业务规定\s*(\d+)\]/g;
         const usedIds = new Set<string>();
-        let match;
+        const citationOrder: string[] = []; // 记录引用顺序
         
+        let match;
         while ((match = citationPattern.exec(answer.value)) !== null) {
-          usedIds.add(match[1]);
+          const id = match[1];
+          if (!usedIds.has(id)) {
+            usedIds.add(id);
+            citationOrder.push(id); // 记录引用顺序
+          }
         }
         
-        // 只保留被引用的文献
+        // 按引用顺序过滤和排序参考文献
         if (usedIds.size > 0) {
-          refs = refs.filter(ref => usedIds.has(String(ref.id)));
+          refs = refs
+            .filter(ref => usedIds.has(String(ref.id)))
+            .sort((a, b) => {
+              const orderA = citationOrder.indexOf(String(a.id));
+              const orderB = citationOrder.indexOf(String(b.id));
+              return orderA - orderB;
+            });
         }
       }
       
@@ -606,6 +616,19 @@ export default defineComponent({
         map.set(String(ref.id), index + 1);
       });
       return map;
+    });
+
+    // 处理答案中的引用标记，将原始ID替换为新的序号（仅非debug模式）
+    const processedAnswer = computed(() => {
+      if (isDebugMode.value || !answer.value) {
+        return answer.value;
+      }
+      
+      // 将 [业务规定 X] 替换为 [业务规定 Y]，其中Y是新的序号
+      return answer.value.replace(/\[业务规定\s*(\d+)\]/g, (match, originalId) => {
+        const newId = referenceIdMap.value.get(originalId);
+        return newId ? `[业务规定 ${newId}]` : match;
+      });
     });
     const subQuestions = ref<SubQuestionsData | null>(null);
     const keywords = ref<KeywordsData | null>(null);
@@ -1425,7 +1448,7 @@ export default defineComponent({
     };
 
     return {
-      question, answer, thinking, references, filteredReferences, referenceIdMap, subQuestions, keywords,
+      question, answer, thinking, references, filteredReferences, referenceIdMap, processedAnswer, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
