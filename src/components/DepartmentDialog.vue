@@ -126,17 +126,16 @@ export default defineComponent({
       
       try {
         const response = await http.get(API_ENDPOINTS.USER_DEPARTMENT.CHECK_DEPARTMENT_REQUIRED)
-        // 后端返回 { hasDepartment: boolean, currentDepartment?: string }
+        // 后端返回 { department: string | null }
         const result = response.data
         
-        if (!result.hasDepartment) {
+        if (!result.department) {
           showDialog.value = true
         }
         
         // 更新 store 中的状态
-        store.commit('setHasDepartment', result.hasDepartment)
-        if (result.currentDepartment) {
-          store.commit('setDepartment', result.currentDepartment)
+        if (result.department) {
+          store.commit('setDepartment', result.department)
         }
         
         hasChecked.value = true
@@ -177,7 +176,6 @@ export default defineComponent({
           
           // 更新 store 中的部门状态
           store.commit('setDepartment', formData.department)
-          store.commit('setHasDepartment', true)
           
           showDialog.value = false
         } else {
