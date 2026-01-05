@@ -78,7 +78,8 @@ export default defineComponent({
     User,
     Warning
   },
-  setup() {
+  emits: ['completed'],  // 定义事件
+  setup(props, { emit }) {  // 解构 emit
     const store = useStore()
     const showDialog = ref(false)
     const loading = ref(false)
@@ -178,6 +179,9 @@ export default defineComponent({
           store.commit('setHasChangedName', true)
           
           showDialog.value = false
+          
+          // 触发改名完成事件
+          emit('completed')
         } else {
           ElMessage.error(response.data.message || '修改失败，请稍后重试')
         }

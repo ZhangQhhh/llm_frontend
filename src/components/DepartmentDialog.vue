@@ -110,6 +110,9 @@ export default defineComponent({
     // 获取用户是否已登录
     const isLoggedIn = computed(() => store.state.user.is_login)
 
+    // 获取用户是否已改名 - 部门弹窗依赖改名完成
+    const hasChangedName = computed(() => store.state.user.hasChangedName)
+
     // 部门选项
     const departmentOptions = ref(DEPARTMENT_OPTIONS)
 
@@ -123,6 +126,12 @@ export default defineComponent({
     // 从后端获取用户是否已设置部门
     const checkHasDepartment = async () => {
       if (hasChecked.value) return
+      
+      // 确保用户已改名才检查部门
+      if (!hasChangedName.value) {
+        console.log('用户还未改名，跳过部门检查')
+        return
+      }
       
       try {
         const response = await http.get(API_ENDPOINTS.USER_DEPARTMENT.CHECK_DEPARTMENT_REQUIRED)
@@ -144,13 +153,14 @@ export default defineComponent({
       }
     }
 
-    // 监听登录状态变化
+    // 监听登录状态和改名状态变化
     watch(
-      isLoggedIn,
-      (loggedIn) => {
-        if (loggedIn) {
+      [isLoggedIn, hasChangedName],
+      ([loggedIn, changedName]) => {
+        if (loggedIn && changedName) {
+          // 只有在登录状态且已改名的情况下才检查部门
           checkHasDepartment()
-        } else {
+        } else if (!loggedIn) {
           hasChecked.value = false
         }
       },

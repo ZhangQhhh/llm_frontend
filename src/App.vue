@@ -4,7 +4,7 @@
     <router-view />
     <TourGuideButton />
     <FirstTimeGuide />
-    <ChangeNameDialog />
+    <ChangeNameDialog @completed="onNameChanged" />
     <DepartmentDialog />
   </div>
 </template>
@@ -36,13 +36,19 @@ export default defineComponent({
       return route.name !== 'login';
     });
 
+    // 改名完成回调
+    const onNameChanged = () => {
+      console.log('用户改名完成，可以检查部门了')
+    };
+
     // 启动版本检查
     onMounted(() => {
       startVersionCheck();
     });
 
     return {
-      showNavBar
+      showNavBar,
+      onNameChanged
     };
   }
 });
