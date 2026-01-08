@@ -18,6 +18,7 @@ import FirstTimeGuide from './components/FirstTimeGuide.vue';
 import ChangeNameDialog from './components/ChangeNameDialog.vue';
 import DepartmentDialog from './components/DepartmentDialog.vue';
 import { startVersionCheck } from './utils/versionCheck';
+import { performanceMonitor } from './utils/performanceMonitor';
 
 export default defineComponent({
   name: "App",
@@ -44,6 +45,8 @@ export default defineComponent({
     // 启动版本检查
     onMounted(() => {
       startVersionCheck();
+      // 启动性能监控
+      performanceMonitor.startMonitoring();
     });
 
     return {

@@ -1,5 +1,6 @@
 <template>
   <div class="smart-office-page">
+    <!-- 重新启用 ThreeBackground，粒子数已优化到30个 -->
     <ThreeBackground />
     <el-container class="smart-office-layout container-fluid">
       <!-- 左侧：额外知识库 -->

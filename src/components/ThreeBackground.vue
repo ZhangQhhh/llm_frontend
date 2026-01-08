@@ -39,9 +39,9 @@ export default defineComponent({
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
 
-      // 创建粒子系统
+      // 创建粒子系统 - 大幅减少粒子数量以提升性能
       const particlesGeometry = new THREE.BufferGeometry();
-      const particlesCount = 3000;
+      const particlesCount = 30; // 从1000减少到30，大幅降低渲染负担
       const posArray = new Float32Array(particlesCount * 3);
       const colorArray = new Float32Array(particlesCount * 3);
 
