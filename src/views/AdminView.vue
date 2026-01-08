@@ -1675,6 +1675,19 @@ export default defineComponent({
     const userRole = computed(() => store.getters.userRole)
     const isBjzxAdmin = computed(() => store.state.user.isBjzxAdmin || false)
     
+    // 通用请求头（包含用户信息和边检智学管理员标识）
+    const getAuthHeaders = (includeContentType = true) => {
+      const headers: Record<string, string> = {
+        'X-User-Name': encodeURIComponent(store.state.user.username),
+        'X-User-Role': userRole.value || '',
+        'X-Is-Bjzx-Admin': isBjzxAdmin.value ? 'true' : 'false'
+      }
+      if (includeContentType) {
+        headers['Content-Type'] = 'application/json'
+      }
+      return headers
+    }
+    
     // Tab权限控制
     const showAdminTabs = computed(() => canAccessAdminTabs(userRole.value))
     const showBjzxTabs = computed(() => canAccessBjzxTabs(userRole.value, isBjzxAdmin.value))
@@ -2261,7 +2274,7 @@ export default defineComponent({
         uploadMessage.value = '检查重复题目中…'
         const checkRes = await fetch(`${MCQ_BASE_URL}/bank/check_duplicates`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: upsertPayload }),
         })
         const checkData = await checkRes.json()
@@ -2354,7 +2367,7 @@ export default defineComponent({
         uploadMessage.value = '保存中…'
         const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: finalPayload }),
         })
         const saved = await rs.json()
@@ -2422,7 +2435,7 @@ export default defineComponent({
           use_insert_block: insertBlock.value,
           target_statuses: parseTargetStatuses.value  // 传递选中的目标状态
         }
-        const r = await fetch(`${MCQ_BASE_URL}/explain_batch_async`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req) })
+        const r = await fetch(`${MCQ_BASE_URL}/explain_batch_async`, { method:'POST', headers: getAuthHeaders(), body: JSON.stringify(req) })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '创建任务失败')
         currentTaskId.value = String(j.task_id)
         currentTaskStatus.value = 'running'
@@ -2493,7 +2506,7 @@ export default defineComponent({
       try {
         const r = await fetch(`${MCQ_BASE_URL}/tasks/stop`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ task_id: currentTaskId.value })
         })
         const j = await r.json()
@@ -2516,7 +2529,7 @@ export default defineComponent({
       try {
         const r = await fetch(`${MCQ_BASE_URL}/tasks/resume`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ task_id: currentTaskId.value || '' })
         })
         const j = await r.json()
@@ -2539,7 +2552,7 @@ export default defineComponent({
     // 检查是否有未完成的任务（页面加载时调用）
     const checkPendingTask = async () => {
       try {
-        const r = await fetch(`${MCQ_BASE_URL}/tasks/pending`, { cache: 'no-store' })
+        const r = await fetch(`${MCQ_BASE_URL}/tasks/pending`, { cache: 'no-store', headers: getAuthHeaders(false) })
         const j = await r.json()
         if (j?.ok && j.has_pending) {
           currentTaskId.value = j.task_id
@@ -2610,7 +2623,7 @@ export default defineComponent({
 
           const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload),
           })
 
@@ -2660,7 +2673,7 @@ export default defineComponent({
         // 统一写回
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: allUpdates }),
         })
 
@@ -2693,7 +2706,7 @@ export default defineComponent({
       loadingQuestions.value = true
       try {
         // 不分页(page=0)，加载图片数据
-        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true`, { method: 'GET' })
+        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true`, { method: 'GET', headers: getAuthHeaders(false) })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
@@ -2742,7 +2755,7 @@ export default defineComponent({
         if (!question) return
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: [{ id: qid, status: 'approved', explain: question.analysis || '' }] })
         })
         const data = await resp.json()
@@ -2756,7 +2769,7 @@ export default defineComponent({
         const { value: reason } = await ElMessageBox.prompt('请输入驳回原因', '驳回', { confirmButtonText: '确定', cancelButtonText: '取消' })
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_reject`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ ids: [qid], reason: (reason || '不符合要求') })
         })
         const data = await resp.json()
@@ -2767,7 +2780,7 @@ export default defineComponent({
 
     const deleteQuestion = async (qid: string) => {
       try {
-        await ElMessageBox.confirm('确认删除该题目？删除后无法恢复！', '警告', {
+        await ElMessageBox.confirm('确认删除该题目？删除后将移到回收站。', '警告', {
           confirmButtonText: '确定删除',
           cancelButtonText: '取消',
           type: 'warning'
@@ -2775,15 +2788,12 @@ export default defineComponent({
         deletingQuestion[qid] = true
         const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: [qid],
             user: store.state.user.username,
-            role: userRole.value
+            role: userRole.value,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
         const data = await resp.json()
@@ -2810,10 +2820,9 @@ export default defineComponent({
         if (candidates.length === 0) { ElMessage.info('没有可通过的题目'); return }
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: candidates.map((it:any)=>({ id: it.qid, status: 'approved', explain: it.analysis || '' })) })
         })
-        // 检查响应状态码，防止解析 HTML 错误页面
         if (!resp.ok) {
           const text = await resp.text()
           throw new Error(`请求失败 (${resp.status}): ${text.substring(0, 100)}`)
@@ -2823,7 +2832,6 @@ export default defineComponent({
           const text = await resp.text()
           throw new Error(`响应格式错误，预期 JSON 但收到: ${text.substring(0, 100)}`)
         }
-
         const data = await resp.json()
         if (data?.ok) { ElMessage.success(`已通过 ${data.count || candidates.length} 题`); loadQuestions() }
         else throw new Error(data?.msg || '操作失败')
@@ -2840,10 +2848,9 @@ export default defineComponent({
         const payload = { items: candidates.map(it => ({ id: it.qid, status: 'rejected', explain: it.analysis || '' })) }
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload)
         })
-        // 检查响应状态码，防止解析 HTML 错误页面
         if (!resp.ok) {
           const text = await resp.text()
           throw new Error(`请求失败 (${resp.status}): ${text.substring(0, 100)}`)
@@ -2853,7 +2860,6 @@ export default defineComponent({
           const text = await resp.text()
           throw new Error(`响应格式错误，预期 JSON 但收到: ${text.substring(0, 100)}`)
         }
-
         const data = await resp.json()
         if (!data?.ok) throw new Error(data?.msg || '批量驳回失败')
         ElMessage.success(`批量驳回 ${data.count||candidates.length} 题`)
@@ -2865,10 +2871,8 @@ export default defineComponent({
     // ========== 批量选择相关函数 ==========
     const toggleSelectAll = () => {
       if (selectAll.value) {
-        // 全选当前页的所有题目
         selectedQuestions.value = pagedQuestions.value.map(q => q.qid)
       } else {
-        // 取消全选
         selectedQuestions.value = []
       }
     }
@@ -2889,15 +2893,12 @@ export default defineComponent({
 
         const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: selectedQuestions.value,
             user: store.state.user.username,
-            role: userRole.value
+            role: userRole.value,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
 
@@ -2923,10 +2924,7 @@ export default defineComponent({
       recycleMessage.value = '加载中...'
       try {
         const resp = await fetch(`${MCQ_BASE_URL}/bank/deleted`, {
-          headers: {
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          }
+          headers: getAuthHeaders(false)
         })
         const data = await resp.json()
         if (data?.ok) {
@@ -2960,14 +2958,11 @@ export default defineComponent({
         restoringQuestion[qid] = true
         const resp = await fetch(`${MCQ_BASE_URL}/bank/restore`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: [qid],
-            user: store.state.user.username
+            user: store.state.user.username,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
         const data = await resp.json()
@@ -2995,14 +2990,11 @@ export default defineComponent({
         )
         const resp = await fetch(`${MCQ_BASE_URL}/bank/restore`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: selectedDeleted.value,
-            user: store.state.user.username
+            user: store.state.user.username,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
         const data = await resp.json()
@@ -3031,15 +3023,12 @@ export default defineComponent({
         permanentDeleting[qid] = true
         const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: [qid],
             user: store.state.user.username,
-            permanent: true  // 关键：设置为永久删除
+            permanent: true,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
         const data = await resp.json()
@@ -3077,15 +3066,12 @@ export default defineComponent({
 
         const resp = await fetch(`${MCQ_BASE_URL}/bank/delete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ids: selectedDeleted.value,
             user: store.state.user.username,
-            permanent: true  // 关键：设置为永久删除
+            permanent: true,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
 
@@ -3113,13 +3099,10 @@ export default defineComponent({
         )
         const resp = await fetch(`${MCQ_BASE_URL}/bank/clear_deleted`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
-            user: store.state.user.username
+            user: store.state.user.username,
+            isBjzxAdmin: isBjzxAdmin.value
           })
         })
         const data = await resp.json()
@@ -3306,7 +3289,7 @@ export default defineComponent({
 
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload),
         })
         const up = await upResp.json()
@@ -3351,7 +3334,7 @@ export default defineComponent({
         }
         const resp = await fetch(`${MCQ_BASE_URL}/explain`, {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
+          headers: getAuthHeaders(),
           body: JSON.stringify(req)
         })
         const data = await resp.json()
@@ -3363,7 +3346,7 @@ export default defineComponent({
         const newStatus = r0.answer_mismatch ? 'abnormal' : 'draft'
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
+          headers: getAuthHeaders(),
           body: JSON.stringify({ items: [{ id: row.qid, explain, status: newStatus }] })
         })
         const up = await upResp.json()
@@ -3677,7 +3660,7 @@ export default defineComponent({
       try {
         const r = await fetch(`${MCQ_BASE_URL}/bank/generate_paper`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(requestBody)
         })
 
@@ -3744,15 +3727,9 @@ export default defineComponent({
       const visible = row.visible
       togglingVisibility[paperId] = true
       try {
-        const userStr = localStorage.getItem('multi_turn_chat_user')
-        const user = userStr ? JSON.parse(userStr) : {}
         const r = await fetch(`${MCQ_BASE_URL}/papers/visibility`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Role': user.role || '',
-            'X-User-Name': encodeURIComponent(user.username || '')
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ paper_id: paperId, visible: visible })
         })
         const j = await r.json()
@@ -3784,11 +3761,7 @@ export default defineComponent({
         deletingPaper[paperId] = true
         const r = await fetch(`${MCQ_BASE_URL}/bank/delete_paper`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Name': encodeURIComponent(store.state.user.username),
-            'X-User-Role': userRole.value
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ paper_id: paperId })
         })
         const j = await r.json()
@@ -4041,7 +4014,7 @@ export default defineComponent({
       try {
         const r = await fetch(`${MCQ_BASE_URL}/bank/save_paper`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             title: uploadedPaperTitle.value.trim(),
             items: validItems,
@@ -4220,15 +4193,9 @@ export default defineComponent({
       publishing.value = true
       publishMessage.value = '发布中...'
       try {
-        const userStr = localStorage.getItem('multi_turn_chat_user')
-        const user = userStr ? JSON.parse(userStr) : {}
         const response = await fetch(`${MCQ_BASE_URL}/exam/publish`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Role': user.role || '',
-            'X-User-Name': encodeURIComponent(user.username || '')
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             exam_name: publishForm.examName.trim(),
             paper_id: publishForm.paperId,
@@ -4263,15 +4230,10 @@ export default defineComponent({
     const loadPublishedExams = async () => {
       loadingPublished.value = true
       try {
-        const userStr = localStorage.getItem('multi_turn_chat_user')
-        const user = userStr ? JSON.parse(userStr) : {}
         const response = await fetch(`${MCQ_BASE_URL}/exam/published`, {
           method: 'GET',
           cache: 'no-store',
-          headers: {
-            'X-User-Role': user.role || '',
-            'X-User-Name': encodeURIComponent(user.username || '')
-          }
+          headers: getAuthHeaders(false)
         })
         const data = await response.json()
         if (data?.ok !== false) {
@@ -4292,15 +4254,9 @@ export default defineComponent({
           { confirmButtonText: '确定取消', cancelButtonText: '返回', type: 'warning' }
         )
         cancelingExam[exam.exam_id] = true
-        const userStr = localStorage.getItem('multi_turn_chat_user')
-        const user = userStr ? JSON.parse(userStr) : {}
         const response = await fetch(`${MCQ_BASE_URL}/exam/cancel`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Role': user.role || '',
-            'X-User-Name': encodeURIComponent(user.username || '')
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ exam_id: exam.exam_id })
         })
         const data = await response.json()
@@ -4327,15 +4283,9 @@ export default defineComponent({
           { confirmButtonText: '确定删除', cancelButtonText: '返回', type: 'warning' }
         )
         deletingExam[exam.exam_id] = true
-        const userStr = localStorage.getItem('multi_turn_chat_user')
-        const user = userStr ? JSON.parse(userStr) : {}
         const response = await fetch(`${MCQ_BASE_URL}/exam/delete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Role': user.role || '',
-            'X-User-Name': encodeURIComponent(user.username || '')
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ exam_id: exam.exam_id })
         })
         const data = await response.json()

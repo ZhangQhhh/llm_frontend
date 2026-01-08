@@ -272,6 +272,7 @@ const playerDialogVisible = ref(false)
 const currentVideo = ref<any>(null)
 const currentVideoUrl = ref('')
 const videoPlayer = ref<HTMLVideoElement | null>(null)
+const isClosingPlayer = ref(false)  // 标记是否正在关闭播放器
 
 // 编辑相关
 const editDialogVisible = ref(false)
@@ -373,16 +374,26 @@ function openVideoPlayer(video: any) {
 
 // 关闭播放器
 function handlePlayerClose(done: () => void) {
+  isClosingPlayer.value = true  // 标记为主动关闭
   if (videoPlayer.value) {
     videoPlayer.value.pause()
+    videoPlayer.value.src = ''  // 清空src防止继续加载
   }
   currentVideoUrl.value = ''
   currentVideo.value = null
   done()
+  // 延迟重置标记
+  setTimeout(() => {
+    isClosingPlayer.value = false
+  }, 100)
 }
 
 // 视频播放错误处理
 function handleVideoError() {
+  // 如果是主动关闭播放器，不显示错误
+  if (isClosingPlayer.value || !currentVideoUrl.value) {
+    return
+  }
   ElMessage.error('视频加载失败，请稍后重试')
 }
 
