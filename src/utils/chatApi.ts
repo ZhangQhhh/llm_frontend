@@ -30,9 +30,11 @@ export function parseSSEMessage(raw: string): StreamMessage {
     return { type: 'SESSION', data: data.substring(8).trim() };
   } else if (data.startsWith("THINK:")) {
     const rawData = data.substring(6);
-    // 调试日志：查看原始数据
-    if (rawData.length < 100) {
-      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData));
+    // 调试日志：查看原始数据（移除长度限制）
+    console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData.substring(0, 200)));
+    // 特别记录 Qwen 模型的思考内容
+    if (rawData.includes('qwen') || rawData.length > 0) {
+      console.log('[DEBUG] Qwen THINK 检测到数据，长度:', rawData.length);
     }
     return { type: 'THINK', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
