@@ -5,6 +5,7 @@ export interface PerformanceState {
   disable3DBackground: boolean; // 禁用3D背景
   reduceEffects: boolean;       // 减少特效
   simplifyUI: boolean;          // 简化UI
+  enableDebugLogs: boolean;     // 启用调试日志
 }
 
 const state: PerformanceState = {
@@ -13,6 +14,7 @@ const state: PerformanceState = {
   disable3DBackground: localStorage.getItem('disable-3d-background') === 'true',
   reduceEffects: localStorage.getItem('reduce-effects') === 'true',
   simplifyUI: localStorage.getItem('simplify-ui') === 'true',
+  enableDebugLogs: localStorage.getItem('enable-debug-logs') === 'true',
 };
 
 export default {
@@ -78,6 +80,25 @@ export default {
     setSimplifyUI(state: PerformanceState, value: boolean) {
       state.simplifyUI = value;
       localStorage.setItem('simplify-ui', String(value));
+    },
+    // 设置是否启用调试日志
+    setEnableDebugLogs(state: PerformanceState, value: boolean) {
+      state.enableDebugLogs = value;
+      localStorage.setItem('enable-debug-logs', String(value));
+      
+      // 动态更新日志级别
+      if (typeof window !== 'undefined') {
+        import('@/utils/logger').then(({ logger, LogLevel }) => {
+          if (value) {
+            logger.setLevel(LogLevel.DEBUG);
+            logger.enableAll();
+            console.log('✅ 调试日志已启用');
+          } else {
+            logger.setLevel(LogLevel.WARN);
+            console.log('⚠️ 调试日志已禁用');
+          }
+        });
+      }
     },
   },
 };

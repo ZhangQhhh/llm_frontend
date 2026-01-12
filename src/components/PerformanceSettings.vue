@@ -59,6 +59,19 @@
             :disabled="lowPerformanceMode"
           />
         </el-form-item>
+
+        <el-divider />
+
+        <el-form-item label="启用调试日志">
+          <el-switch
+            v-model="enableDebugLogs"
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <el-tag v-if="enableDebugLogs" type="warning" size="small" class="ml-2">
+            生产环境可用
+          </el-tag>
+        </el-form-item>
       </el-form>
 
       <el-alert
@@ -149,6 +162,14 @@ export default defineComponent({
       }
     });
 
+    const enableDebugLogs = computed({
+      get: () => store.state.performance.enableDebugLogs,
+      set: (value: boolean) => {
+        store.commit('performance/setEnableDebugLogs', value);
+        // 调试日志不需要刷新页面，立即生效
+      }
+    });
+
     const handleReload = () => {
       window.location.reload();
     };
@@ -160,6 +181,7 @@ export default defineComponent({
       disable3DBackground,
       reduceEffects,
       simplifyUI,
+      enableDebugLogs,
       needsReload,
       handleReload,
     };
