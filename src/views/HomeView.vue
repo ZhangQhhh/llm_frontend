@@ -346,6 +346,15 @@ export default defineComponent({
     let renderer: THREE.WebGLRenderer;
     let particles: THREE.Points;
     let animationId: number;
+    let particlesGeometry: THREE.BufferGeometry | null = null;
+    let particlesMaterial: THREE.PointsMaterial | null = null;
+
+    const handleResize = () => {
+      if (!renderer || !camera) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
 
     // 粒子样式生成
     const getParticleStyle = () => {
@@ -392,7 +401,7 @@ export default defineComponent({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
       // 创建粒子系统
-      const particlesGeometry = new THREE.BufferGeometry();
+      particlesGeometry = new THREE.BufferGeometry();
       const particlesCount = 1000;
       const posArray = new Float32Array(particlesCount * 3);
 
@@ -405,7 +414,7 @@ export default defineComponent({
         new THREE.BufferAttribute(posArray, 3)
       );
 
-      const particlesMaterial = new THREE.PointsMaterial({
+      particlesMaterial = new THREE.PointsMaterial({
         size: 0.15,
         color: 0x60a5fa,
         transparent: true,
@@ -430,12 +439,6 @@ export default defineComponent({
       animate();
 
       // 窗口大小调整
-      const handleResize = () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      };
-
       window.addEventListener('resize', handleResize);
     };
 
@@ -477,7 +480,7 @@ export default defineComponent({
 
     onMounted(() => {
       initThree();
-      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('scroll', handleScroll, { passive: true });
       // 初始检查
       handleScroll();
     });
@@ -489,7 +492,16 @@ export default defineComponent({
       if (renderer) {
         renderer.dispose();
       }
+      if (particlesGeometry) {
+        particlesGeometry.dispose();
+        particlesGeometry = null;
+      }
+      if (particlesMaterial) {
+        particlesMaterial.dispose();
+        particlesMaterial = null;
+      }
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
     });
 
     // 帮助中心暂未开放

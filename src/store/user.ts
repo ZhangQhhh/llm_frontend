@@ -248,6 +248,7 @@ export default {
             idCardNumber: userInfo.idCardNumber || null,
             hasChangedName: userInfo.hasChangedName ?? false,  // 默认为 false
             isBjzxAdmin: userInfo.isBjzxAdmin ?? false,  // 默认为 false
+            department: userInfo.department || null,  // 添加部门字段
             is_login: true,
           };
 

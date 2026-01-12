@@ -45,8 +45,12 @@ export default defineComponent({
     // 启动版本检查
     onMounted(() => {
       startVersionCheck();
-      // 启动性能监控
-      performanceMonitor.startMonitoring();
+      const enablePerfMonitor =
+        process.env.NODE_ENV !== 'production' ||
+        localStorage.getItem('enable_perf_monitor') === '1';
+      if (enablePerfMonitor) {
+        performanceMonitor.startMonitoring();
+      }
     });
 
     return {

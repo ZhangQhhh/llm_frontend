@@ -21,6 +21,14 @@ export interface StreamMessage {
 }
 
 export function parseSSEMessage(raw: string): StreamMessage {
+  let debugStreamEnabled = false;
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      debugStreamEnabled = localStorage.getItem('debug_stream') === '1';
+    } catch {
+      debugStreamEnabled = false;
+    }
+  }
   let data = raw.trim();
   if (data.startsWith("data:")) {
     data = data.substring(5).trim();
@@ -31,16 +39,18 @@ export function parseSSEMessage(raw: string): StreamMessage {
   } else if (data.startsWith("THINK:")) {
     const rawData = data.substring(6);
     // 调试日志：查看原始数据（移除长度限制）
-    console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData.substring(0, 200)));
+    if (debugStreamEnabled) {
+      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData.substring(0, 200)));
+    }
     // 特别记录 Qwen 模型的思考内容
-    if (rawData.includes('qwen') || rawData.length > 0) {
+    if (debugStreamEnabled && (rawData.includes('qwen') || rawData.length > 0)) {
       console.log('[DEBUG] Qwen THINK 检测到数据，长度:', rawData.length);
     }
     return { type: 'THINK', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
     const rawData = data.substring(8);
     // 调试日志：查看原始数据（只显示前100个字符）
-    if (rawData.length < 100) {
+    if (debugStreamEnabled && rawData.length < 100) {
       console.log('[DEBUG] CONTENT 原始数据:', JSON.stringify(rawData));
     }
     return { type: 'CONTENT', data: rawData.replace(/<NEWLINE>/g, "\n") };

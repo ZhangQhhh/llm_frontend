@@ -105,8 +105,13 @@ export class StreamPerformanceMonitor {
       const usedMB = memory.usedJSHeapSize / 1024 / 1024;
       const totalMB = memory.totalJSHeapSize / 1024 / 1024;
       
-      if (usedMB > 100) {
-        console.warn(`[StreamMonitor] 内存使用较高: ${usedMB.toFixed(2)}MB`);
+      // 内存使用分级警告
+      if (usedMB > 200) {
+        console.warn(`[StreamMonitor] 内存使用较高: ${usedMB.toFixed(2)}MB / ${totalMB.toFixed(2)}MB`);
+      }
+      
+      if (usedMB > 300) {
+        console.error(`[StreamMonitor] 内存使用过高: ${usedMB.toFixed(2)}MB，建议优化`);
       }
       
       return {

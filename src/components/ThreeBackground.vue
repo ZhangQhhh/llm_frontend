@@ -17,6 +17,9 @@ export default defineComponent({
     let animationId: number;
     let mouseX = 0;
     let mouseY = 0;
+    // eslint-disable-next-line no-unused-vars
+    let handleMouseMove: ((event: MouseEvent) => void) | null = null;
+    let handleWindowResize: (() => void) | null = null;
 
     const initThree = () => {
       if (!containerRef.value) return;
@@ -124,21 +127,25 @@ export default defineComponent({
       scene.add(glow);
 
       // 鼠标移动事件
-      const onMouseMove = (event: MouseEvent) => {
+      handleMouseMove = (event: MouseEvent) => {
         mouseX = (event.clientX / width) * 2 - 1;
         mouseY = -(event.clientY / height) * 2 + 1;
       };
-      window.addEventListener('mousemove', onMouseMove);
+      if (handleMouseMove) {
+        window.addEventListener('mousemove', handleMouseMove, { passive: true });
+      }
 
       // 窗口大小调整
-      const onWindowResize = () => {
+      handleWindowResize = () => {
         const newWidth = container.clientWidth;
         const newHeight = container.clientHeight;
         camera.aspect = newWidth / newHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(newWidth, newHeight);
       };
-      window.addEventListener('resize', onWindowResize);
+      if (handleWindowResize) {
+        window.addEventListener('resize', handleWindowResize);
+      }
 
       // 动画循环
       const animate = () => {
@@ -171,6 +178,18 @@ export default defineComponent({
     onUnmounted(() => {
       if (animationId) {
         cancelAnimationFrame(animationId);
+      }
+      if (handleMouseMove) {
+        window.removeEventListener('mousemove', handleMouseMove);
+        handleMouseMove = null;
+      }
+      if (handleWindowResize) {
+        window.removeEventListener('resize', handleWindowResize);
+        handleWindowResize = null;
+      }
+      if (particles) {
+        particles.geometry.dispose();
+        (particles.material as THREE.Material).dispose();
       }
       if (renderer) {
         renderer.dispose();

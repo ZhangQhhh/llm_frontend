@@ -13,8 +13,7 @@ import 'element-plus/dist/index.css'
 // 1. 导入 Bootstrap 的 CSS 样式
 import 'bootstrap/dist/css/bootstrap.min.css'
 
-// 2. 导入 Bootstrap 的 JavaScript 功能 (包含 Popper.js)
-import 'bootstrap/dist/js/bootstrap.bundle.min.js'
+// Bootstrap JS removed to reduce global runtime overhead.
 
 // 恢复登录状态
 const token = localStorage.getItem('jwt_token')

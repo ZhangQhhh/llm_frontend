@@ -544,7 +544,7 @@ import {
   type SubQuestionsData
 } from '@/mocks/referenceMocks';
 import { renderMarkdown } from '@/utils/markdown';
-import { streamMonitor } from '@/utils/streamPerformanceMonitor';
+// import { streamMonitor } from '@/utils/streamPerformanceMonitor'; // 暂时注释，待后续使用
 
 export default defineComponent({
   name: 'KnowledgeQAView',
@@ -1386,8 +1386,8 @@ export default defineComponent({
         (newVal) => handleMcqModeChange(newVal)
       );
       // 添加滚动监听
-      window.addEventListener('wheel', handleUserScroll);
-      window.addEventListener('touchmove', handleUserScroll);
+      window.addEventListener('wheel', handleUserScroll, { passive: true });
+      window.addEventListener('touchmove', handleUserScroll, { passive: true });
     });
 
     onUnmounted(() => {
