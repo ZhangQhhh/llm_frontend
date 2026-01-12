@@ -75,6 +75,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>个人设置</span>
               </el-dropdown-item>
+              <el-dropdown-item command="performance">
+                <el-icon><Monitor /></el-icon>
+                <span>性能设置</span>
+              </el-dropdown-item>
               <el-dropdown-item command="excel-tool">
                 <el-icon><DocumentCopy /></el-icon>
                 <span>Excel 工具</span>
@@ -111,11 +115,14 @@
       </template>
     </div>
     </el-menu>
+    
+    <!-- 性能设置对话框 -->
+    <PerformanceSettings v-model="showPerformanceSettings" />
   </nav>
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue'
+import { defineComponent, computed, ref } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import { 
@@ -128,9 +135,11 @@ import {
   Document,
   DataBoard,
   FolderOpened,
-  VideoCamera
+  VideoCamera,
+  Monitor
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
+import PerformanceSettings from './PerformanceSettings.vue'
 
 export default defineComponent({
   name: 'NavBar',
@@ -144,12 +153,15 @@ export default defineComponent({
     Document,
     DataBoard,
     FolderOpened,
-    VideoCamera
+    VideoCamera,
+    Monitor,
+    PerformanceSettings
   },
   setup() {
     const store = useStore()
     const router = useRouter()
     const route = useRoute()
+    const showPerformanceSettings = ref(false)
 
     const activeIndex = computed(() => route.path)
     const isLoggedIn = computed(() => store.state.user.is_login)
@@ -188,6 +200,8 @@ export default defineComponent({
         store.dispatch('logout')
       } else if (command === 'profile') {
         router.push('/profile')
+      } else if (command === 'performance') {
+        showPerformanceSettings.value = true
       } else if (command === 'excel-tool') {
         router.push('/excel-tool')
       } else if (command === 'report-generator') {
@@ -227,7 +241,8 @@ export default defineComponent({
       roleTagType,
       roleText,
       navigateTo,
-      handleCommand
+      handleCommand,
+      showPerformanceSettings
     }
   }
 })

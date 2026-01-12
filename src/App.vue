@@ -10,8 +10,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, onMounted } from 'vue';
+import { defineComponent, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useStore } from 'vuex';
 import NavBar from './components/NavBar.vue';
 import TourGuideButton from './components/TourGuideButton.vue';
 import FirstTimeGuide from './components/FirstTimeGuide.vue';
@@ -31,6 +32,7 @@ export default defineComponent({
   },
   setup() {
     const route = useRoute();
+    const store = useStore();
 
     // 在登录页面隐藏导航栏
     const showNavBar = computed(() => {
@@ -42,6 +44,32 @@ export default defineComponent({
       console.log('用户改名完成，可以检查部门了')
     };
 
+    // 监听性能模式变化，动态添加 body class
+    const updateBodyClasses = () => {
+      const body = document.body;
+      
+      // 低配模式
+      if (store.getters['performance/isLowPerformanceMode']) {
+        body.classList.add('low-performance-mode');
+      } else {
+        body.classList.remove('low-performance-mode');
+      }
+      
+      // 减少特效
+      if (store.getters['performance/shouldReduceEffects']) {
+        body.classList.add('reduce-effects-mode');
+      } else {
+        body.classList.remove('reduce-effects-mode');
+      }
+      
+      // 简化UI
+      if (store.getters['performance/shouldSimplifyUI']) {
+        body.classList.add('simplify-ui-mode');
+      } else {
+        body.classList.remove('simplify-ui-mode');
+      }
+    };
+
     // 启动版本检查
     onMounted(() => {
       startVersionCheck();
@@ -51,7 +79,19 @@ export default defineComponent({
       if (enablePerfMonitor) {
         performanceMonitor.startMonitoring();
       }
+      
+      // 初始化 body classes
+      updateBodyClasses();
     });
+
+    // 监听性能设置变化
+    watch(
+      () => store.state.performance,
+      () => {
+        updateBodyClasses();
+      },
+      { deep: true }
+    );
 
     return {
       showNavBar,
@@ -63,6 +103,7 @@ export default defineComponent({
 
 <style>
 @import '@/styles/driver.css';
+@import '@/assets/performance.css';
 
 /* 新字体 */
 @font-face {

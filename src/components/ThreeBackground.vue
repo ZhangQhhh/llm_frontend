@@ -3,13 +3,19 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onUnmounted } from 'vue';
+import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue';
+import { useStore } from 'vuex';
 import * as THREE from 'three';
 
 export default defineComponent({
   name: 'ThreeBackground',
   setup() {
+    const store = useStore();
     const containerRef = ref<HTMLDivElement | null>(null);
+    
+    // 检查是否应该禁用3D背景
+    const shouldDisable = computed(() => store.getters['performance/shouldDisable3DBackground']);
+    
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -172,7 +178,12 @@ export default defineComponent({
     };
 
     onMounted(() => {
-      initThree();
+      // 如果启用了低配模式，不初始化3D背景
+      if (!shouldDisable.value) {
+        initThree();
+      } else {
+        console.log('[ThreeBackground] 低配模式已启用，跳过3D背景初始化');
+      }
     });
 
     onUnmounted(() => {
