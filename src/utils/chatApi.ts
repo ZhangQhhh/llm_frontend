@@ -29,9 +29,12 @@ export function parseSSEMessage(raw: string): StreamMessage {
       debugStreamEnabled = false;
     }
   }
-  let data = raw.trim();
+  let data = raw.replace(/\r$/, '');
   if (data.startsWith("data:")) {
-    data = data.substring(5).trim();
+    data = data.substring(5);
+    if (data.startsWith(" ")) {
+      data = data.substring(1);
+    }
   }
 
   if (data.startsWith("SESSION:")) {
@@ -177,10 +180,10 @@ export async function sendStreamChatRequest(
     buffer = parts.pop() || "";
 
     for (const part of parts) {
-      const trimmed = part.trim();
-      if (!trimmed) continue;
-      
-      const message = parseSSEMessage(trimmed);
+      const normalized = part.replace(/[\r\n]+$/, '');
+      if (!normalized.trim()) continue;
+
+      const message = parseSSEMessage(normalized);
       onMessage(message);
     }
   }
