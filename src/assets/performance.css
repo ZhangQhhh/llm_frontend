@@ -1,0 +1,80 @@
+/* 全局性能优化样式 */
+
+/* 低配模式：禁用所有动画和过渡效果 */
+body.low-performance-mode *,
+body.low-performance-mode *::before,
+body.low-performance-mode *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+/* 低配模式：简化阴影效果 */
+body.low-performance-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* 低配模式：禁用模糊效果 */
+body.low-performance-mode * {
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 低配模式：简化渐变背景 */
+body.low-performance-mode * {
+  background-image: none !important;
+}
+
+/* 减少特效模式：保留基本动画，移除复杂特效 */
+body.reduce-effects-mode .glass-effect {
+  backdrop-filter: none !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+}
+
+body.reduce-effects-mode .gradient-bg {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* 简化UI模式：减少圆角和装饰 */
+body.simplify-ui-mode * {
+  border-radius: 4px !important;
+}
+
+body.simplify-ui-mode .decorative-element {
+  display: none !important;
+}
+
+/* 性能优化：使用 GPU 加速 */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* 性能优化：减少重绘 */
+.no-repaint {
+  contain: layout style paint;
+}
+
+/* 性能优化：虚拟滚动容器 */
+.virtual-scroll-container {
+  overflow-y: auto;
+  will-change: scroll-position;
+}
+
+/* 低配模式提示标识 */
+body.low-performance-mode::before {
+  content: '低配模式';
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(96, 165, 250, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}

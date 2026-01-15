@@ -21,24 +21,39 @@ export interface StreamMessage {
 }
 
 export function parseSSEMessage(raw: string): StreamMessage {
-  let data = raw.trim();
+  let debugStreamEnabled = false;
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      debugStreamEnabled = localStorage.getItem('debug_stream') === '1';
+    } catch {
+      debugStreamEnabled = false;
+    }
+  }
+  let data = raw.replace(/\r$/, '');
   if (data.startsWith("data:")) {
-    data = data.substring(5).trim();
+    data = data.substring(5);
+    if (data.startsWith(" ")) {
+      data = data.substring(1);
+    }
   }
 
   if (data.startsWith("SESSION:")) {
     return { type: 'SESSION', data: data.substring(8).trim() };
   } else if (data.startsWith("THINK:")) {
     const rawData = data.substring(6);
-    // 调试日志：查看原始数据
-    if (rawData.length < 100) {
-      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData));
+    // 调试日志：查看原始数据（移除长度限制）
+    if (debugStreamEnabled) {
+      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData.substring(0, 200)));
+    }
+    // 特别记录 Qwen 模型的思考内容
+    if (debugStreamEnabled && (rawData.includes('qwen') || rawData.length > 0)) {
+      console.log('[DEBUG] Qwen THINK 检测到数据，长度:', rawData.length);
     }
     return { type: 'THINK', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
     const rawData = data.substring(8);
     // 调试日志：查看原始数据（只显示前100个字符）
-    if (rawData.length < 100) {
+    if (debugStreamEnabled && rawData.length < 100) {
       console.log('[DEBUG] CONTENT 原始数据:', JSON.stringify(rawData));
     }
     return { type: 'CONTENT', data: rawData.replace(/<NEWLINE>/g, "\n") };
@@ -165,10 +180,10 @@ export async function sendStreamChatRequest(
     buffer = parts.pop() || "";
 
     for (const part of parts) {
-      const trimmed = part.trim();
-      if (!trimmed) continue;
-      
-      const message = parseSSEMessage(trimmed);
+      const normalized = part.replace(/[\r\n]+$/, '');
+      if (!normalized.trim()) continue;
+
+      const message = parseSSEMessage(normalized);
       onMessage(message);
     }
   }
@@ -471,6 +486,7 @@ export interface QALogDetail {
 export interface QALogListParams {
   date?: string;       // 日期，格式 YYYY-MM-DD，默认今天
   user_id?: string;    // 按用户ID筛选
+  username?: string;   // 按用户名筛选（需要后端支持）
   page?: number;       // 页码，默认1
   page_size?: number;  // 每页数量，默认20，最大100
 }
@@ -510,6 +526,7 @@ export async function getQALogsByDate(
   const queryParams = new URLSearchParams();
   if (params.date) queryParams.append('date', params.date);
   if (params.user_id) queryParams.append('user_id', params.user_id);
+  if (params.username) queryParams.append('username', params.username);
   if (params.page) queryParams.append('page', String(params.page));
   if (params.page_size) queryParams.append('page_size', String(params.page_size));
 

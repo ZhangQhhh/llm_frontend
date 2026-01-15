@@ -3,13 +3,19 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onUnmounted } from 'vue';
+import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue';
+import { useStore } from 'vuex';
 import * as THREE from 'three';
 
 export default defineComponent({
   name: 'ThreeBackground',
   setup() {
+    const store = useStore();
     const containerRef = ref<HTMLDivElement | null>(null);
+    
+    // 检查是否应该禁用3D背景
+    const shouldDisable = computed(() => store.getters['performance/shouldDisable3DBackground']);
+    
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -17,6 +23,9 @@ export default defineComponent({
     let animationId: number;
     let mouseX = 0;
     let mouseY = 0;
+    // eslint-disable-next-line no-unused-vars
+    let handleMouseMove: ((event: MouseEvent) => void) | null = null;
+    let handleWindowResize: (() => void) | null = null;
 
     const initThree = () => {
       if (!containerRef.value) return;
@@ -124,21 +133,25 @@ export default defineComponent({
       scene.add(glow);
 
       // 鼠标移动事件
-      const onMouseMove = (event: MouseEvent) => {
+      handleMouseMove = (event: MouseEvent) => {
         mouseX = (event.clientX / width) * 2 - 1;
         mouseY = -(event.clientY / height) * 2 + 1;
       };
-      window.addEventListener('mousemove', onMouseMove);
+      if (handleMouseMove) {
+        window.addEventListener('mousemove', handleMouseMove, { passive: true });
+      }
 
       // 窗口大小调整
-      const onWindowResize = () => {
+      handleWindowResize = () => {
         const newWidth = container.clientWidth;
         const newHeight = container.clientHeight;
         camera.aspect = newWidth / newHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(newWidth, newHeight);
       };
-      window.addEventListener('resize', onWindowResize);
+      if (handleWindowResize) {
+        window.addEventListener('resize', handleWindowResize);
+      }
 
       // 动画循环
       const animate = () => {
@@ -165,12 +178,29 @@ export default defineComponent({
     };
 
     onMounted(() => {
-      initThree();
+      // 如果启用了低配模式，不初始化3D背景
+      if (!shouldDisable.value) {
+        initThree();
+      } else {
+        console.log('[ThreeBackground] 低配模式已启用，跳过3D背景初始化');
+      }
     });
 
     onUnmounted(() => {
       if (animationId) {
         cancelAnimationFrame(animationId);
+      }
+      if (handleMouseMove) {
+        window.removeEventListener('mousemove', handleMouseMove);
+        handleMouseMove = null;
+      }
+      if (handleWindowResize) {
+        window.removeEventListener('resize', handleWindowResize);
+        handleWindowResize = null;
+      }
+      if (particles) {
+        particles.geometry.dispose();
+        (particles.material as THREE.Material).dispose();
       }
       if (renderer) {
         renderer.dispose();

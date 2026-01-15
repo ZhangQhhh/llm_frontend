@@ -690,8 +690,8 @@ export default defineComponent({
       if (mockReferencesEnabled) {
         applyReferenceMocks();
       }
-      window.addEventListener('wheel', handleUserScroll);
-      window.addEventListener('touchmove', handleUserScroll);
+      window.addEventListener('wheel', handleUserScroll, { passive: true });
+      window.addEventListener('touchmove', handleUserScroll, { passive: true });
     });
 
     onUnmounted(() => {

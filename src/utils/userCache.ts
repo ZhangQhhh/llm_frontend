@@ -6,7 +6,7 @@
 import { API_ENDPOINTS } from '@/config/api/api';
 import { fetchWithAuth, getApiUrl } from '@/utils/request';
 
-interface CachedUser {
+export interface CachedUser {
   id: string;
   username: string;
   email?: string;
@@ -63,10 +63,12 @@ async function loadUserCache(): Promise<void> {
         // 更新缓存
         cache.data.clear();
         for (const user of list) {
-          if (user.id) {
-            cache.data.set(user.id, {
-              id: user.id,
-              username: user.username || user.id,
+          const rawId = user.id ?? user.user_id ?? user.userId;
+          if (rawId !== undefined && rawId !== null) {
+            const id = String(rawId);
+            cache.data.set(id, {
+              id,
+              username: user.username || id,
               email: user.email,
               role: user.role
             });
@@ -90,10 +92,11 @@ async function loadUserCache(): Promise<void> {
  * @param userId 用户ID
  * @returns 用户名，如果未找到则返回用户ID本身
  */
-export function getUserNameById(userId?: string): string {
-  if (!userId) return '-';
-  const user = cache.data.get(userId);
-  return user?.username || userId;
+export function getUserNameById(userId?: string | number): string {
+  if (userId === undefined || userId === null || userId === '') return '-';
+  const normalizedId = String(userId);
+  const user = cache.data.get(normalizedId);
+  return user?.username || normalizedId;
 }
 
 /**
@@ -101,8 +104,9 @@ export function getUserNameById(userId?: string): string {
  * @param userId 用户ID
  * @returns 用户信息对象，如果未找到则返回 null
  */
-export function getUserById(userId: string): CachedUser | null {
-  return cache.data.get(userId) || null;
+export function getUserById(userId: string | number): CachedUser | null {
+  const normalizedId = String(userId);
+  return cache.data.get(normalizedId) || null;
 }
 
 /**

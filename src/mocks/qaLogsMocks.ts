@@ -173,20 +173,22 @@ export const mockGetQALogsByDate = async (
   params: {
     date?: string;
     user_id?: string;
+    username?: string;
     page?: number;
     page_size?: number;
   }
 ): Promise<MockQALogListResponse> => {
   await mockDelay(400);
   
-  const { user_id, page = 1, page_size = 20 } = params;
+  const { user_id, username, page = 1, page_size = 20 } = params;
   // 如果没有指定日期，使用今天
   const date = params.date || new Date().toISOString().split('T')[0];
   let logs = getLogsForDate(date);
   
-  // 按用户ID筛选
-  if (user_id) {
-    logs = logs.filter(log => log.metadata.user_id?.includes(user_id));
+  // 按用户ID/用户名筛选（mock中用user_id字段兜底）
+  const filterKey = user_id || username;
+  if (filterKey) {
+    logs = logs.filter(log => log.metadata.user_id?.includes(filterKey));
   }
   
   const total = logs.length;

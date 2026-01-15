@@ -544,6 +544,7 @@ import {
   type SubQuestionsData
 } from '@/mocks/referenceMocks';
 import { renderMarkdown } from '@/utils/markdown';
+// import { streamMonitor } from '@/utils/streamPerformanceMonitor'; // 暂时注释，待后续使用
 
 export default defineComponent({
   name: 'KnowledgeQAView',
@@ -675,6 +676,9 @@ export default defineComponent({
         }, 500);
       }
     });
+
+    // 清理定时器引用
+    let summaryTimeoutId: number | null = null;
 
     // 监听选择题模式切换
     const handleMcqModeChange = (val: boolean) => {
@@ -1382,13 +1386,18 @@ export default defineComponent({
         (newVal) => handleMcqModeChange(newVal)
       );
       // 添加滚动监听
-      window.addEventListener('wheel', handleUserScroll);
-      window.addEventListener('touchmove', handleUserScroll);
+      window.addEventListener('wheel', handleUserScroll, { passive: true });
+      window.addEventListener('touchmove', handleUserScroll, { passive: true });
     });
 
     onUnmounted(() => {
       window.removeEventListener('wheel', handleUserScroll);
       window.removeEventListener('touchmove', handleUserScroll);
+      // 清理定时器
+      if (summaryTimeoutId) {
+        clearTimeout(summaryTimeoutId);
+        summaryTimeoutId = null;
+      }
     });
 
     // 答案归纳函数（自动执行版本，不显示提示）
