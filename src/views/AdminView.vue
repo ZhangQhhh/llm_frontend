@@ -1277,6 +1277,7 @@
               </el-select>
               <el-button @click="loadPublishedExams" :loading="loadingPublished">刷新</el-button>
               <el-button type="primary" @click="exportZip" :loading="exportingZip" :disabled="!selectedExportExam">导出ZIP</el-button>
+              <!-- <el-button type="success" @click="exportXlsx" :loading="exportingXlsx" :disabled="!selectedExportExam">导出Excel</el-button> -->
               <el-button @click="exportDocx" :loading="exportingDocx" :disabled="!selectedExportExam">导出DOCX</el-button>
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
@@ -1988,6 +1989,7 @@ export default defineComponent({
     const loadingExportPapers = ref(false)
     const exportingZip = ref(false)
     const exportingDocx = ref(false)
+    const exportingXlsx = ref(false)
     const exportMessage = ref('')
 
     // 试卷题目选择相关
@@ -4137,6 +4139,41 @@ export default defineComponent({
       }
     }
 
+    const exportXlsx = async () => {
+      if (!selectedExportExam.value) {
+        return ElMessage.warning('请选择考试场次')
+      }
+      exportingXlsx.value = true
+      exportMessage.value = '正在生成Excel成绩汇总表...'
+      try {
+        let url = `${MCQ_BASE_URL}/grades/export_summary_xlsx?paper_id=${encodeURIComponent(selectedExportPaper.value)}`
+        if (selectedExportExam.value) {
+          url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
+        }
+        const response = await fetch(url)
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ msg: '导出失败' }))
+          throw new Error(error.msg || '导出失败')
+        }
+        const blob = await response.blob()
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `成绩汇总_${Date.now()}.xlsx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
+        exportMessage.value = '导出成功！'
+        setTimeout(() => { exportMessage.value = '' }, 3000)
+      } catch (error: any) {
+        exportMessage.value = '导出失败：' + (error?.message || error)
+        ElMessage.error('导出失败：' + (error?.message || error))
+      } finally {
+        exportingXlsx.value = false
+      }
+    }
+
     // ========== 成绩统计相关函数 ==========
     // 选择考试场次时触发
     const onExportExamChange = (examId: string) => {
@@ -4516,7 +4553,7 @@ export default defineComponent({
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
-      approveAll, createPaper, loadExportPapers, exportZip, exportDocx,isEditing,editRow,
+      approveAll, createPaper, loadExportPapers, exportZip, exportDocx, exportXlsx, exportingXlsx, isEditing,editRow,
       loadUsers, filteredUsers, applyUserSearch, banUser, unbanUser, roleName, isRegularUser,onPickBankDocx,
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,

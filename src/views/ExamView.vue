@@ -35,6 +35,17 @@
           开始作答
         </el-button>
         
+        <el-button type="success" @click="randomPracticeVisible = true" :disabled="examStarted" size="default">
+          <el-icon><Reading /></el-icon>
+          随机练习
+        </el-button>
+        
+        <el-button type="warning" @click="openWrongBook" :disabled="examStarted" size="default">
+          <el-icon><Collection /></el-icon>
+          错题本
+          <el-badge v-if="wrongBookTotal > 0" :value="wrongBookTotal" :max="99" class="wrong-badge" />
+        </el-button>
+        
         <div class="time">
           <span class="muted">倒计时：</span>
           <span class="pill">{{ timerDisplay }}</span>
@@ -42,87 +53,6 @@
         
         <div class="user-actions">
           <span class="user-name">{{ username }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 随机练习面板（已隐藏） -->
-    <div v-if="false && !examStarted" class="practice-panel">
-      <div class="practice-header">
-        <el-icon class="practice-icon"><Reading /></el-icon>
-        <span>随机练习</span>
-        <el-tag type="success" size="small" effect="plain">从题库抽题</el-tag>
-      </div>
-      <div class="practice-content">
-        <div class="practice-config">
-          <div class="config-row">
-            <div class="config-item">
-              <label>单选题数量</label>
-              <el-input-number v-model="practiceConfig.singleCount" :min="0" :max="50" size="small" />
-            </div>
-            <div class="config-item">
-              <label>多选题数量</label>
-              <el-input-number v-model="practiceConfig.multiCount" :min="0" :max="50" size="small" />
-            </div>
-            <div class="config-item">
-              <label>不定项数量</label>
-              <el-input-number v-model="practiceConfig.indeterminateCount" :min="0" :max="50" size="small" />
-            </div>
-            <div class="config-item">
-              <label>练习时长（分钟）</label>
-              <el-input-number v-model="practiceConfig.duration" :min="5" :max="180" size="small" />
-            </div>
-          </div>
-          <div class="config-summary">
-            <span class="summary-text">
-              共 <b>{{ practiceTotalCount }}</b> 题，预计 <b>{{ practiceConfig.duration }}</b> 分钟
-            </span>
-            <el-button 
-              type="success" 
-              @click="startRandomPractice" 
-              :disabled="practiceTotalCount === 0"
-              :loading="startingPractice"
-            >
-              <el-icon><CaretRight /></el-icon>
-              开始随机练习
-            </el-button>
-          </div>
-        </div>
-        <div class="practice-tips">
-          <el-icon><InfoFilled /></el-icon>
-          <span>随机练习模式将从题库中随机抽取指定数量的题目，练习结果不计入正式成绩。</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 错题本面板（已隐藏） -->
-    <div v-if="false && !examStarted" class="wrong-book-panel">
-      <div class="wrong-book-header">
-        <el-icon class="wrong-book-icon"><Collection /></el-icon>
-        <span>我的错题本</span>
-        <el-tag type="danger" size="small" effect="plain">{{ wrongBookTotal }} 题</el-tag>
-        <el-button size="small" text @click="loadWrongBook" :loading="loadingWrongBook" style="margin-left: auto;">
-          <el-icon><Refresh /></el-icon>
-        </el-button>
-      </div>
-      <div class="wrong-book-content">
-        <div v-if="wrongBookTotal === 0" class="wrong-book-empty">
-          <el-empty description="错题本为空，完成考试后可收录错题" :image-size="80" />
-        </div>
-        <div v-else class="wrong-book-info">
-          <div class="wrong-book-stats">
-            <span>共收录 <b>{{ wrongBookTotal }}</b> 道错题</span>
-          </div>
-          <div class="wrong-book-actions">
-            <el-button type="primary" @click="openWrongBook">
-              <el-icon><View /></el-icon>
-              查看错题
-            </el-button>
-            <el-button type="warning" @click="startWrongBookPractice" :loading="startingPractice" :disabled="wrongBookTotal === 0">
-              <el-icon><CaretRight /></el-icon>
-              错题练习
-            </el-button>
-          </div>
         </div>
       </div>
     </div>
@@ -672,6 +602,58 @@
       ⚠️ 已切屏 {{ switchCount }}/{{ maxSwitchCount }} 次
     </div>
 
+    <!-- 随机练习对话框 -->
+    <el-dialog
+      v-model="randomPracticeVisible"
+      title="🎲 随机练习"
+      width="500px"
+      :close-on-click-modal="true"
+    >
+      <div class="random-practice-dialog">
+        <div class="practice-config-dialog">
+          <div class="config-row-dialog">
+            <div class="config-item-dialog">
+              <label>单选题数量</label>
+              <el-input-number v-model="practiceConfig.singleCount" :min="0" :max="50" size="default" />
+            </div>
+            <div class="config-item-dialog">
+              <label>多选题数量</label>
+              <el-input-number v-model="practiceConfig.multiCount" :min="0" :max="50" size="default" />
+            </div>
+          </div>
+          <div class="config-row-dialog">
+            <div class="config-item-dialog">
+              <label>不定项数量</label>
+              <el-input-number v-model="practiceConfig.indeterminateCount" :min="0" :max="50" size="default" />
+            </div>
+            <div class="config-item-dialog">
+              <label>练习时长（分钟）</label>
+              <el-input-number v-model="practiceConfig.duration" :min="5" :max="180" size="default" />
+            </div>
+          </div>
+          <div class="config-summary-dialog">
+            <span>共 <b>{{ practiceTotalCount }}</b> 题，预计 <b>{{ practiceConfig.duration }}</b> 分钟</span>
+          </div>
+        </div>
+        <div class="practice-tips-dialog">
+          <el-icon><InfoFilled /></el-icon>
+          <span>随机练习模式将从题库中随机抽取指定数量的题目，练习结果不计入正式成绩。</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="randomPracticeVisible = false">取消</el-button>
+        <el-button 
+          type="success" 
+          @click="startRandomPracticeFromDialog" 
+          :disabled="practiceTotalCount === 0"
+          :loading="startingPractice"
+        >
+          <el-icon><CaretRight /></el-icon>
+          开始练习
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 错题本对话框 -->
     <el-dialog
       v-model="wrongBookVisible"
@@ -928,6 +910,7 @@ export default defineComponent({
     const wrongBookVisible = ref(false)  // 错题本弹窗
     const loadingWrongBook = ref(false)  // 加载中
     const savingToWrongBook = ref(false)  // 保存中
+    const randomPracticeVisible = ref(false)  // 随机练习弹窗
 
     // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
     const analysisActiveTab = reactive<Record<number, string>>({})
@@ -1023,9 +1006,11 @@ export default defineComponent({
         return q.option_images[label]
       }
       // 方式2: options 数组中的 images 字段
-      const opt = q.options.find(o => o.label === label)
-      if (opt && opt.images) {
-        return opt.images
+      if (Array.isArray(q.options)) {
+        const opt = q.options.find(o => o.label === label)
+        if (opt && opt.images) {
+          return opt.images
+        }
       }
       return []
     }
@@ -1037,9 +1022,11 @@ export default defineComponent({
         return item.option_images[label]
       }
       // 方式2: options 数组中的 images 字段
-      const opt = item.options.find(o => o.label === label)
-      if (opt && opt.images) {
-        return opt.images
+      if (Array.isArray(item.options)) {
+        const opt = item.options.find(o => o.label === label)
+        if (opt && opt.images) {
+          return opt.images
+        }
       }
       return []
     }
@@ -1216,6 +1203,28 @@ export default defineComponent({
       if (item.is_correct) return 'ok'
       if (item.score > 0) return 'partial'
       return 'bad'
+    }
+
+    // 规范化选项格式：将 dict 格式转为 list 格式
+    const normalizeOptions = (options: any): Array<{label: string, text: string}> => {
+      if (!options) return []
+      if (Array.isArray(options)) {
+        // 已经是 list 格式
+        return options
+      }
+      if (typeof options === 'object') {
+        // dict 格式 {"A": "text", "B": "text"} 转为 list 格式
+        return Object.keys(options).sort().map(k => ({ label: k, text: options[k] }))
+      }
+      return []
+    }
+
+    // 规范化题目数据（确保 options 为 list 格式）
+    const normalizeQuestions = (items: any[]): any[] => {
+      return items.map(q => ({
+        ...q,
+        options: normalizeOptions(q.options)
+      }))
     }
 
     // 将 <NEWLINE> 标识符转换为换行显示
@@ -1793,7 +1802,7 @@ export default defineComponent({
 
         // 7. 直接进入考试状态
         attemptId.value = startResult.attempt_id
-        questions.value = startResult.items || []
+        questions.value = normalizeQuestions(startResult.items || [])
         leftSeconds.value = startResult.left_sec || practiceConfig.duration * 60
         examStarted.value = true
         isPracticeMode.value = true
@@ -1814,6 +1823,12 @@ export default defineComponent({
       } finally {
         startingPractice.value = false
       }
+    }
+
+    // 从弹窗开始随机练习
+    const startRandomPracticeFromDialog = async () => {
+      randomPracticeVisible.value = false
+      await startRandomPractice()
     }
 
     const startExam = async () => {
@@ -1995,6 +2010,10 @@ export default defineComponent({
           `${API_ENDPOINTS.EXAM.REVIEW}?attempt_id=${encodeURIComponent(attemptId.value)}`
         )
         if (data.ok) {
+          // 规范化选项格式
+          if (data.items) {
+            data.items = normalizeQuestions(data.items)
+          }
           reviewData.value = data
         }
       } catch (error: any) {
@@ -2258,7 +2277,7 @@ export default defineComponent({
         
         // 直接进入考试状态
         attemptId.value = startResult.attempt_id
-        questions.value = startResult.items || []
+        questions.value = normalizeQuestions(startResult.items || [])
         leftSeconds.value = startResult.left_sec || durationSec
         examStarted.value = true
         isPracticeMode.value = true
@@ -2384,6 +2403,8 @@ export default defineComponent({
       practiceTotalCount,
       startingPractice,
       startRandomPractice,
+      randomPracticeVisible,
+      startRandomPracticeFromDialog,
       // 错题本相关
       wrongBook,
       wrongBookTotal,
@@ -3802,6 +3823,80 @@ export default defineComponent({
 .wrong-book-actions {
   display: flex;
   gap: 12px;
+}
+
+/* 随机练习对话框 */
+.random-practice-dialog {
+  padding: 10px 0;
+}
+
+.practice-config-dialog {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.config-row-dialog {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.config-row-dialog:last-child {
+  margin-bottom: 0;
+}
+
+.config-item-dialog {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-item-dialog label {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.config-summary-dialog {
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 16px;
+  color: #64748b;
+}
+
+.config-summary-dialog b {
+  color: #10b981;
+  font-size: 18px;
+}
+
+.practice-tips-dialog {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  padding: 12px;
+  background: #fefce8;
+  border-radius: 8px;
+}
+
+.practice-tips-dialog .el-icon {
+  color: #eab308;
+  margin-top: 2px;
+}
+
+/* 顶部按钮中的错题本徽章 */
+.wrong-badge {
+  margin-left: 6px;
+}
+
+.wrong-badge :deep(.el-badge__content) {
+  top: -8px;
+  right: -8px;
 }
 
 /* 错题本对话框 */

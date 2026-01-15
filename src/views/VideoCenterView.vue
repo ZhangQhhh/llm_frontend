@@ -1,13 +1,13 @@
 <template>
-  <div class="video-center-page">
+  <div class="resource-center-page">
     <div class="container">
       <!-- 头部 -->
       <header class="page-header">
         <h1>
-          <el-icon class="header-icon"><VideoCamera /></el-icon>
-          视频中心
+          <el-icon class="header-icon"><FolderOpened /></el-icon>
+          资料中心
         </h1>
-        <p class="subtitle">{{ isAdmin ? '管理和分享视频资源' : '查看和下载视频资源' }}</p>
+        <p class="subtitle">{{ isAdmin ? '管理和分享各类资源' : '查看和下载各类资源' }}</p>
       </header>
 
       <!-- 管理员上传区域 -->
@@ -15,45 +15,58 @@
         <template #header>
           <div class="card-header">
             <el-icon><Upload /></el-icon>
-            <span>上传视频</span>
+            <span>上传资料</span>
           </div>
         </template>
         <el-form :model="uploadForm" label-width="80px">
           <el-row :gutter="20">
             <el-col :span="8">
-              <el-form-item label="视频文件">
+              <el-form-item label="文件类型">
+                <el-radio-group v-model="uploadForm.fileType" @change="handleUploadTypeChange">
+                  <el-radio-button value="video">
+                    <el-icon><VideoCamera /></el-icon> 视频
+                  </el-radio-button>
+                  <el-radio-button value="pdf">
+                    <el-icon><Document /></el-icon> PDF
+                  </el-radio-button>
+                  <el-radio-button value="ppt">
+                    <el-icon><Tickets /></el-icon> PPT
+                  </el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item label="选择文件">
                 <el-upload
                   ref="uploadRef"
                   :auto-upload="false"
                   :limit="1"
                   :on-change="handleFileChange"
                   :on-remove="handleFileRemove"
-                  accept=".mp4,.avi,.mov,.mkv,.wmv,.flv,.webm,.m4v"
+                  :accept="acceptFileTypes"
                   drag
-                  class="video-upload"
+                  class="resource-upload"
                 >
                   <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
                   <div class="el-upload__text">
-                    拖拽视频文件到这里，或 <em>点击选择</em>
+                    拖拽文件到这里，或 <em>点击选择</em>
                   </div>
                   <template #tip>
                     <div class="el-upload__tip">
-                      支持 mp4、avi、mov、mkv 等格式，最大 500MB
+                      {{ uploadTipText }}
                     </div>
                   </template>
                 </el-upload>
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="视频标题">
-                <el-input v-model="uploadForm.title" placeholder="请输入视频标题" clearable />
+              <el-form-item label="资料标题">
+                <el-input v-model="uploadForm.title" placeholder="请输入资料标题" clearable />
               </el-form-item>
-              <el-form-item label="视频描述">
+              <el-form-item label="资料描述">
                 <el-input
                   v-model="uploadForm.description"
                   type="textarea"
                   :rows="3"
-                  placeholder="请输入视频描述（可选）"
+                  placeholder="请输入资料描述（可选）"
                 />
               </el-form-item>
             </el-col>
@@ -83,20 +96,34 @@
         </el-form>
       </el-card>
 
-      <!-- 视频列表 -->
-      <el-card class="video-list-card" shadow="hover">
+      <!-- 资料列表 -->
+      <el-card class="resource-list-card" shadow="hover">
         <template #header>
           <div class="card-header">
             <div class="header-left">
-              <el-icon><Film /></el-icon>
-              <span>视频列表</span>
+              <el-icon><Folder /></el-icon>
+              <span>资料列表</span>
               <el-tag type="info" size="small" style="margin-left: 10px">
-                共 {{ videos.length }} 个视频
+                共 {{ filteredResources.length }} 个资料
               </el-tag>
             </div>
-            <el-button type="primary" :icon="Refresh" @click="loadVideos" :loading="loading">
-              刷新
-            </el-button>
+            <div class="header-right">
+              <el-radio-group v-model="filterType" size="small" style="margin-right: 15px">
+                <el-radio-button value="all">全部</el-radio-button>
+                <el-radio-button value="video">
+                  <el-icon><VideoCamera /></el-icon> 视频
+                </el-radio-button>
+                <el-radio-button value="pdf">
+                  <el-icon><Document /></el-icon> PDF
+                </el-radio-button>
+                <el-radio-button value="ppt">
+                  <el-icon><Tickets /></el-icon> PPT
+                </el-radio-button>
+              </el-radio-group>
+              <el-button type="primary" :icon="Refresh" @click="loadResources" :loading="loading">
+                刷新
+              </el-button>
+            </div>
           </div>
         </template>
 
@@ -105,42 +132,53 @@
           <p>加载中...</p>
         </div>
 
-        <el-empty v-else-if="videos.length === 0" description="暂无视频" />
+        <el-empty v-else-if="filteredResources.length === 0" description="暂无资料" />
 
-        <div v-else class="video-grid">
+        <div v-else class="resource-grid">
           <el-card
-            v-for="video in videos"
-            :key="video.id"
-            class="video-item"
+            v-for="resource in filteredResources"
+            :key="resource.id"
+            class="resource-item"
             shadow="hover"
-            @click="openVideoPlayer(video)"
+            @click="openResource(resource)"
           >
-            <div class="video-thumbnail">
-              <el-icon class="play-icon"><VideoPlay /></el-icon>
-              <div class="video-duration">
-                {{ formatFileSize(video.size) }}
+            <div class="resource-thumbnail" :class="`type-${resource.file_type}`">
+              <el-icon class="type-icon">
+                <VideoPlay v-if="resource.file_type === 'video'" />
+                <Document v-else-if="resource.file_type === 'pdf'" />
+                <Tickets v-else-if="resource.file_type === 'ppt'" />
+                <Document v-else />
+              </el-icon>
+              <div class="resource-size">
+                {{ formatFileSize(resource.size) }}
+              </div>
+              <div class="resource-type-badge">
+                {{ getFileTypeLabel(resource.file_type) }}
               </div>
             </div>
-            <div class="video-info">
-              <h3 class="video-title" :title="video.title">{{ video.title }}</h3>
-              <p class="video-description" v-if="video.description">{{ video.description }}</p>
-              <div class="video-meta">
+            <div class="resource-info">
+              <h3 class="resource-title" :title="resource.title">{{ resource.title }}</h3>
+              <p class="resource-description" v-if="resource.description">{{ resource.description }}</p>
+              <div class="resource-meta">
                 <span class="meta-item">
                   <el-icon><User /></el-icon>
-                  {{ video.uploader }}
+                  {{ resource.uploader }}
                 </span>
                 <span class="meta-item">
                   <el-icon><Clock /></el-icon>
-                  {{ formatDate(video.upload_time) }}
+                  {{ formatDate(resource.upload_time) }}
                 </span>
               </div>
-              <div class="video-actions" @click.stop>
+              <div class="resource-actions" @click.stop>
                 <el-button-group>
-                  <el-button size="small" type="primary" @click="openVideoPlayer(video)">
-                    <el-icon><VideoPlay /></el-icon>
-                    播放
+                  <el-button size="small" type="primary" @click="openResource(resource)">
+                    <el-icon>
+                      <VideoPlay v-if="resource.file_type === 'video'" />
+                      <View v-else />
+                    </el-icon>
+                    {{ resource.file_type === 'video' ? '播放' : '预览' }}
                   </el-button>
-                  <el-button size="small" @click="downloadVideo(video)">
+                  <el-button size="small" @click="downloadResource(resource)">
                     <el-icon><Download /></el-icon>
                     下载
                   </el-button>
@@ -148,7 +186,7 @@
                     v-if="isAdmin"
                     size="small"
                     type="warning"
-                    @click="openEditDialog(video)"
+                    @click="openEditDialog(resource)"
                   >
                     <el-icon><Edit /></el-icon>
                   </el-button>
@@ -156,7 +194,7 @@
                     v-if="isAdmin"
                     size="small"
                     type="danger"
-                    @click="confirmDelete(video)"
+                    @click="confirmDelete(resource)"
                   >
                     <el-icon><Delete /></el-icon>
                   </el-button>
@@ -171,7 +209,7 @@
     <!-- 视频播放对话框 -->
     <el-dialog
       v-model="playerDialogVisible"
-      :title="currentVideo?.title || '视频播放'"
+      :title="currentResource?.title || '视频播放'"
       width="80%"
       :before-close="handlePlayerClose"
       destroy-on-close
@@ -180,7 +218,7 @@
       <div class="video-player-container">
         <video
           ref="videoPlayer"
-          :src="currentVideoUrl"
+          :src="currentResourceUrl"
           controls
           autoplay
           class="video-player"
@@ -191,7 +229,7 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="downloadVideo(currentVideo!)" :disabled="!currentVideo">
+          <el-button @click="downloadResource(currentResource!)" :disabled="!currentResource">
             <el-icon><Download /></el-icon>
             下载视频
           </el-button>
@@ -202,18 +240,47 @@
       </template>
     </el-dialog>
 
-    <!-- 编辑视频对话框 -->
-    <el-dialog v-model="editDialogVisible" title="编辑视频信息" width="500px">
+    <!-- PDF预览对话框 -->
+    <el-dialog
+      v-model="pdfDialogVisible"
+      :title="currentResource?.title || 'PDF预览'"
+      width="85%"
+      :before-close="handlePdfClose"
+      destroy-on-close
+      class="pdf-viewer-dialog"
+    >
+      <div class="pdf-viewer-container">
+        <iframe
+          :src="currentResourceUrl"
+          class="pdf-viewer"
+          frameborder="0"
+        ></iframe>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="downloadResource(currentResource!)" :disabled="!currentResource">
+            <el-icon><Download /></el-icon>
+            下载PDF
+          </el-button>
+          <el-button type="primary" @click="pdfDialogVisible = false">
+            关闭
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑资料对话框 -->
+    <el-dialog v-model="editDialogVisible" title="编辑资料信息" width="500px">
       <el-form :model="editForm" label-width="80px">
-        <el-form-item label="视频标题">
-          <el-input v-model="editForm.title" placeholder="请输入视频标题" />
+        <el-form-item label="资料标题">
+          <el-input v-model="editForm.title" placeholder="请输入资料标题" />
         </el-form-item>
-        <el-form-item label="视频描述">
+        <el-form-item label="资料描述">
           <el-input
             v-model="editForm.description"
             type="textarea"
             :rows="4"
-            placeholder="请输入视频描述"
+            placeholder="请输入资料描述"
           />
         </el-form-item>
       </el-form>
@@ -235,7 +302,6 @@ import {
   VideoCamera,
   Upload,
   UploadFilled,
-  Film,
   Refresh,
   VideoPlay,
   Download,
@@ -243,7 +309,12 @@ import {
   Delete,
   User,
   Clock,
-  Loading
+  Loading,
+  FolderOpened,
+  Folder,
+  Document,
+  Tickets,
+  View
 } from '@element-plus/icons-vue'
 import llmHttp from '@/config/api/llmHttp'
 
@@ -253,9 +324,18 @@ const store = useStore()
 // 权限判断
 const isAdmin = computed(() => store.getters.isAdmin)
 
-// 视频列表
-const videos = ref<any[]>([])
+// 资料列表
+const resources = ref<any[]>([])
 const loading = ref(false)
+const filterType = ref('all')  // 筛选类型: all, video, pdf, ppt
+
+// 计算属性 - 筛选后的资料列表
+const filteredResources = computed(() => {
+  if (filterType.value === 'all') {
+    return resources.value
+  }
+  return resources.value.filter(r => r.file_type === filterType.value)
+})
 
 // 上传相关
 const uploadRef = ref()
@@ -264,13 +344,43 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadForm = ref({
   title: '',
-  description: ''
+  description: '',
+  fileType: 'video' as 'video' | 'pdf' | 'ppt'
 })
 
-// 播放器相关
+// 计算属性 - 根据文件类型返回接受的文件格式
+const acceptFileTypes = computed(() => {
+  switch (uploadForm.value.fileType) {
+    case 'video':
+      return '.mp4,.avi,.mov,.mkv,.wmv,.flv,.webm,.m4v'
+    case 'pdf':
+      return '.pdf'
+    case 'ppt':
+      return '.ppt,.pptx'
+    default:
+      return '*'
+  }
+})
+
+// 计算属性 - 上传提示文本
+const uploadTipText = computed(() => {
+  switch (uploadForm.value.fileType) {
+    case 'video':
+      return '支持 mp4、avi、mov、mkv 等格式，最大 500MB'
+    case 'pdf':
+      return '支持 PDF 格式，最大 100MB'
+    case 'ppt':
+      return '支持 ppt、pptx 格式，最大 100MB'
+    default:
+      return '请选择文件'
+  }
+})
+
+// 播放器/预览器相关
 const playerDialogVisible = ref(false)
-const currentVideo = ref<any>(null)
-const currentVideoUrl = ref('')
+const pdfDialogVisible = ref(false)
+const currentResource = ref<any>(null)
+const currentResourceUrl = ref('')
 const videoPlayer = ref<HTMLVideoElement | null>(null)
 const isClosingPlayer = ref(false)  // 标记是否正在关闭播放器
 
@@ -283,22 +393,38 @@ const editForm = ref({
 })
 const saving = ref(false)
 
-// 加载视频列表
-async function loadVideos() {
+// 加载资料列表
+async function loadResources() {
   loading.value = true
   try {
-    const response = await llmHttp.get('/videos/list')
+    const response = await llmHttp.get('/resources/list')
     if (response.data.ok) {
-      videos.value = response.data.data.videos || []
+      resources.value = response.data.data.resources || []
     } else {
-      ElMessage.error(response.data.message || '加载视频列表失败')
+      ElMessage.error(response.data.message || '加载资料列表失败')
     }
   } catch (error: any) {
-    console.error('加载视频列表失败:', error)
-    ElMessage.error('加载视频列表失败')
+    console.error('加载资料列表失败:', error)
+    ElMessage.error('加载资料列表失败')
   } finally {
     loading.value = false
   }
+}
+
+// 获取文件类型标签
+function getFileTypeLabel(fileType: string): string {
+  switch (fileType) {
+    case 'video': return '视频'
+    case 'pdf': return 'PDF'
+    case 'ppt': return 'PPT'
+    default: return '文件'
+  }
+}
+
+// 切换上传文件类型时清空已选文件
+function handleUploadTypeChange() {
+  selectedFile.value = null
+  uploadRef.value?.clearFiles()
 }
 
 // 文件选择处理
@@ -315,10 +441,10 @@ function handleFileRemove() {
   selectedFile.value = null
 }
 
-// 上传视频
+// 上传资料
 async function handleUpload() {
   if (!selectedFile.value) {
-    ElMessage.warning('请先选择视频文件')
+    ElMessage.warning('请先选择文件')
     return
   }
 
@@ -329,9 +455,10 @@ async function handleUpload() {
   formData.append('file', selectedFile.value)
   formData.append('title', uploadForm.value.title || selectedFile.value.name)
   formData.append('description', uploadForm.value.description || '')
+  formData.append('file_type', uploadForm.value.fileType)
 
   try {
-    const response = await llmHttp.post('/videos/upload', formData, {
+    const response = await llmHttp.post('/resources/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
@@ -343,13 +470,13 @@ async function handleUpload() {
     })
 
     if (response.data.ok) {
-      ElMessage.success('视频上传成功')
+      ElMessage.success('资料上传成功')
       // 重置表单
-      uploadForm.value = { title: '', description: '' }
+      uploadForm.value = { title: '', description: '', fileType: uploadForm.value.fileType }
       selectedFile.value = null
       uploadRef.value?.clearFiles()
       // 刷新列表
-      await loadVideos()
+      await loadResources()
     } else {
       ElMessage.error(response.data.message || '上传失败')
     }
@@ -362,54 +489,78 @@ async function handleUpload() {
   }
 }
 
-// 打开视频播放器
-function openVideoPlayer(video: any) {
-  currentVideo.value = video
-  // 构建流式播放URL，使用multi_turn_chat_jwt token
+// 打开资料预览
+function openResource(resource: any) {
+  currentResource.value = resource
   const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
   const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
-  currentVideoUrl.value = `${baseUrl}/videos/${video.id}/stream?token=${token}`
-  playerDialogVisible.value = true
+  
+  if (resource.file_type === 'video') {
+    // 视频播放
+    currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
+    playerDialogVisible.value = true
+  } else if (resource.file_type === 'pdf') {
+    // PDF预览
+    currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/preview?token=${token}`
+    pdfDialogVisible.value = true
+  } else if (resource.file_type === 'ppt') {
+    // PPT直接下载（浏览器无法直接预览PPT）
+    ElMessage.info('PPT文件将直接下载')
+    downloadResource(resource)
+  }
 }
 
-// 关闭播放器
+// 关闭视频播放器
 function handlePlayerClose(done: () => void) {
-  isClosingPlayer.value = true  // 标记为主动关闭
+  isClosingPlayer.value = true
   if (videoPlayer.value) {
     videoPlayer.value.pause()
-    videoPlayer.value.src = ''  // 清空src防止继续加载
+    videoPlayer.value.src = ''
   }
-  currentVideoUrl.value = ''
-  currentVideo.value = null
+  currentResourceUrl.value = ''
+  currentResource.value = null
   done()
-  // 延迟重置标记
   setTimeout(() => {
     isClosingPlayer.value = false
   }, 100)
 }
 
+// 关闭PDF预览器
+function handlePdfClose(done: () => void) {
+  currentResourceUrl.value = ''
+  currentResource.value = null
+  done()
+}
+
 // 视频播放错误处理
 function handleVideoError() {
-  // 如果是主动关闭播放器，不显示错误
-  if (isClosingPlayer.value || !currentVideoUrl.value) {
+  if (isClosingPlayer.value || !currentResourceUrl.value) {
     return
   }
   ElMessage.error('视频加载失败，请稍后重试')
 }
 
-// 下载视频
-async function downloadVideo(video: any) {
-  if (!video) return
+// 下载资料
+async function downloadResource(resource: any) {
+  if (!resource) return
   
   try {
-    const response = await llmHttp.get(`/videos/${video.id}/download`, {
+    const response = await llmHttp.get(`/resources/${resource.id}/download`, {
       responseType: 'blob'
     })
     
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
-    link.download = video.original_filename || video.filename || `${video.title}.mp4`
+    
+    // 根据文件类型设置默认扩展名
+    let defaultExt = ''
+    switch (resource.file_type) {
+      case 'video': defaultExt = '.mp4'; break
+      case 'pdf': defaultExt = '.pdf'; break
+      case 'ppt': defaultExt = '.pptx'; break
+    }
+    link.download = resource.original_filename || resource.filename || `${resource.title}${defaultExt}`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -432,16 +583,16 @@ function openEditDialog(video: any) {
   editDialogVisible.value = true
 }
 
-// 保存视频信息
+// 保存资料信息
 async function saveVideoInfo() {
   if (!editForm.value.title.trim()) {
-    ElMessage.warning('请输入视频标题')
+    ElMessage.warning('请输入资料标题')
     return
   }
 
   saving.value = true
   try {
-    const response = await llmHttp.post(`/videos/${editForm.value.id}/update`, {
+    const response = await llmHttp.post(`/resources/${editForm.value.id}/update`, {
       title: editForm.value.title,
       description: editForm.value.description
     })
@@ -449,7 +600,7 @@ async function saveVideoInfo() {
     if (response.data.ok) {
       ElMessage.success('保存成功')
       editDialogVisible.value = false
-      await loadVideos()
+      await loadResources()
     } else {
       ElMessage.error(response.data.message || '保存失败')
     }
@@ -462,10 +613,10 @@ async function saveVideoInfo() {
 }
 
 // 确认删除
-async function confirmDelete(video: any) {
+async function confirmDelete(resource: any) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除视频「${video.title}」吗？此操作不可恢复。`,
+      `确定要删除资料「${resource.title}」吗？此操作不可恢复。`,
       '删除确认',
       {
         confirmButtonText: '删除',
@@ -474,11 +625,11 @@ async function confirmDelete(video: any) {
       }
     )
     
-    const response = await llmHttp.post(`/videos/${video.id}/delete`)
+    const response = await llmHttp.post(`/resources/${resource.id}/delete`)
     
     if (response.data.ok) {
       ElMessage.success('删除成功')
-      await loadVideos()
+      await loadResources()
     } else {
       ElMessage.error(response.data.message || '删除失败')
     }
@@ -514,12 +665,12 @@ function formatDate(dateStr: string): string {
 
 // 初始化
 onMounted(() => {
-  loadVideos()
+  loadResources()
 })
 </script>
 
 <style scoped>
-.video-center-page {
+.resource-center-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
@@ -556,9 +707,14 @@ onMounted(() => {
 }
 
 .upload-card,
-.video-list-card {
+.resource-list-card {
   margin-bottom: 20px;
   border-radius: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
 }
 
 .card-header {
@@ -576,7 +732,7 @@ onMounted(() => {
   flex: 1;
 }
 
-.video-upload {
+.resource-upload {
   width: 100%;
 }
 
@@ -596,45 +752,56 @@ onMounted(() => {
   margin-top: 15px;
 }
 
-.video-grid {
+.resource-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
 }
 
-.video-item {
+.resource-item {
   cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
   border-radius: 12px;
   overflow: hidden;
 }
 
-.video-item:hover {
+.resource-item:hover {
   transform: translateY(-5px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
 }
 
-.video-thumbnail {
+.resource-thumbnail {
   height: 180px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
 }
 
-.play-icon {
+.resource-thumbnail.type-video {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.resource-thumbnail.type-pdf {
+  background: linear-gradient(135deg, #c62828 0%, #e53935 100%);
+}
+
+.resource-thumbnail.type-ppt {
+  background: linear-gradient(135deg, #d84315 0%, #ff5722 100%);
+}
+
+.type-icon {
   font-size: 60px;
   color: rgba(255, 255, 255, 0.8);
   transition: transform 0.3s;
 }
 
-.video-item:hover .play-icon {
+.resource-item:hover .type-icon {
   transform: scale(1.2);
   color: #fff;
 }
 
-.video-duration {
+.resource-size {
   position: absolute;
   bottom: 10px;
   right: 10px;
@@ -645,11 +812,23 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.video-info {
+.resource-type-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.resource-info {
   padding: 15px;
 }
 
-.video-title {
+.resource-title {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 8px;
@@ -659,7 +838,7 @@ onMounted(() => {
   color: #303133;
 }
 
-.video-description {
+.resource-description {
   font-size: 0.9rem;
   color: #606266;
   margin-bottom: 10px;
@@ -669,7 +848,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.video-meta {
+.resource-meta {
   display: flex;
   gap: 15px;
   font-size: 0.85rem;
@@ -683,7 +862,7 @@ onMounted(() => {
   gap: 4px;
 }
 
-.video-actions {
+.resource-actions {
   display: flex;
   justify-content: flex-start;
 }
@@ -710,12 +889,28 @@ onMounted(() => {
   gap: 10px;
 }
 
+.pdf-viewer-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.pdf-viewer-container {
+  width: 100%;
+  height: 75vh;
+  background: #f5f5f5;
+}
+
+.pdf-viewer {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
 @media (max-width: 768px) {
   .page-header h1 {
     font-size: 1.8rem;
   }
   
-  .video-grid {
+  .resource-grid {
     grid-template-columns: 1fr;
   }
   
@@ -725,6 +920,11 @@ onMounted(() => {
   
   .el-col {
     max-width: 100% !important;
+  }
+  
+  .header-right {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 </style>

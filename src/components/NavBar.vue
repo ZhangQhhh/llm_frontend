@@ -69,7 +69,7 @@
               </el-dropdown-item>
               <el-dropdown-item command="video-center">
                 <el-icon><VideoCamera /></el-icon>
-                <span>视频中心</span>
+                <span>资料中心</span>
               </el-dropdown-item>
               <el-dropdown-item divided command="profile">
                 <el-icon><Setting /></el-icon>

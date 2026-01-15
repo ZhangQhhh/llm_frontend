@@ -3,6 +3,72 @@
     <!-- 重新启用 ThreeBackground，粒子数已优化到30个 -->
     <ThreeBackground />
     <el-container class="smart-office-layout container-fluid">
+      <!-- 最左侧：会话列表（可收起） -->
+      <div :class="['session-sidebar', { collapsed: sessionSidebarCollapsed }]">
+        <div class="session-sidebar-toggle" @click="sessionSidebarCollapsed = !sessionSidebarCollapsed">
+          <el-icon :size="16">
+            <ArrowLeft v-if="!sessionSidebarCollapsed" />
+            <ArrowRight v-else />
+          </el-icon>
+        </div>
+        <div class="session-sidebar-content" v-show="!sessionSidebarCollapsed">
+          <div class="session-header">
+            <div class="session-title-wrapper">
+              <el-icon :size="16" class="session-icon"><ChatDotRound /></el-icon>
+              <span class="session-title">会话列表</span>
+              <el-button
+                class="session-refresh-btn"
+                size="small"
+                circle
+                @click="refreshSessionList"
+                :loading="sessionListLoading"
+              >
+                <el-icon :size="12"><Refresh /></el-icon>
+              </el-button>
+            </div>
+            <el-button
+              class="session-new-btn"
+              size="small"
+              @click="createNewSession"
+              :loading="sessionCreating"
+            >
+              <el-icon><Plus /></el-icon>
+              <span>新建</span>
+            </el-button>
+          </div>
+          
+          <div class="session-list" v-loading="sessionListLoading">
+            <div
+              v-for="sess in sessionList"
+              :key="sess.session_id"
+              :class="['session-item', { active: sess.session_id === sessionId }]"
+              @click="switchSession(sess.session_id)"
+            >
+              <div class="session-item-content">
+                <el-icon :size="14" class="session-item-icon"><ChatLineSquare /></el-icon>
+                <div class="session-item-text">
+                  <div class="session-item-title">{{ sess.title }}</div>
+                  <div class="session-item-time">{{ formatSessionTime(sess.updated_at) }}</div>
+                </div>
+              </div>
+              <el-button
+                type="danger"
+                size="small"
+                circle
+                class="session-delete-btn"
+                @click.stop="deleteSessionById(sess.session_id)"
+              >
+                <el-icon :size="12"><Delete /></el-icon>
+              </el-button>
+            </div>
+            <div v-if="!sessionList.length && !sessionListLoading" class="session-empty">
+              <el-icon :size="32" class="session-empty-icon"><ChatDotRound /></el-icon>
+              <span>暂无会话记录</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 左侧：额外知识库 -->
       <el-aside width="320px" class="kb-aside">
         <div class="kb-header mb-3">
@@ -79,11 +145,12 @@
             </div>
             <el-scrollbar v-else style="height: 100%" id="kbList">
               <div
-                v-for="file in kbFiles"
+                v-for="(file, index) in kbFiles"
                 :key="file.name"
                 class="kb-item"
               >
                 <el-checkbox v-model="file.selected" />
+                <span v-if="file.selected" class="kb-file-index">[{{ getKbFileGlobalIndex(index) }}]</span>
                 <el-icon class="file-icon"><Document /></el-icon>
                 <span class="kb-file-name" :title="file.name">
                   {{ file.name }}
@@ -118,7 +185,7 @@
                   <span>支持知识库检索</span>
                   <el-divider direction="vertical" />
                   <el-icon class="desc-icon"><Document /></el-icon>
-                  <span>最多10个会话文档</span>
+                  <span>最多5个会话文档</span>
                 </p>
               </div>
             </div>
@@ -152,125 +219,66 @@
             <el-icon class="title-icon" :size="18"><UploadFilled /></el-icon>
             <span class="card-title">文档与配置</span>
           </div>
-          <div class="upload-row row g-3">
-            <div class="col-lg-6 col-12">
-              <div class="config-section">
-                <label class="config-label">
-                  <el-icon><Document /></el-icon>
-                  <span>会话文档上传</span>
-                </label>
-                <div class="upload-group">
-                  <input
-                    ref="sessionFileInputRef"
-                    type="file"
-                    multiple
-                    accept=".txt,.md,.pdf,.docx,.doc"
-                    class="form-control"
-                  />
-                  <el-button
-                    type="primary"
-                    :loading="sessionUploading"
-                    class="upload-action-btn"
-                    @click="uploadSessionFiles"
-                  >
-                    <el-icon class="me-2"><UploadFilled /></el-icon>
-                    上传文档
-                  </el-button>
-                </div>
-                <div class="config-hint">
-                  <el-icon><Warning /></el-icon>
-                  <span>建议上传 1~10 个参考文档</span>
-                </div>
+          
+          <!-- 第一行：文档上传 -->
+          <div class="config-row">
+            <div class="config-group">
+              <div class="group-title">
+                <el-icon><Document /></el-icon>
+                <span>文档上传</span>
               </div>
-            </div>
-            <div class="col-lg-6 col-12">
-              <div class="config-section">
-                <label class="config-label">
-                  <el-icon><Tickets /></el-icon>
-                  <span>模板文件</span>
-                  <el-tag size="small" type="info" class="ms-2">可选</el-tag>
-                </label>
-                <el-select
-                  v-model="templateFile"
-                  filterable
-                  clearable
-                  placeholder="选择模板文件"
-                  class="w-100 config-select"
-                >
-                  <el-option
-                    v-for="name in sessionFiles"
-                    :key="name"
-                    :label="name"
-                    :value="name"
-                  />
-                </el-select>
-              </div>
-            </div>
-            <div class="col-lg-6 col-12">
-              <div class="config-section">
-                <label class="config-label">
-                  <el-icon><Cpu /></el-icon>
-                  <span>AI 模型</span>
-                </label>
-                <el-select
-                  v-model="selectedModel"
-                  placeholder="选择模型"
-                  class="w-100 config-select"
-                >
-                  <template #prefix><el-icon><Cpu /></el-icon></template>
-                  <el-option label="Qwen (通用)" value="qwen3-32b" />
-                  <el-option label="Qwen (增强)" value="qwen2025" />
-                  <el-option label="DeepSeekv3_2" value="deepseek" />
-                </el-select>
-              </div>
-            </div>
-            <div class="col-lg-6 col-12">
-              <div class="config-section" style="display: flex; flex-direction: row; align-items: flex-end; gap: 24px; height: 100%;">
-                <div class="option-item" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                  <label class="config-label-inline" style="margin: 0; white-space: nowrap;">
-                    <el-icon><MagicStick /></el-icon>
-                    <span>写作模式</span>
-                  </label>
-                  <div class="mode-selector-compact" style="margin: 0;">
-                    <el-radio-group v-model="writeMode" size="small">
-                      <el-radio-button value="generate">生成</el-radio-button>
-                      <el-radio-button value="complete">补全</el-radio-button>
-                    </el-radio-group>
+              <div class="group-content">
+                <div class="config-item">
+                  <span class="item-label">会话文档</span>
+                  <div class="item-control upload-inline">
+                    <input
+                      ref="sessionFileInputRef"
+                      type="file"
+                      multiple
+                      accept=".txt,.md,.pdf,.docx,.doc"
+                      class="form-control form-control-sm"
+                      style="max-width: 200px;"
+                    />
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :loading="sessionUploading"
+                      @click="uploadSessionFiles"
+                    >
+                      <el-icon class="me-1"><UploadFilled /></el-icon>
+                      上传
+                    </el-button>
                   </div>
                 </div>
-                <div class="option-item" style="display: flex; align-items: center; gap: 8px;">
-                  <label class="config-label-inline" style="margin: 0; white-space: nowrap;">
-                    <el-icon><ChatDotRound /></el-icon>
-                    <span>高级选项</span>
-                  </label>
-                  <el-switch
-                    v-model="thinkingMode"
-                    active-text="思考"
-                    inactive-text="标准"
+                <div class="config-item">
+                  <span class="item-label">模板文件</span>
+                  <el-select
+                    v-model="templateFile"
+                    filterable
+                    clearable
+                    placeholder="选择模板"
                     size="small"
-                    style="--el-switch-on-color: #409eff"
-                  />
+                    style="width: 180px;"
+                  >
+                    <el-option
+                      v-for="name in sessionFiles"
+                      :key="name"
+                      :label="name"
+                      :value="name"
+                    />
+                  </el-select>
+                  <el-tag size="small" type="info">可选</el-tag>
                 </div>
-              </div>
-            </div>
-            <!-- OCR 图片识别 -->
-            <div class="col-lg-6 col-12">
-              <div class="config-section">
-                <label class="config-label">
-                  <el-icon><Picture /></el-icon>
-                  <span>图片识别 (OCR)</span>
-                </label>
-                <div class="ocr-group">
+                <div class="config-item">
+                  <span class="item-label">图片识别</span>
                   <el-select
                     v-model="ocrType"
-                    placeholder="识别类型"
-                    class="ocr-type-select"
-                    style="width: 140px;"
+                    size="small"
+                    style="width: 100px;"
                   >
                     <el-option label="通用识别" value="universal" />
                     <el-option label="文档识别" value="document" />
                     <el-option label="手写识别" value="handwritten" />
-                    <!-- <el-option label="身份证" value="idcard" /> -->
                   </el-select>
                   <input
                     ref="ocrFileInputRef"
@@ -282,17 +290,85 @@
                   />
                   <el-button
                     type="warning"
+                    size="small"
                     :loading="ocrUploading"
                     @click="ocrFileInputRef?.click()"
-                    class="ocr-btn"
                   >
                     <el-icon class="me-1"><Picture /></el-icon>
-                    选择图片识别
+                    OCR
                   </el-button>
                 </div>
-                <div class="config-hint">
-                  <el-icon><Warning /></el-icon>
-                  <span>支持 JPG/PNG/BMP 等格式</span>
+              </div>
+            </div>
+          </div>
+
+          <el-divider class="my-3" />
+
+          <!-- 第二行：模型与模式配置 -->
+          <div class="config-row">
+            <div class="config-group">
+              <div class="group-title">
+                <el-icon><Cpu /></el-icon>
+                <span>模型与模式</span>
+              </div>
+              <div class="group-content">
+                <div class="config-item">
+                  <span class="item-label">AI 模型</span>
+                  <el-select
+                    v-model="selectedModel"
+                    size="small"
+                    style="width: 160px;"
+                  >
+                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
+                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen (增强)" value="qwen2025" />
+                    <el-option label="DeepSeekv3_2" value="deepseek" />
+                  </el-select>
+                </div>
+                <div class="config-item">
+                  <span class="item-label">提示词</span>
+                  <el-radio-group v-model="promptMode" size="small">
+                    <el-radio-button value="raw">
+                      <el-tooltip content="无系统提示词，直接使用原生大模型" placement="top">
+                        <span>原生</span>
+                      </el-tooltip>
+                    </el-radio-button>
+                    <el-radio-button value="standard">
+                      <el-tooltip content="使用内置写作助手提示词" placement="top">
+                        <span>标准</span>
+                      </el-tooltip>
+                    </el-radio-button>
+                    <el-radio-button value="skeleton">
+                      <el-tooltip content="自定义角色、文稿类型等结构化提示词" placement="top">
+                        <span>骨架</span>
+                      </el-tooltip>
+                    </el-radio-button>
+                  </el-radio-group>
+                  <el-button
+                    v-if="promptMode === 'skeleton'"
+                    type="primary"
+                    size="small"
+                    @click="skeletonDialogVisible = true"
+                  >
+                    <el-icon><Setting /></el-icon>
+                  </el-button>
+                </div>
+                <div v-if="promptMode === 'standard'" class="config-item">
+                  <span class="item-label">写作模式</span>
+                  <el-radio-group v-model="writeMode" size="small">
+                    <el-radio-button value="generate">生成</el-radio-button>
+                    <el-radio-button value="complete">补全</el-radio-button>
+                  </el-radio-group>
+                </div>
+                <div class="config-item">
+                  <span class="item-label">思考模式</span>
+                  <el-switch
+                    v-model="thinkingMode"
+                    active-text="开"
+                    inactive-text="关"
+                    size="small"
+                    style="--el-switch-on-color: #409eff"
+                  />
                 </div>
               </div>
             </div>
@@ -305,7 +381,7 @@
             </div>
             <div class="files-list">
               <el-tag
-                v-for="name in sessionFiles"
+                v-for="(name, index) in sessionFiles"
                 :key="name"
                 closable
                 type="info"
@@ -314,8 +390,12 @@
                 @close="deleteSessionFile(name)"
               >
                 <el-icon class="me-1"><Document /></el-icon>
-                {{ name }}
+                <span class="file-index">[{{ index + 1 }}]</span> {{ name }}
               </el-tag>
+            </div>
+            <div v-if="hasMultipleFiles" class="files-hint">
+              <el-icon><InfoFilled /></el-icon>
+              <span>提示：可在输入中通过编号引用文件，如"使用[1]作为模板，引用[2]中的内容"</span>
             </div>
           </div>
           <el-alert
@@ -339,6 +419,15 @@
             <span class="card-title">对话区域</span>
             <el-badge :value="messages.length" :max="99" type="primary" class="ms-2" />
             <div class="title-actions">
+              <el-button
+                size="small"
+                :disabled="sending"
+                @click="resetSession"
+                class="new-session-btn"
+              >
+                <el-icon class="me-1"><Promotion /></el-icon>
+                新建会话
+              </el-button>
               <el-button
                 type="success"
                 size="small"
@@ -442,27 +531,108 @@
           </div>
 
           <div class="input-bar">
-            <el-input
-              v-model="prompt"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 8 }"
-              :placeholder="inputPlaceholder"
-              class="input-textarea"
-              @keydown.enter.stop.prevent="handleEnter"
-            />
-            <el-button
-              type="primary"
-              :loading="sending"
-              size="large"
-              :class="['send-btn', writeMode === 'complete' ? 'complete-mode' : '']"
-              @click="sendMessage"
-            >
-              <el-icon class="me-2" :size="18">
-                <MagicStick v-if="writeMode === 'complete'" />
-                <Promotion v-else />
-              </el-icon>
-              <span>{{ sendButtonText }}</span>
-            </el-button>
+            <div class="input-wrapper">
+              <el-input
+                v-model="prompt"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 8 }"
+                :placeholder="inputPlaceholder"
+                class="input-textarea"
+                @keydown.enter="handleEnter"
+              />
+              <div v-if="pendingFiles.length || pendingImages.length" class="pending-files">
+                <el-tag
+                  v-for="(file, idx) in pendingFiles"
+                  :key="'file-' + file.name"
+                  closable
+                  size="small"
+                  type="info"
+                  @close="removePendingFile(idx)"
+                >
+                  <span class="pending-index">[本次{{ idx + 1 }}]</span>
+                  <el-icon class="me-1"><Document /></el-icon>
+                  {{ file.name }}
+                </el-tag>
+                <el-tag
+                  v-for="(file, idx) in pendingImages"
+                  :key="'img-' + file.name"
+                  closable
+                  size="small"
+                  type="success"
+                  @close="removePendingImage(idx)"
+                >
+                  <span class="pending-index">[图{{ idx + 1 }}]</span>
+                  <el-icon class="me-1"><Picture /></el-icon>
+                  {{ file.name }}
+                </el-tag>
+              </div>
+            </div>
+            <div class="input-actions">
+              <!-- 临时附件功能暂时隐藏 -->
+              <!--
+              <el-tooltip content="附加文档(仅本次消息)" placement="top">
+                <el-button
+                  :disabled="sending"
+                  circle
+                  class="attach-btn"
+                  @click="triggerFileAttach"
+                >
+                  <el-icon :size="18"><FolderAdd /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <input
+                ref="attachFileInputRef"
+                type="file"
+                multiple
+                accept=".doc,.docx,.pdf,.txt,.md"
+                style="display: none"
+                @change="handleFileAttach"
+              />
+              <el-tooltip content="附加图片(OCR识别,仅本次消息)" placement="top">
+                <el-button
+                  :disabled="sending"
+                  circle
+                  class="attach-btn"
+                  @click="triggerImageAttach"
+                >
+                  <el-icon :size="18"><Picture /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <input
+                ref="attachImageInputRef"
+                type="file"
+                multiple
+                accept="image/*"
+                style="display: none"
+                @change="handleImageAttach"
+              />
+              -->
+              <el-button
+                v-if="!sending"
+                type="primary"
+                size="large"
+                :class="['send-btn', writeMode === 'complete' ? 'complete-mode' : '']"
+                @click="sendMessage"
+              >
+                <el-icon class="me-2" :size="18">
+                  <MagicStick v-if="writeMode === 'complete'" />
+                  <Promotion v-else />
+                </el-icon>
+                <span>{{ sendButtonText }}</span>
+              </el-button>
+              <el-button
+                v-else
+                type="danger"
+                size="large"
+                class="stop-btn"
+                @click="stopGeneration"
+              >
+                <el-icon class="me-2" :size="18">
+                  <CircleClose />
+                </el-icon>
+                <span>停止生成</span>
+              </el-button>
+            </div>
           </div>
         </el-card>
       </el-main>
@@ -481,30 +651,38 @@
         </div>
       </template>
 
+      <!-- 识别模式选择 -->
+      <div class="template-mode-selector">
+        <el-radio-group v-model="templateRecognizeMode" :disabled="templateLoading">
+          <el-radio-button value="system">
+            <el-icon class="me-1"><Setting /></el-icon>
+            系统识别
+          </el-radio-button>
+          <el-radio-button value="ai">
+            <el-icon class="me-1"><MagicStick /></el-icon>
+            AI 生成大纲
+          </el-radio-button>
+        </el-radio-group>
+        <p class="mode-hint">
+          {{ templateRecognizeMode === 'system' ? '使用规则提取文档结构和关键信息' : '使用大模型智能分析并生成写作大纲' }}
+        </p>
+      </div>
+
       <div v-if="templateLoading" class="template-loading">
         <el-icon class="loading-icon spin" :size="48">
           <Loading />
         </el-icon>
-        <p class="loading-text">正在智能识别模板结构...</p>
+        <p class="loading-text">{{ templateRecognizeMode === 'ai' ? '正在AI生成大纲...' : '正在智能识别模板结构...' }}</p>
         <p class="loading-hint">这可能需要几秒钟时间</p>
       </div>
       <div v-else class="template-content">
         <el-form label-width="90px" class="template-form">
-          <el-form-item label="模板概要">
-            <el-input
-              v-model="templateOutlineText"
-              type="textarea"
-              :autosize="{ minRows: 4, maxRows: 8 }"
-              readonly
-              class="outline-textarea"
-            />
-          </el-form-item>
-          <el-form-item label="生成提示">
+          <el-form-item label="写作大纲">
             <el-input
               v-model="templateContent"
               type="textarea"
-              :autosize="{ minRows: 6, maxRows: 12 }"
-              placeholder="您可以在此基础上微调写作提示词，使其更符合您的需求"
+              :autosize="{ minRows: 10, maxRows: 18 }"
+              placeholder="您可以在此基础上微调写作大纲，使其更符合您的需求"
               class="content-textarea"
             />
           </el-form-item>
@@ -517,13 +695,132 @@
             取消
           </el-button>
           <el-button
+            v-if="!templateContent && !templateLoading"
             type="primary"
             size="large"
-            :disabled="!templateContent"
+            @click="executeTemplateRecognize"
+          >
+            <el-icon class="me-2"><Tickets /></el-icon>
+            开始识别
+          </el-button>
+          <el-button
+            v-if="templateContent"
+            type="primary"
+            size="large"
             @click="applyTemplate"
           >
             <el-icon class="me-2"><Promotion /></el-icon>
             确认使用
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 骨架模式配置弹窗 -->
+    <el-dialog
+      v-model="skeletonDialogVisible"
+      title="骨架提示词配置"
+      width="600px"
+      class="skeleton-dialog"
+    >
+      <el-form label-width="100px" label-position="left">
+        <el-form-item label="角色定义">
+          <el-select
+            v-model="skeletonConfig.role"
+            placeholder="选择或输入角色定义"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option label="专业写作助手" value="专业写作助手" />
+            <el-option label="公文写作专家" value="公文写作专家" />
+            <el-option label="政策分析师" value="政策分析师" />
+            <el-option label="新闻记者" value="新闻记者" />
+            <el-option label="文案策划" value="文案策划" />
+            <el-option label="学术研究员" value="学术研究员" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="文稿类型">
+          <el-select
+            v-model="skeletonConfig.doc_type"
+            placeholder="选择或输入文稿类型"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option label="通用文档" value="通用文档" />
+            <el-option label="政府公文" value="政府公文" />
+            <el-option label="工作报告" value="工作报告" />
+            <el-option label="会议纪要" value="会议纪要" />
+            <el-option label="通知公告" value="通知公告" />
+            <el-option label="请示报告" value="请示报告" />
+            <el-option label="分析报告" value="分析报告" />
+            <el-option label="新闻稿" value="新闻稿" />
+            <el-option label="宣传材料" value="宣传材料" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标受众">
+          <el-select
+            v-model="skeletonConfig.audience"
+            placeholder="选择或输入目标受众"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option label="一般读者" value="一般读者" />
+            <el-option label="上级领导" value="上级领导" />
+            <el-option label="普通民众" value="普通民众" />
+            <el-option label="专业人士" value="专业人士" />
+            <el-option label="企业员工" value="企业员工" />
+            <el-option label="政府部门" value="政府部门" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="语气风格">
+          <el-select
+            v-model="skeletonConfig.tone"
+            placeholder="选择或输入语气风格"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option label="正式、专业" value="正式、专业" />
+            <el-option label="庄重、严肃" value="庄重、严肃" />
+            <el-option label="平实、亲切" value="平实、亲切" />
+            <el-option label="生动、活泼" value="生动、活泼" />
+            <el-option label="简洁、精炼" value="简洁、精炼" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="输出格式">
+          <el-select
+            v-model="skeletonConfig.output_format"
+            placeholder="选择或输入输出格式"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option label="结构清晰的文章" value="结构清晰的文章" />
+            <el-option label="分点列出" value="分点列出" />
+            <el-option label="表格形式" value="表格形式" />
+            <el-option label="带小标题的段落" value="带小标题的段落" />
+            <el-option label="问答形式" value="问答形式" />
+            <el-option label="大纲形式" value="大纲形式" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="额外要求">
+          <el-input
+            v-model="skeletonConfig.extra_requirements"
+            type="textarea"
+            :rows="3"
+            placeholder="其他特殊要求（可选）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="skeletonDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="skeletonDialogVisible = false">
+            <el-icon class="me-1"><Check /></el-icon>
+            确认配置
           </el-button>
         </div>
       </template>
@@ -537,6 +834,7 @@ import { useStore } from 'vuex';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   ChatDotRound,
+  ChatLineSquare,
   User,
   UploadFilled,
   Collection,
@@ -551,6 +849,14 @@ import {
   Download,
   Picture,
   Cpu,
+  Setting,
+  Check,
+  Plus,
+  Refresh,
+  ArrowLeft,
+  ArrowRight,
+  InfoFilled,
+  CircleClose,
 } from '@element-plus/icons-vue';
 import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -590,6 +896,15 @@ export default defineComponent({
     Download,
     Picture,
     Cpu,
+    Setting,
+    Check,
+    Plus,
+    Refresh,
+    ArrowLeft,
+    ArrowRight,
+    InfoFilled,
+    CircleClose,
+    ChatLineSquare,
     ThreeBackground,
   },
   setup() {
@@ -598,6 +913,12 @@ export default defineComponent({
     const sessionId = ref<string>('');
     const prompt = ref<string>('');
     const messages = ref<ChatMessage[]>([]);
+
+    // 会话列表相关
+    const sessionList = ref<Array<{ session_id: string; title: string; created_at: string; updated_at: string }>>([]);
+    const sessionListLoading = ref<boolean>(false);
+    const sessionCreating = ref<boolean>(false);
+    const sessionSidebarCollapsed = ref<boolean>(false);
 
     const useKb = ref<boolean>(false);
     const kbPassword = ref<string>('');
@@ -610,6 +931,12 @@ export default defineComponent({
     const sessionFileInputRef = ref<HTMLInputElement | null>(null);
     const kbFileInputRef = ref<HTMLInputElement | null>(null);
     const ocrFileInputRef = ref<HTMLInputElement | null>(null);
+    const attachFileInputRef = ref<HTMLInputElement | null>(null);
+    const attachImageInputRef = ref<HTMLInputElement | null>(null);
+    
+    // 待发送的附件文件和图片
+    const pendingFiles = ref<File[]>([]);
+    const pendingImages = ref<File[]>([]);
 
     const ocrUploading = ref<boolean>(false);
     const ocrResults = ref<Array<{ filename: string; text: string; success: boolean }>>([]);
@@ -620,6 +947,20 @@ export default defineComponent({
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
     const selectedModel = ref<string>('qwen3-32b');
+    
+    // 提示词模式：raw(原生) / standard(标准) / skeleton(骨架)
+    const promptMode = ref<'raw' | 'standard' | 'skeleton'>('standard');
+    // 骨架模式配置
+    const skeletonConfig = ref({
+      role: '专业写作助手',
+      doc_type: '通用文档',
+      audience: '一般读者',
+      tone: '正式、专业',
+      output_format: '结构清晰的文章',
+      extra_requirements: ''
+    });
+    // 骨架模式配置对话框
+    const skeletonDialogVisible = ref<boolean>(false);
 
     const templateFile = ref<string>('');
     const templateDialogVisible = ref<boolean>(false);
@@ -627,6 +968,7 @@ export default defineComponent({
     const templateContent = ref<string>('');
     const templateOutlineText = ref<string>('');
     const templateReady = ref<boolean>(false);
+    const templateRecognizeMode = ref<'system' | 'ai'>('system');  // 模板识别模式
 
     const chatWindowRef = ref<HTMLDivElement | null>(null);
     const sending = ref<boolean>(false);
@@ -654,6 +996,30 @@ export default defineComponent({
       return ocrResults.value.filter((r) => r.success && r.text).length;
     });
 
+    // 计算知识库文件的全局编号起始值（会话文档数量 + 1）
+    const kbFileGlobalIndexStart = computed(() => {
+      return sessionFiles.value.length;
+    });
+
+    // 判断是否有多个文件（用于显示提示）
+    const hasMultipleFiles = computed(() => {
+      const selectedKbCount = kbFiles.value.filter(f => f.selected).length;
+      return sessionFiles.value.length + selectedKbCount > 1;
+    });
+
+    // 获取知识库文件的全局编号（仅计算已勾选的文件）
+    const getKbFileGlobalIndex = (index: number): number => {
+      // 基础编号 = 会话文档数量
+      let globalIndex = sessionFiles.value.length;
+      // 计算当前文件之前有多少个已勾选的文件
+      for (let i = 0; i < index; i++) {
+        if (kbFiles.value[i].selected) {
+          globalIndex++;
+        }
+      }
+      return globalIndex + 1;
+    };
+
     const scrollToBottom = () => {
       nextTick(() => {
         const el = chatWindowRef.value;
@@ -669,6 +1035,11 @@ export default defineComponent({
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
+      // 添加用户名头，用于后端识别用户
+      const username: string | undefined = store.state?.user?.username;
+      if (username) {
+        headers['X-User-Name'] = encodeURIComponent(username);
+      }
       return headers;
     };
 
@@ -681,8 +1052,173 @@ export default defineComponent({
         });
         const data = await resp.json();
         sessionId.value = data.session_id;
+        // 创建后刷新会话列表
+        await refreshSessionList();
       } catch (e) {
         ElMessage.error('创建会话失败，请稍后重试');
+      }
+    };
+
+    const resetSession = async () => {
+      // 不再调用 clear 接口，保留旧会话的数据
+      // 只清空本地状态，创建新会话
+      
+      // 清空本地状态
+      sessionId.value = '';
+      messages.value = [];
+      sessionFiles.value = [];
+      templateFile.value = '';
+      templateContent.value = '';
+      templateReady.value = false;
+      ocrResults.value = [];
+      prompt.value = '';
+      
+      // 创建新会话
+      await ensureSession();
+      // 刷新会话列表
+      await refreshSessionList();
+      ElMessage.success('已新建会话');
+    };
+
+    // ====== 会话列表功能 ======
+    const refreshSessionList = async () => {
+      sessionListLoading.value = true;
+      try {
+        const resp = await fetch(`${writerBase}/writer/session/list`, {
+          method: 'GET',
+          headers: getAuthHeaders(),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          sessionList.value = data.sessions || [];
+        }
+      } catch (e) {
+        console.warn('获取会话列表失败', e);
+      } finally {
+        sessionListLoading.value = false;
+      }
+    };
+
+    const createNewSession = async () => {
+      sessionCreating.value = true;
+      try {
+        // 清空本地状态
+        sessionId.value = '';
+        messages.value = [];
+        sessionFiles.value = [];
+        templateFile.value = '';
+        templateContent.value = '';
+        templateReady.value = false;
+        ocrResults.value = [];
+        prompt.value = '';
+        
+        // 创建新会话
+        await ensureSession();
+        // 刷新会话列表
+        await refreshSessionList();
+        ElMessage.success('已创建新会话');
+      } finally {
+        sessionCreating.value = false;
+      }
+    };
+
+    const switchSession = async (targetSessionId: string) => {
+      if (targetSessionId === sessionId.value) return;
+      
+      sessionListLoading.value = true;
+      try {
+        const resp = await fetch(`${writerBase}/writer/session/load`, {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ session_id: targetSessionId }),
+        });
+        const data = await resp.json();
+        console.log('[switchSession] 后端返回:', data);
+        if (data.ok) {
+          // 更新本地状态
+          sessionId.value = data.session_id;
+          sessionFiles.value = data.files || [];
+          
+          // 加载对话历史
+          messages.value = [];
+          const conversations = data.conversations || [];
+          console.log('[switchSession] conversations:', conversations.length, conversations);
+          for (const conv of conversations) {
+            if (conv.user_query) {
+              messages.value.push({ role: 'user', text: conv.user_query });
+            }
+            if (conv.assistant_response) {
+              messages.value.push({ role: 'assistant', text: conv.assistant_response });
+            }
+          }
+          console.log('[switchSession] messages:', messages.value.length, messages.value);
+          
+          // 清空其他状态
+          templateFile.value = '';
+          templateContent.value = '';
+          templateReady.value = false;
+          ocrResults.value = [];
+          prompt.value = '';
+          
+          ElMessage.success(`已切换到会话: ${data.title}`);
+        }
+      } catch (e) {
+        ElMessage.error('切换会话失败');
+      } finally {
+        sessionListLoading.value = false;
+      }
+    };
+
+    const deleteSessionById = async (targetSessionId: string) => {
+      try {
+        await ElMessageBox.confirm('确定要删除该会话吗？删除后无法恢复。', '删除确认', {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+        });
+        
+        const resp = await fetch(`${writerBase}/writer/session/delete`, {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ session_id: targetSessionId }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          // 刷新会话列表
+          await refreshSessionList();
+          
+          // 如果删除的是当前会话，清空本地状态但不自动创建新会话
+          if (targetSessionId === sessionId.value) {
+            sessionId.value = '';
+            messages.value = [];
+            sessionFiles.value = [];
+            templateFile.value = '';
+            templateContent.value = '';
+            templateReady.value = false;
+            ocrResults.value = [];
+            prompt.value = '';
+          }
+          ElMessage.success('会话已删除');
+        }
+      } catch (e: any) {
+        if (e !== 'cancel') {
+          ElMessage.error('删除失败');
+        }
+      }
+    };
+
+    const formatSessionTime = (isoTime: string) => {
+      if (!isoTime) return '';
+      try {
+        const date = new Date(isoTime);
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        if (isToday) {
+          return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+      } catch {
+        return '';
       }
     };
 
@@ -705,6 +1241,8 @@ export default defineComponent({
       }
     };
 
+    const MAX_SESSION_FILES = 5;  // 会话文档总数限制
+
     const uploadSessionFiles = async () => {
       const input = sessionFileInputRef.value;
       if (!input || !input.files || input.files.length === 0) {
@@ -712,13 +1250,26 @@ export default defineComponent({
         return;
       }
 
+      // 检查总数限制
+      const currentCount = sessionFiles.value.length;
+      const newFiles = Array.from(input.files);
+      if (currentCount >= MAX_SESSION_FILES) {
+        ElMessage.warning(`会话文档最多${MAX_SESSION_FILES}个，请先删除已有文档`);
+        input.value = '';
+        return;
+      }
+      const allowedCount = MAX_SESSION_FILES - currentCount;
+      if (newFiles.length > allowedCount) {
+        ElMessage.warning(`当前已有${currentCount}个文档，最多还能上传${allowedCount}个`);
+      }
+
       await ensureSession();
       if (!sessionId.value) return;
 
       const fd = new FormData();
       fd.append('session_id', sessionId.value);
-      Array.from(input.files)
-        .slice(0, 10)
+      newFiles
+        .slice(0, allowedCount)
         .forEach((f) => fd.append('files', f));
 
       sessionUploading.value = true;
@@ -943,17 +1494,26 @@ export default defineComponent({
       }
 
       templateDialogVisible.value = true;
+    };
+
+    // 执行模板识别（根据选择的模式）
+    const executeTemplateRecognize = async () => {
       templateLoading.value = true;
       templateContent.value = '';
       templateOutlineText.value = '';
 
       try {
-        const resp = await fetch(`${writerBase}/writer/template/recognize`, {
+        const endpoint = templateRecognizeMode.value === 'ai' 
+          ? `${writerBase}/writer/template/ai-outline`
+          : `${writerBase}/writer/template/recognize`;
+        
+        const resp = await fetch(endpoint, {
           method: 'POST',
           headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             session_id: sessionId.value,
             filename: templateFile.value,
+            model_id: selectedModel.value || undefined,
           }),
         });
         const data = await resp.json();
@@ -992,6 +1552,131 @@ export default defineComponent({
       sendMessage();
     };
 
+    // 停止生成
+    const stopGeneration = () => {
+      if (abortController.value) {
+        abortController.value.abort();
+        abortController.value = null;
+        sending.value = false;
+        ElMessage.info('已停止生成');
+        // 在最后一条消息后添加提示
+        const lastMsg = messages.value[messages.value.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.text) {
+          lastMsg.text += '\n\n*[生成已中断]*';
+        }
+      }
+    };
+
+    // 触发附件选择
+    const triggerFileAttach = () => {
+      attachFileInputRef.value?.click();
+    };
+
+    // 读取文件内容为文本
+    const readFileAsText = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    };
+
+    // 附件数量限制
+    const MAX_PENDING_FILES = 5;
+    const MAX_PENDING_IMAGES = 10;
+
+    // 处理附件选择
+    const handleFileAttach = () => {
+      const input = attachFileInputRef.value;
+      if (!input || !input.files) return;
+      
+      const files = Array.from(input.files);
+      for (const file of files) {
+        // 检查数量限制
+        if (pendingFiles.value.length >= MAX_PENDING_FILES) {
+          ElMessage.warning(`单次最多附加 ${MAX_PENDING_FILES} 个文档`);
+          break;
+        }
+        // 检查是否已存在同名文件
+        if (!pendingFiles.value.some(f => f.name === file.name)) {
+          pendingFiles.value.push(file);
+        }
+      }
+      input.value = '';
+    };
+
+    // 移除待发送附件
+    const removePendingFile = (index: number) => {
+      pendingFiles.value.splice(index, 1);
+    };
+
+    // 触发图片选择
+    const triggerImageAttach = () => {
+      attachImageInputRef.value?.click();
+    };
+
+    // 处理图片选择
+    const handleImageAttach = () => {
+      const input = attachImageInputRef.value;
+      if (!input || !input.files) return;
+      
+      const files = Array.from(input.files);
+      for (const file of files) {
+        // 检查数量限制
+        if (pendingImages.value.length >= MAX_PENDING_IMAGES) {
+          ElMessage.warning(`单次最多附加 ${MAX_PENDING_IMAGES} 张图片`);
+          break;
+        }
+        if (!pendingImages.value.some(f => f.name === file.name)) {
+          pendingImages.value.push(file);
+        }
+      }
+      input.value = '';
+    };
+
+    // 移除待发送图片
+    const removePendingImage = (index: number) => {
+      pendingImages.value.splice(index, 1);
+    };
+
+    // OCR 识别图片并获取文本
+    const ocrPendingImages = async (): Promise<string> => {
+      if (!pendingImages.value.length) return '';
+      
+      const formData = new FormData();
+      formData.append('ocr_type', ocrType.value);
+      for (const file of pendingImages.value) {
+        formData.append('files', file);
+      }
+      
+      try {
+        const resp = await fetch(`${ocrBase}/ocr/recognize`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: formData,
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          throw new Error(data.error || 'OCR识别失败');
+        }
+        
+        // 合并所有识别结果
+        const results = data.results || [];
+        const texts: string[] = [];
+        for (const r of results) {
+          if (r.success && r.text) {
+            texts.push(`【图片: ${r.filename}】\n${r.text}`);
+          }
+        }
+        pendingImages.value = [];
+        return texts.join('\n\n');
+      } catch (e: any) {
+        ElMessage.error(`OCR识别失败: ${e.message}`);
+        return '';
+      }
+    };
+
     const sendMessage = async () => {
       const text = prompt.value.trim();
       if (!text) {
@@ -1015,6 +1700,28 @@ export default defineComponent({
         abortController.value = null;
       }
 
+      // 读取本次附件内容（仅用于本次消息，不保存到会话）
+      const tempDocs: Array<{filename: string; content: string}> = [];
+      if (pendingFiles.value.length) {
+        for (const file of pendingFiles.value) {
+          try {
+            const content = await readFileAsText(file);
+            if (content) {
+              tempDocs.push({ filename: file.name, content });
+            }
+          } catch (e) {
+            console.error(`读取文件 ${file.name} 失败:`, e);
+          }
+        }
+        pendingFiles.value = [];
+      }
+
+      // OCR 识别附加的图片（如果有）
+      let pendingOcrText = '';
+      if (pendingImages.value.length) {
+        pendingOcrText = await ocrPendingImages();
+      }
+
       sending.value = true;
       const userMsg: ChatMessage = { role: 'user', text };
       messages.value.push(userMsg);
@@ -1027,11 +1734,12 @@ export default defineComponent({
         ? kbFiles.value.filter((f) => f.selected).map((f) => f.name)
         : [];
 
-      // 获取OCR识别的文本内容作为参考资料
-      const ocrTexts = ocrResults.value
+      // 获取OCR识别的文本内容作为参考资料（包括预先上传的和本次附加的）
+      const existingOcrTexts = ocrResults.value
         .filter((r) => r.success && r.text)
         .map((r) => `【${r.filename}】\n${r.text}`)
         .join('\n\n');
+      const ocrTexts = [existingOcrTexts, pendingOcrText].filter(Boolean).join('\n\n');
 
       const payload: any = {
         session_id: sessionId.value,
@@ -1042,7 +1750,10 @@ export default defineComponent({
         use_kb: !!useKb.value,
         kb_selected: kbSelected,
         write_mode: writeMode.value,
-        ocr_content: ocrTexts || undefined,  // OCR识别内容作为参考资料
+        ocr_content: ocrTexts || undefined,
+        prompt_mode: promptMode.value,
+        skeleton_config: promptMode.value === 'skeleton' ? skeletonConfig.value : undefined,
+        temp_docs: tempDocs.length > 0 ? tempDocs : undefined,
       };
 
       const ac = new AbortController();
@@ -1386,7 +2097,8 @@ export default defineComponent({
     };
 
     onMounted(async () => {
-      await ensureSession();
+      await refreshSessionList();
+      // 不再自动创建会话，等用户输入或点击新建时才创建
       await refreshKbList();
     });
 
@@ -1394,6 +2106,15 @@ export default defineComponent({
       sessionId,
       prompt,
       messages,
+      sessionList,
+      sessionListLoading,
+      sessionCreating,
+      sessionSidebarCollapsed,
+      refreshSessionList,
+      createNewSession,
+      switchSession,
+      deleteSessionById,
+      formatSessionTime,
       useKb,
       kbPassword,
       kbFiles,
@@ -1403,14 +2124,30 @@ export default defineComponent({
       sessionFileInputRef,
       kbFileInputRef,
       ocrFileInputRef,
+      attachFileInputRef,
+      pendingFiles,
+      triggerFileAttach,
+      handleFileAttach,
+      removePendingFile,
+      attachImageInputRef,
+      pendingImages,
+      triggerImageAttach,
+      handleImageAttach,
+      removePendingImage,
       ocrUploading,
       ocrResults,
       ocrType,
       ocrSuccessCount,
+      kbFileGlobalIndexStart,
+      hasMultipleFiles,
+      getKbFileGlobalIndex,
       uploadOcrImages,
       clearOcrResults,
       thinkingMode,
       writeMode,
+      promptMode,
+      skeletonConfig,
+      skeletonDialogVisible,
       inputPlaceholder,
       sendButtonText,
       selectedModel,
@@ -1419,9 +2156,12 @@ export default defineComponent({
       templateLoading,
       templateContent,
       templateOutlineText,
+      templateRecognizeMode,
+      executeTemplateRecognize,
       templateReady,
       chatWindowRef,
       sending,
+      resetSession,
       uploadSessionFiles,
       deleteSessionFile,
       uploadKbFiles,
@@ -1429,6 +2169,7 @@ export default defineComponent({
       onRecognizeTemplate,
       applyTemplate,
       handleEnter,
+      stopGeneration,
       sendMessage,
       formatMessage,
       hasExportableContent,
@@ -1460,6 +2201,8 @@ export default defineComponent({
   border: 1px solid rgba(255, 255, 255, 0.2);
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: row;
 }
 
 /* ========== 左侧知识库区域 ========== */
@@ -1470,6 +2213,234 @@ export default defineComponent({
   backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
+}
+
+/* ========== 会话列表可收起侧边栏 ========== */
+.session-sidebar {
+  position: relative;
+  width: 220px;
+  min-width: 220px;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  border-right: none;
+}
+
+.session-sidebar-toggle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  color: white;
+  box-shadow: 2px 0 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s;
+}
+
+.session-sidebar.collapsed .session-sidebar-toggle {
+  right: -24px;
+}
+
+.session-sidebar-toggle:hover {
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 3px 0 12px rgba(102, 126, 234, 0.4);
+}
+
+.session-sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  overflow: hidden;
+  background: #ffffff;
+  min-height: 0;
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.session-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-icon {
+  color: #667eea;
+}
+
+.session-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.session-refresh-btn {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #667eea;
+  margin-left: 4px;
+}
+
+.session-refresh-btn:hover {
+  background: #f3f4f6;
+  border-color: #667eea;
+}
+
+.session-new-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.session-new-btn:hover {
+  opacity: 0.9;
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+/* 会话列表滚动条样式 */
+.session-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.session-list::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 3px;
+}
+
+.session-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f9fafb;
+  border: 1px solid transparent;
+}
+
+.session-item:hover {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+.session-item.active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.08) 100%);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.session-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.session-item-icon {
+  color: #9ca3af;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.session-item.active .session-item-icon {
+  color: #667eea;
+}
+
+.session-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.session-item-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.session-delete-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px;
+}
+
+.session-item:hover .session-delete-btn {
+  opacity: 1;
+}
+
+.session-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.session-empty-icon {
+  opacity: 0.4;
 }
 
 .kb-header {
@@ -1617,6 +2588,14 @@ export default defineComponent({
   flex-shrink: 0;
 }
 
+.kb-file-index {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 12px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
 .kb-file-name {
   font-size: 13px;
   color: #374151;
@@ -1745,6 +2724,73 @@ export default defineComponent({
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+/* ========== 配置行布局 ========== */
+.config-row {
+  margin-bottom: 0;
+}
+
+.config-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 90px;
+  padding: 6px 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  flex-shrink: 0;
+}
+
+.group-title .el-icon {
+  color: #667eea;
+  font-size: 16px;
+}
+
+.group-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-label {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.upload-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-inline .form-control {
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+}
+
+.upload-inline .form-control:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
 .card-title-bar {
   display: flex;
   align-items: center;
@@ -1769,6 +2815,29 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.new-session-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: #fff;
+}
+
+.new-session-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+  color: #fff;
+}
+
+.new-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #c0c4cc;
 }
 
 .export-btn {
@@ -2076,6 +3145,28 @@ export default defineComponent({
   font-size: 13px;
 }
 
+.file-index {
+  font-weight: 600;
+  color: #667eea;
+  margin-right: 4px;
+}
+
+.files-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f0f9ff;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0369a1;
+}
+
+.files-hint .el-icon {
+  font-size: 14px;
+}
+
 .template-tip {
   border-radius: 8px;
 }
@@ -2291,9 +3382,49 @@ export default defineComponent({
   margin-top: 16px;
 }
 
+.input-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .input-textarea {
   flex: 1;
   border-radius: 12px;
+}
+
+.pending-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+}
+
+.pending-index {
+  font-weight: 600;
+  color: #667eea;
+  margin-right: 4px;
+}
+
+.input-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.attach-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.attach-btn:hover {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 .send-btn {
@@ -2303,7 +3434,56 @@ export default defineComponent({
   white-space: nowrap;
 }
 
+.stop-btn {
+  border-radius: 12px;
+  font-weight: 500;
+  padding: 12px 28px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+  border: none;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.stop-btn:hover {
+  background: linear-gradient(135deg, #ff5252 0%, #e04848 100%);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
 /* ========== 模板弹窗 ========== */
+.template-mode-selector {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.template-mode-selector .el-radio-group {
+  display: flex;
+  width: 100%;
+}
+
+.template-mode-selector .el-radio-button {
+  flex: 1;
+}
+
+.template-mode-selector .el-radio-button__inner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+}
+
 .template-dialog .dialog-header {
   display: flex;
   align-items: center;
@@ -2403,10 +3583,10 @@ export default defineComponent({
   height: 2px;
   width: 0;
   background: linear-gradient(90deg, #667eea, #764ba2);
-  animation: dataFlow 2s ease-in-out infinite;
+  /* animation: dataFlow 2s ease-in-out infinite; */
 }
 
-@keyframes dataFlow {
+/* @keyframes dataFlow {
   0%, 100% {
     width: 0;
     opacity: 0;
@@ -2415,7 +3595,7 @@ export default defineComponent({
     width: 100%;
     opacity: 1;
   }
-}
+} */
 
 .kb-item {
   position: relative;
@@ -2467,14 +3647,14 @@ export default defineComponent({
 }
 
 /* 数据流动画 */
-@keyframes dataStream {
+/* @keyframes dataStream {
   0% {
     transform: translateX(-100%);
   }
   100% {
     transform: translateX(100%);
   }
-}
+} */
 
 .config-section {
   position: relative;
@@ -2488,9 +3668,9 @@ export default defineComponent({
   width: 2px;
   height: 100%;
   background: linear-gradient(180deg, transparent, #667eea, transparent);
-  animation: dataStream 2s ease-in-out infinite;
+  /* animation: dataStream 2s ease-in-out infinite; */
   opacity: 0;
-  transition: opacity 0.3s;
+  /* transition: opacity 0.3s; */
 }
 
 .config-section:hover::after {
