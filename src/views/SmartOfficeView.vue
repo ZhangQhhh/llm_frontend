@@ -319,14 +319,14 @@
                     size="small"
                     style="width: 160px;"
                   >
-                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
-                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <!-- <el-option label="Qwen-Plus (云端)" value="qwen-plus" /> -->
+                    <el-option label="Qwen (通用)" valwue="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
                     <el-option label="DeepSeekv3_2" value="deepseek" />
                   </el-select>
                 </div>
                 <div class="config-item">
-                  <span class="item-label">提示词</span>
+                  <span class="item-label">提示词模式</span>
                   <el-radio-group v-model="promptMode" size="small">
                     <el-radio-button value="raw">
                       <el-tooltip content="无系统提示词，直接使用原生大模型" placement="top">
@@ -946,7 +946,7 @@ export default defineComponent({
 
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
-    const selectedModel = ref<string>('qwen3-32b');
+    const selectedModel = ref<string>('Qwen (通用)');
     
     // 提示词模式：raw(原生) / standard(标准) / skeleton(骨架)
     const promptMode = ref<'raw' | 'standard' | 'skeleton'>('standard');
