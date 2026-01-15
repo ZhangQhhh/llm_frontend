@@ -35,10 +35,10 @@
           />
         </div>
         <div class="filter-item">
-          <label>用户ID：</label>
+          <label>用户名：</label>
           <el-input
-            v-model="filterUserId"
-            placeholder="输入用户ID筛选"
+            v-model="filterUserName"
+            placeholder="输入用户名筛选"
             clearable
             style="width: 200px;"
             @clear="handleSearch"
@@ -177,7 +177,6 @@
             <div class="detail-item" v-if="logDetail.metadata.user_id">
               <label>用户:</label>
               <span>{{ getUserName(logDetail.metadata.user_id) }}</span>
-              <span class="user-id-hint">(ID: {{ logDetail.metadata.user_id }})</span>
             </div>
             <div class="detail-item" v-if="logDetail.metadata.ip">
               <label>IP地址:</label>
@@ -237,6 +236,7 @@ import {
   type QALogListResponse
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
+import { buildUserFilterParams } from '@/utils/qaLogFilters';
 import { ensureUserCacheLoaded, getUserNameById } from '@/utils/userCache';
 import { isMockEnabled } from '@/mocks/mockService';
 
@@ -260,7 +260,7 @@ const logData = ref<QALogListResponse>({
 
 // 筛选条件
 const selectedDate = ref<string>(getTodayDate());
-const filterUserId = ref('');
+const filterUserName = ref('');
 const currentPage = ref(1);
 const pageSize = ref(20);
 
@@ -332,7 +332,6 @@ async function loadAvailableDates() {
   }
 }
 
-// 获取用户名（使用缓存服务）
 function getUserName(userId?: string): string {
   return getUserNameById(userId);
 }
@@ -344,9 +343,14 @@ async function loadLogs() {
 
   try {
     const token = store.state.user.token;
+    const userFilterResult = await buildUserFilterParams(filterUserName.value);
+    if (userFilterResult.status === 'ambiguous') {
+      const keyword = userFilterResult.keyword || filterUserName.value.trim();
+      ElMessage.warning(`用户名“${keyword}”匹配多个用户，请输入更完整的用户名`);
+    }
     const result = await getQALogsByDate(token, {
       date: selectedDate.value,
-      user_id: filterUserId.value || undefined,
+      ...userFilterResult.params,
       page: currentPage.value,
       page_size: pageSize.value
     });
@@ -393,7 +397,7 @@ function handleSearch() {
 // 处理重置
 function handleReset() {
   selectedDate.value = getTodayDate();
-  filterUserId.value = '';
+  filterUserName.value = '';
   currentPage.value = 1;
   pageSize.value = 20;
   loadLogs();
@@ -722,13 +726,6 @@ onMounted(async () => {
 .detail-item .mono {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85rem;
-}
-
-.user-id-hint {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  font-weight: normal;
-  margin-left: 0.5rem;
 }
 
 .detail-content {

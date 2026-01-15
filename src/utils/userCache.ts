@@ -6,7 +6,7 @@
 import { API_ENDPOINTS } from '@/config/api/api';
 import { fetchWithAuth, getApiUrl } from '@/utils/request';
 
-interface CachedUser {
+export interface CachedUser {
   id: string;
   username: string;
   email?: string;

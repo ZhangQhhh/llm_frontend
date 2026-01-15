@@ -486,6 +486,7 @@ export interface QALogDetail {
 export interface QALogListParams {
   date?: string;       // 日期，格式 YYYY-MM-DD，默认今天
   user_id?: string;    // 按用户ID筛选
+  username?: string;   // 按用户名筛选（需要后端支持）
   page?: number;       // 页码，默认1
   page_size?: number;  // 每页数量，默认20，最大100
 }
@@ -525,6 +526,7 @@ export async function getQALogsByDate(
   const queryParams = new URLSearchParams();
   if (params.date) queryParams.append('date', params.date);
   if (params.user_id) queryParams.append('user_id', params.user_id);
+  if (params.username) queryParams.append('username', params.username);
   if (params.page) queryParams.append('page', String(params.page));
   if (params.page_size) queryParams.append('page_size', String(params.page_size));
 

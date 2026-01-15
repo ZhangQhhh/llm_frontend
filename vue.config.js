@@ -16,10 +16,21 @@ module.exports = defineConfig({
   
   // 开发服务器配置
   devServer: {
+    host: '0.0.0.0',       
     port: 8080,
+    allowedHosts: 'all',      // ✅ 防止 "Invalid Host header"
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3000',
+        changeOrigin: true
+      },
+      '/llm': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:3000',
+        ws: true,
         changeOrigin: true
       }
     },
