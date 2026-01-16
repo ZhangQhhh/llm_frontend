@@ -269,6 +269,41 @@
       </template>
     </el-dialog>
 
+    <!-- PPT预览对话框 -->
+    <el-dialog
+      v-model="pptDialogVisible"
+      :title="currentResource?.title || 'PPT预览'"
+      width="85%"
+      :before-close="handlePptClose"
+      destroy-on-close
+      class="pdf-viewer-dialog"
+    >
+      <div class="pdf-viewer-container">
+        <div v-if="pptLoading" class="ppt-loading">
+          <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+          <p>正在转换PPT，请稍候...</p>
+        </div>
+        <iframe
+          v-show="!pptLoading"
+          :src="currentResourceUrl"
+          class="pdf-viewer"
+          frameborder="0"
+          @load="handlePptLoad"
+        ></iframe>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="downloadResource(currentResource!)" :disabled="!currentResource">
+            <el-icon><Download /></el-icon>
+            下载PPT
+          </el-button>
+          <el-button type="primary" @click="pptDialogVisible = false">
+            关闭
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 编辑资料对话框 -->
     <el-dialog v-model="editDialogVisible" title="编辑资料信息" width="500px">
       <el-form :model="editForm" label-width="80px">
@@ -379,6 +414,8 @@ const uploadTipText = computed(() => {
 // 播放器/预览器相关
 const playerDialogVisible = ref(false)
 const pdfDialogVisible = ref(false)
+const pptDialogVisible = ref(false)
+const pptLoading = ref(false)
 const currentResource = ref<any>(null)
 const currentResourceUrl = ref('')
 const videoPlayer = ref<HTMLVideoElement | null>(null)
@@ -504,9 +541,11 @@ function openResource(resource: any) {
     currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/preview?token=${token}`
     pdfDialogVisible.value = true
   } else if (resource.file_type === 'ppt') {
-    // PPT直接下载（浏览器无法直接预览PPT）
-    ElMessage.info('PPT文件将直接下载')
-    downloadResource(resource)
+    // PPT预览（后端转换为PDF）
+    pptLoading.value = true
+    currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/preview?token=${token}`
+    pptDialogVisible.value = true
+    // 加载完成后关闭loading状态（通过iframe的onload事件）
   }
 }
 
@@ -530,6 +569,19 @@ function handlePdfClose(done: () => void) {
   currentResourceUrl.value = ''
   currentResource.value = null
   done()
+}
+
+// 关闭PPT预览器
+function handlePptClose(done: () => void) {
+  currentResourceUrl.value = ''
+  currentResource.value = null
+  pptLoading.value = false
+  done()
+}
+
+// PPT预览加载完成
+function handlePptLoad() {
+  pptLoading.value = false
 }
 
 // 视频播放错误处理
@@ -903,6 +955,20 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+.ppt-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #606266;
+}
+
+.ppt-loading p {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 @media (max-width: 768px) {
