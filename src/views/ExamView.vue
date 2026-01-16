@@ -1555,6 +1555,9 @@ export default defineComponent({
       lastSwitchTime.value = time
       switchLogs.value.push({ time, type })
       
+      // 立即保存切屏记录到后端（强制保存，不检查答案变化）
+      saveProgress(true)
+      
       if (switchCount.value >= maxSwitchCount) {
         // 达到最大次数，自动提交
         ElMessage.error(`检测到第${switchCount.value}次切屏，系统将自动提交试卷！`)
