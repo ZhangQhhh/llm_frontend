@@ -1524,11 +1524,27 @@ export default defineComponent({
       ElMessage.success(resumeMsg)
     }
 
+    // 使用 sendBeacon 保存进度（用于页面卸载时确保数据不丢失）
+    const saveProgressWithBeacon = () => {
+      if (!attemptId.value || submitted.value) return
+      
+      const answers = collectAnswersForSave()
+      const data = JSON.stringify({
+        attempt_id: attemptId.value,
+        answers,
+        switch_count: switchCount.value
+      })
+      
+      // sendBeacon 确保页面卸载时数据能被发送
+      const url = API_ENDPOINTS.EXAM.SAVE_PROGRESS
+      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+    }
+
     // 页面关闭前警告
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (examStarted.value && !submitted.value) {
-        // 先保存一次进度
-        saveProgress()
+        // 使用 sendBeacon 保存进度（确保数据不丢失）
+        saveProgressWithBeacon()
         e.preventDefault()
         e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
         return e.returnValue
@@ -1555,8 +1571,8 @@ export default defineComponent({
       lastSwitchTime.value = time
       switchLogs.value.push({ time, type })
       
-      // 立即保存切屏记录到后端（强制保存，不检查答案变化）
-      saveProgress(true)
+      // 立即使用 sendBeacon 保存切屏记录（确保页面卸载时数据不丢失）
+      saveProgressWithBeacon()
       
       if (switchCount.value >= maxSwitchCount) {
         // 达到最大次数，自动提交
