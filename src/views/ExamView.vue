@@ -776,6 +776,7 @@ const API_ENDPOINTS = {
     REVIEW: `${MCQ_BASE_URL}/exam/review`,
     PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
     SAVE_PROGRESS: `${MCQ_BASE_URL}/exam/save_progress`,
+    ABANDON_PROGRESS: `${MCQ_BASE_URL}/exam/abandon_progress`,
     NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`
   },
   STUDENT: {
@@ -1476,7 +1477,19 @@ export default defineComponent({
             // 用户选择恢复考试
             resumeExam(data)
           } catch {
-            // 用户选择放弃，不做任何操作
+            // 用户选择放弃，调用后端 API 清除进度
+            try {
+              await mcqFetch(API_ENDPOINTS.EXAM.ABANDON_PROGRESS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  student_id: studentId,
+                  attempt_id: data.attempt_id
+                })
+              })
+            } catch (e) {
+              console.error('放弃进度失败:', e)
+            }
           }
         }
       } catch (error: any) {
