@@ -6,6 +6,10 @@ import { API_ENDPOINTS } from '@/config/api/api';
 import http from '@/config/api/http';
 import llmHttp from '@/config/api/llmHttp';
 import { isMockEnabled } from '@/mocks/mockService';
+import { createModuleLogger, LogModules } from '@/utils/logger';
+
+const log = createModuleLogger(LogModules.CHAT_API);
+
 import {
   mockGetQALogsByDate,
   mockGetQALogDetail,
@@ -21,14 +25,6 @@ export interface StreamMessage {
 }
 
 export function parseSSEMessage(raw: string): StreamMessage {
-  let debugStreamEnabled = false;
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      debugStreamEnabled = localStorage.getItem('debug_stream') === '1';
-    } catch {
-      debugStreamEnabled = false;
-    }
-  }
   let data = raw.replace(/\r$/, '');
   if (data.startsWith("data:")) {
     data = data.substring(5);
@@ -38,37 +34,43 @@ export function parseSSEMessage(raw: string): StreamMessage {
   }
 
   if (data.startsWith("SESSION:")) {
-    return { type: 'SESSION', data: data.substring(8).trim() };
+    const sessionId = data.substring(8).trim();
+    log.debug('收到 SESSION:', sessionId);
+    return { type: 'SESSION', data: sessionId };
   } else if (data.startsWith("THINK:")) {
     const rawData = data.substring(6);
-    // 调试日志：查看原始数据（移除长度限制）
-    if (debugStreamEnabled) {
-      console.log('[DEBUG] THINK 原始数据:', JSON.stringify(rawData.substring(0, 200)));
-    }
-    // 特别记录 Qwen 模型的思考内容
-    if (debugStreamEnabled && (rawData.includes('qwen') || rawData.length > 0)) {
-      console.log('[DEBUG] Qwen THINK 检测到数据，长度:', rawData.length);
-    }
+    log.debug('收到 THINK，长度:', rawData.length, '前200字符:', rawData.substring(0, 200));
     return { type: 'THINK', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("CONTENT:")) {
     const rawData = data.substring(8);
-    // 调试日志：查看原始数据（只显示前100个字符）
-    if (debugStreamEnabled && rawData.length < 100) {
-      console.log('[DEBUG] CONTENT 原始数据:', JSON.stringify(rawData));
+    if (rawData.length < 100) {
+      log.debug('收到 CONTENT:', rawData);
+    } else {
+      log.debug('收到 CONTENT，长度:', rawData.length);
     }
     return { type: 'CONTENT', data: rawData.replace(/<NEWLINE>/g, "\n") };
   } else if (data.startsWith("SOURCE:")) {
-    return { type: 'SOURCE', data: data.substring(7).trim() };
+    const sourceData = data.substring(7).trim();
+    log.debug('收到 SOURCE');
+    return { type: 'SOURCE', data: sourceData };
   } else if (data.startsWith("SUB_QUESTIONS:")) {
-    return { type: 'SUB_QUESTIONS', data: data.substring(14).trim() };
+    const subQuestions = data.substring(14).trim();
+    log.debug('收到 SUB_QUESTIONS');
+    return { type: 'SUB_QUESTIONS', data: subQuestions };
   } else if (data.startsWith("KEYWORDS:")) {
-    return { type: 'KEYWORDS', data: data.substring(9).trim() };
+    const keywords = data.substring(9).trim();
+    log.debug('收到 KEYWORDS');
+    return { type: 'KEYWORDS', data: keywords };
   } else if (data.startsWith("ERROR:")) {
-    return { type: 'ERROR', data: data.substring(6).trim() };
+    const errorMsg = data.substring(6).trim();
+    log.error('收到 ERROR:', errorMsg);
+    return { type: 'ERROR', data: errorMsg };
   } else if (data.startsWith("DONE:")) {
+    log.debug('收到 DONE');
     return { type: 'DONE', data: '' };
   }
   
+  log.debug('收到 UNKNOWN 消息:', data.substring(0, 100));
   return { type: 'UNKNOWN', data };
 }
 

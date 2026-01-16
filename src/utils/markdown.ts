@@ -42,6 +42,12 @@ export function renderMarkdown(markdown: string): string {
     // 0. 预处理：将 <NEWLINE> 转换为真实换行符 \n
     let normalizedMarkdown = markdown.replace(/<NEWLINE>/g, '\n');
     
+    // 0.05 移除 <think>...</think> 标签（思考过程不应显示在正文中）
+    // 某些模型（如千问增强）可能在 CONTENT 消息中包含思考标签
+    normalizedMarkdown = normalizedMarkdown.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    // 移除可能残留的单独标签
+    normalizedMarkdown = normalizedMarkdown.replace(/<\/?think>/gi, '');
+    
     // 0.1 防御性处理：检测未闭合的代码块标记
     // 统计代码块标记（三个反引号）的数量
     const codeBlockMarkers = (normalizedMarkdown.match(/```/g) || []).length;
