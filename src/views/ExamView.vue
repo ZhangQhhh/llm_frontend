@@ -753,6 +753,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
@@ -1543,11 +1544,19 @@ export default defineComponent({
     // 页面关闭前警告
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (examStarted.value && !submitted.value) {
-        // 使用 sendBeacon 保存进度（确保数据不丢失）
+        // 记录切屏并保存
+        handleSwitchDetected('关闭/刷新页面')
         saveProgressWithBeacon()
         e.preventDefault()
         e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
         return e.returnValue
+      }
+    }
+
+    // pagehide 事件处理（更可靠的页面卸载检测）
+    const handlePageHide = (e: PageTransitionEvent) => {
+      if (examStarted.value && !submitted.value) {
+        saveProgressWithBeacon()
       }
     }
 
@@ -2319,6 +2328,17 @@ export default defineComponent({
       }
     }
 
+    // 监听路由离开（Vue Router 导航）
+    onBeforeRouteLeave((to, from, next) => {
+      if (examStarted.value && !submitted.value) {
+        // 记录切屏
+        handleSwitchDetected('离开考试页面')
+        // 使用 sendBeacon 确保数据保存
+        saveProgressWithBeacon()
+      }
+      next()
+    })
+
     onMounted(() => {
       loadPapers()
       loadPublishedExams()  // 加载考试通知
@@ -2327,6 +2347,8 @@ export default defineComponent({
       checkInProgressExam()
       // 添加页面关闭前警告
       window.addEventListener('beforeunload', handleBeforeUnload)
+      // 添加 pagehide 事件（比 beforeunload 更可靠）
+      window.addEventListener('pagehide', handlePageHide)
       // 添加防作弊检测
       document.addEventListener('visibilitychange', handleVisibilityChange)
       window.addEventListener('blur', handleWindowBlur)
@@ -2336,6 +2358,7 @@ export default defineComponent({
       stopTimer()
       stopAutoSave()
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handlePageHide)
       // 移除防作弊检测
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
