@@ -753,7 +753,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
-import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
@@ -904,6 +904,7 @@ export default defineComponent({
     const lastSwitchTime = ref('')  // 最后一次切屏时间
     const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
     const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
+    const blurTimeoutId = ref<number | null>(null)  // blur 延迟检测定时器
 
     // ======= 错题本相关 =======
     const wrongBook = ref<any[]>([])  // 错题本列表
@@ -1554,7 +1555,7 @@ export default defineComponent({
     }
 
     // pagehide 事件处理（更可靠的页面卸载检测）
-    const handlePageHide = (e: PageTransitionEvent) => {
+    const handlePageHide = () => {
       if (examStarted.value && !submitted.value) {
         saveProgressWithBeacon()
       }
@@ -1603,7 +1604,26 @@ export default defineComponent({
     const handleWindowBlur = () => {
       // 如果页面已经隐藏，不重复计数（visibilitychange已处理）
       if (document.hidden) return
-      handleSwitchDetected('切换到其他应用')
+      
+      // 延迟检测：等待 5秒，过滤点击输入法等短暂失焦
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+      }
+      blurTimeoutId.value = window.setTimeout(() => {
+        // 5秒后仍未获得焦点，才算切屏
+        if (!document.hasFocus() && !document.hidden) {
+          handleSwitchDetected('切换到其他窗口')
+        }
+        blurTimeoutId.value = null
+      }, 5000)
+    }
+
+    const handleWindowFocus = () => {
+      // 窗口重新获得焦点，取消延迟检测
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+        blurTimeoutId.value = null
+      }
     }
 
     // 重置防作弊状态（开始新考试时调用）
@@ -2352,6 +2372,7 @@ export default defineComponent({
       // 添加防作弊检测
       document.addEventListener('visibilitychange', handleVisibilityChange)
       window.addEventListener('blur', handleWindowBlur)
+      window.addEventListener('focus', handleWindowFocus)
     })
 
     onUnmounted(() => {
@@ -2362,6 +2383,12 @@ export default defineComponent({
       // 移除防作弊检测
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
+      // 清理延迟定时器
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+        blurTimeoutId.value = null
+      }
     })
 
     return {
