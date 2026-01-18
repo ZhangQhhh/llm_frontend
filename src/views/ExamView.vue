@@ -753,6 +753,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { useStore } from 'vuex'
+import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
@@ -775,6 +776,7 @@ const API_ENDPOINTS = {
     REVIEW: `${MCQ_BASE_URL}/exam/review`,
     PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
     SAVE_PROGRESS: `${MCQ_BASE_URL}/exam/save_progress`,
+    ABANDON_PROGRESS: `${MCQ_BASE_URL}/exam/abandon_progress`,
     NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`
   },
   STUDENT: {
@@ -903,6 +905,7 @@ export default defineComponent({
     const lastSwitchTime = ref('')  // 最后一次切屏时间
     const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
     const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
+    const blurTimeoutId = ref<number | null>(null)  // blur 延迟检测定时器
 
     // ======= 错题本相关 =======
     const wrongBook = ref<any[]>([])  // 错题本列表
@@ -1474,7 +1477,19 @@ export default defineComponent({
             // 用户选择恢复考试
             resumeExam(data)
           } catch {
-            // 用户选择放弃，不做任何操作
+            // 用户选择放弃，调用后端 API 清除进度
+            try {
+              await mcqFetch(API_ENDPOINTS.EXAM.ABANDON_PROGRESS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  student_id: studentId,
+                  attempt_id: data.attempt_id
+                })
+              })
+            } catch (e) {
+              console.error('放弃进度失败:', e)
+            }
           }
         }
       } catch (error: any) {
@@ -1524,14 +1539,38 @@ export default defineComponent({
       ElMessage.success(resumeMsg)
     }
 
+    // 使用 sendBeacon 保存进度（用于页面卸载时确保数据不丢失）
+    const saveProgressWithBeacon = () => {
+      if (!attemptId.value || submitted.value) return
+      
+      const answers = collectAnswersForSave()
+      const data = JSON.stringify({
+        attempt_id: attemptId.value,
+        answers,
+        switch_count: switchCount.value
+      })
+      
+      // sendBeacon 确保页面卸载时数据能被发送
+      const url = API_ENDPOINTS.EXAM.SAVE_PROGRESS
+      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+    }
+
     // 页面关闭前警告
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (examStarted.value && !submitted.value) {
-        // 先保存一次进度
-        saveProgress()
+        // 记录切屏并保存
+        handleSwitchDetected('关闭/刷新页面')
+        saveProgressWithBeacon()
         e.preventDefault()
         e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
         return e.returnValue
+      }
+    }
+
+    // pagehide 事件处理（更可靠的页面卸载检测）
+    const handlePageHide = () => {
+      if (examStarted.value && !submitted.value) {
+        saveProgressWithBeacon()
       }
     }
 
@@ -1555,6 +1594,9 @@ export default defineComponent({
       lastSwitchTime.value = time
       switchLogs.value.push({ time, type })
       
+      // 立即使用 sendBeacon 保存切屏记录（确保页面卸载时数据不丢失）
+      saveProgressWithBeacon()
+      
       if (switchCount.value >= maxSwitchCount) {
         // 达到最大次数，自动提交
         ElMessage.error(`检测到第${switchCount.value}次切屏，系统将自动提交试卷！`)
@@ -1575,7 +1617,26 @@ export default defineComponent({
     const handleWindowBlur = () => {
       // 如果页面已经隐藏，不重复计数（visibilitychange已处理）
       if (document.hidden) return
-      handleSwitchDetected('切换到其他应用')
+      
+      // 延迟检测：等待 5秒，过滤点击输入法等短暂失焦
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+      }
+      blurTimeoutId.value = window.setTimeout(() => {
+        // 5秒后仍未获得焦点，才算切屏
+        if (!document.hasFocus() && !document.hidden) {
+          handleSwitchDetected('切换到其他窗口')
+        }
+        blurTimeoutId.value = null
+      }, 5000)
+    }
+
+    const handleWindowFocus = () => {
+      // 窗口重新获得焦点，取消延迟检测
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+        blurTimeoutId.value = null
+      }
     }
 
     // 重置防作弊状态（开始新考试时调用）
@@ -2300,6 +2361,17 @@ export default defineComponent({
       }
     }
 
+    // 监听路由离开（Vue Router 导航）
+    onBeforeRouteLeave((to, from, next) => {
+      if (examStarted.value && !submitted.value) {
+        // 记录切屏
+        handleSwitchDetected('离开考试页面')
+        // 使用 sendBeacon 确保数据保存
+        saveProgressWithBeacon()
+      }
+      next()
+    })
+
     onMounted(() => {
       loadPapers()
       loadPublishedExams()  // 加载考试通知
@@ -2308,18 +2380,28 @@ export default defineComponent({
       checkInProgressExam()
       // 添加页面关闭前警告
       window.addEventListener('beforeunload', handleBeforeUnload)
+      // 添加 pagehide 事件（比 beforeunload 更可靠）
+      window.addEventListener('pagehide', handlePageHide)
       // 添加防作弊检测
       document.addEventListener('visibilitychange', handleVisibilityChange)
       window.addEventListener('blur', handleWindowBlur)
+      window.addEventListener('focus', handleWindowFocus)
     })
 
     onUnmounted(() => {
       stopTimer()
       stopAutoSave()
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handlePageHide)
       // 移除防作弊检测
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
+      // 清理延迟定时器
+      if (blurTimeoutId.value) {
+        clearTimeout(blurTimeoutId.value)
+        blurTimeoutId.value = null
+      }
     })
 
     return {
