@@ -40,13 +40,13 @@
             <span class="info-label">反馈类型:</span>
             <span
               class="info-value"
-              :class="feedback.feedbackType === 'LIKE' ? 'like' : 'dislike'"
+              :class="isLikeType(feedback.feedbackType) ? 'like' : 'dislike'"
             >
               <el-icon :size="18" style="vertical-align: middle; margin-right: 0.25rem;">
-                <CircleCheck v-if="feedback.feedbackType === 'LIKE'" />
+                <CircleCheck v-if="isLikeType(feedback.feedbackType)" />
                 <CircleClose v-else />
               </el-icon>
-              {{ feedback.feedbackType === 'LIKE' ? '点赞' : '点踩' }}
+              {{ isLikeType(feedback.feedbackType) ? '点赞' : '点踩' }}
             </span>
           </div>
           <div class="info-item">
@@ -133,7 +133,7 @@
         </div>
 
         <!-- 差评详情 -->
-        <div v-if="feedback.feedbackType === 'DISLIKE'" class="section-card dislike-card">
+        <div v-if="!isLikeType(feedback.feedbackType)" class="section-card dislike-card">
           <div class="section-header">
             <el-icon :size="28" class="section-icon"><WarningFilled /></el-icon>
             <h2 class="section-title">差评详情</h2>
@@ -232,6 +232,8 @@ const sources = computed(() => {
   return feedback.value?.source || [];
 });
 
+const isLikeType = (type?: string) => String(type || '').toUpperCase() === 'LIKE';
+
 // 渲染纯文本（保留换行）
 const renderText = (text: string) => {
   if (!text) return '';
@@ -268,6 +270,10 @@ const loadFeedbackDetail = async () => {
 
 // 返回列表
 const goBack = () => {
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
   router.push({ name: 'feedback-list' });
 };
 

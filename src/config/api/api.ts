@@ -62,6 +62,7 @@ export const API_ENDPOINTS = {
     LIKE: `/feedback/like`,
     DISLIKE: `/feedback/dislike`,
     LIST: `/feedback/show/list`,
+    PAGE: `/feedback/show/page`,
     DETAIL: (feedbackId: string | number) => `/feedback/show/${feedbackId}`,
   },
   // 认证相关API
