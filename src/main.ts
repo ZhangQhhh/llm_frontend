@@ -6,6 +6,7 @@ import { initSessionWatch } from './utils/userStatusChecker'
 
 // 1. 导入 Element Plus 库
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 // 2. 导入 Element Plus 的 CSS 样式文件 (非常重要！)
 import 'element-plus/dist/index.css'
@@ -55,4 +56,4 @@ window.addEventListener('storage', (e) => {
   }
 })
 
-createApp(App).use(store).use(router).use(ElementPlus).mount('#app')
+createApp(App).use(store).use(router).use(ElementPlus, { locale: zhCn }).mount('#app')

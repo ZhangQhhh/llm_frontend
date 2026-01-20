@@ -16,6 +16,12 @@ export const API_ENDPOINTS = {
     PENDING_USERS: `/api/admin/users/pending/`,
     APPROVE_USER: `/api/admin/users/approve/`,
     REJECT_USER: `/api/admin/users/reject/`,
+    // 分组权限管理
+    GROUPS_LIST: `/api/admin/groups`,
+    GROUPS_CREATE: `/api/admin/groups`,
+    GROUPS_DETAIL: (groupId: string | number) => `/api/admin/groups/${groupId}`,
+    GROUPS_PERMISSIONS: (groupId: string | number) => `/api/admin/groups/${groupId}/permissions`,
+    GROUPS_USER_UPDATE: (userId: string | number) => `/api/admin/groups/users/${userId}`,
     // 题库管理
     IMPORT_TEMPLATE: '/admin/import_template/public_file',
     EXPORT_TEACHER_DOCX: '/admin/export_teacher_docx',
@@ -34,6 +40,10 @@ export const API_ENDPOINTS = {
     LOGIN: `/user/account/token/`,
     REGISTER: `/user/account/register/`,
     INFO: `/user/account/info/`
+  },
+  PERMISSIONS: {
+    LIST: `/user/permissions`,
+    CHECK: `/permission/check`
   },
   // 知识问答相关API
   KNOWLEDGE: {
