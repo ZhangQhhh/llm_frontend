@@ -66,6 +66,15 @@
           <span class="stat-label">管理员</span>
         </div>
       </div>
+      <div class="stat-card">
+        <div class="stat-icon online">
+          <el-icon><Connection /></el-icon>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ stats.online }}</span>
+          <span class="stat-label">当前在线</span>
+        </div>
+      </div>
     </div>
 
     <!-- 筛选区域 -->
@@ -259,7 +268,15 @@
               </el-tag>
             </template>
           </el-table-column>
-          
+
+          <el-table-column prop="online" label="在线" width="100" sortable>
+            <template #default="{ row }">
+              <el-tag :type="row.online ? 'success' : 'info'" size="small">
+                {{ row.online ? '在线' : '离线' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+
           <el-table-column v-if="showIP" prop="last_login_ip" label="最近登录IP" width="150">
             <template #default="{ row }">
               <span class="ip-address">{{ row.last_login_ip || '暂无记录' }}</span>
@@ -344,8 +361,20 @@
               {{ getStatusText(currentUser.status) }}
             </el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="在线状态">
+            <el-tag :type="currentUser.online ? 'success' : 'info'" size="small">
+              {{ currentUser.online ? '在线' : '离线' }}
+            </el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="最近登录">{{ formatDate(currentUser.last_login_at) || '从未登录' }}</el-descriptions-item>
           <el-descriptions-item label="最近登录IP" v-if="showIP">{{ currentUser.last_login_ip || '暂无记录' }}</el-descriptions-item>
+          <el-descriptions-item
+            v-for="field in detailFields"
+            :key="field.key"
+            :label="field.label"
+          >
+            <span class="detail-value">{{ formatDetailValue(field.key, field.value) }}</span>
+          </el-descriptions-item>
         </el-descriptions>
       </div>
       <template #footer>
@@ -356,7 +385,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   User,
@@ -371,9 +400,10 @@ import {
   CircleClose,
   Clock,
   ArrowDown,
-  DataBoard
+  DataBoard,
+  Connection
 } from '@element-plus/icons-vue'
-import { API_ENDPOINTS } from '@/config/api/api'
+import { API_BASE_URL, API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
 import { refreshUserCache, getUserById } from '@/utils/userCache'
 import { getUserActivityMap, getQARanking, refreshActivityCache } from '@/utils/userActivityCache'
@@ -383,11 +413,18 @@ interface DashboardUser {
   id?: string
   username: string
   email?: string
+  department?: string | null
+  policeId?: string
+  idCardNumber?: string
+  phone?: string
   role?: string
   status?: number
   created_at?: string
+  updated_at?: string
   last_login_at?: string
   last_login_ip?: string
+  online?: boolean
+  [key: string]: unknown
 }
 
 // 状态
@@ -429,8 +466,108 @@ const stats = reactive({
   active: 0,
   pending: 0,
   banned: 0,
-  admins: 0
+  admins: 0,
+  online: 0
 })
+
+let onlineStatusWs: WebSocket | null = null
+
+const normalizeOnlineFlag = (value: unknown) => value === true
+
+const syncOnlineStats = (list: DashboardUser[]) => {
+  stats.online = list.filter(user => user.online === true).length
+}
+
+const resolveOnlineWsEndpoint = () => {
+  if (process.env.VUE_APP_WS_URL) return process.env.VUE_APP_WS_URL
+  if (API_BASE_URL) {
+    try {
+      const baseUrl = new URL(API_BASE_URL)
+      return `${baseUrl.protocol === 'https:' ? 'wss:' : 'ws:'}//${baseUrl.host}/ws/session`
+    } catch {
+      return ''
+    }
+  }
+  return `${window.location.origin.replace(/^http/, 'ws')}/ws/session`
+}
+
+const buildOnlineWsUrl = (token: string) => {
+  const endpoint = resolveOnlineWsEndpoint()
+  if (!endpoint) return ''
+  const url = new URL(endpoint, window.location.origin)
+  url.searchParams.set('token', token)
+  let wsUrl = url.toString()
+  if (wsUrl.startsWith('https://')) {
+    wsUrl = wsUrl.replace('https://', 'wss://')
+  } else if (wsUrl.startsWith('http://')) {
+    wsUrl = wsUrl.replace('http://', 'ws://')
+  }
+  return wsUrl
+}
+
+const stopOnlineStatusWatch = () => {
+  if (!onlineStatusWs) return
+  try {
+    onlineStatusWs.close()
+  } catch (error) {
+    console.warn('关闭在线状态 WebSocket 连接时出错:', error)
+  } finally {
+    onlineStatusWs = null
+  }
+}
+
+const updateOnlineStatus = (userId: unknown, online: unknown, onlineCount?: unknown) => {
+  if (userId == null || typeof online !== 'boolean') return
+  const targetId = String(userId)
+  const target = users.value.find(user => String(user.id) === targetId)
+  if (target) {
+    target.online = online
+  }
+
+  if (typeof onlineCount === 'number') {
+    stats.online = onlineCount
+  } else {
+    syncOnlineStats(users.value)
+  }
+}
+
+const startOnlineStatusWatch = () => {
+  const token = localStorage.getItem(STORAGE_KEYS.TOKEN)
+  if (!token) {
+    console.warn('在线状态 WebSocket 未启动：缺少 token')
+    return
+  }
+
+  const wsUrl = buildOnlineWsUrl(token)
+  if (!wsUrl) {
+    console.warn('在线状态 WebSocket 未启动：无法解析 ws 地址')
+    return
+  }
+
+  stopOnlineStatusWatch()
+  onlineStatusWs = new WebSocket(wsUrl)
+
+  onlineStatusWs.onmessage = (event: MessageEvent) => {
+    try {
+      const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+      const type = message?.type?.toString().toLowerCase()
+      if (type !== 'user-online-status') return
+
+      const payload = message?.data && typeof message.data === 'object' ? message.data : message
+      updateOnlineStatus(payload?.userId, payload?.online, payload?.onlineCount)
+    } catch (error) {
+      console.warn('解析在线状态消息失败:', error)
+    }
+  }
+
+  onlineStatusWs.onerror = (event) => {
+    console.warn('在线状态 WebSocket 发生错误:', event)
+  }
+
+  onlineStatusWs.onclose = () => {
+    onlineStatusWs = null
+  }
+}
 
 // 计算筛选后的用户列表
 const filteredUsers = computed(() => {
@@ -559,6 +696,106 @@ const formatDate = (dateStr?: string) => {
   }
 }
 
+const detailFieldLabelMap: Record<string, string> = {
+  email: '邮箱',
+  department: '所属部门',
+  dept: '所属部门',
+  deptName: '所属部门',
+  department_name: '所属部门',
+  policeId: '警号',
+  police_id: '警号',
+  idCardNumber: '身份证号',
+  id_card_number: '身份证号',
+  phone: '手机号',
+  phoneNumber: '手机号',
+  createAt: '创建时间',
+  isBjzxAdmin: '边检智学权限',
+  created_at: '注册时间',
+  updated_at: '更新时间',
+  createdAt: '注册时间',
+  updatedAt: '更新时间'
+}
+
+const detailFieldOrder = [
+  'email',
+  'department',
+  'dept',
+  'deptName',
+  'department_name',
+  'policeId',
+  'police_id',
+  'idCardNumber',
+  'id_card_number',
+  'phone',
+  'phoneNumber',
+  'createAt',
+  'isBjzxAdmin',
+  'created_at',
+  'createdAt',
+  'updated_at',
+  'updatedAt'
+]
+
+const detailExcludedKeys = new Set([
+  'id',
+  'username',
+  'role',
+  'status',
+  'online',
+  'hasChangedName',
+  'last_login_at',
+  'last_login_ip'
+])
+
+const formatDetailValue = (key: string, value: unknown) => {
+  if (value === null || value === undefined || value === '') return '-'
+  if (key.endsWith('_at') || key.endsWith('_time') || key.endsWith('At') || key.endsWith('Time')) {
+    return formatDate(String(value)) || String(value)
+  }
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+const detailFields = computed(() => {
+  const user = currentUser.value
+  if (!user) return []
+
+  const fields: Array<{ key: string; label: string; value: unknown }> = []
+  const usedKeys = new Set(detailExcludedKeys)
+
+  for (const key of detailFieldOrder) {
+    if (Object.prototype.hasOwnProperty.call(user, key)) {
+      fields.push({
+        key,
+        label: detailFieldLabelMap[key] || key,
+        value: user[key]
+      })
+      usedKeys.add(key)
+    }
+  }
+
+  const restKeys = Object.keys(user)
+    .filter((key) => !usedKeys.has(key))
+    .sort()
+
+  restKeys.forEach((key) => {
+    fields.push({
+      key,
+      label: detailFieldLabelMap[key] || key,
+      value: user[key]
+    })
+  })
+
+  return fields
+})
+
 // 加载用户数据
 const loadUsers = async () => {
   loading.value = true
@@ -567,16 +804,21 @@ const loadUsers = async () => {
     if (response.ok) {
       const raw = response.data?.data?.list || response.data?.data?.users || response.data || []
       const list = Array.isArray(raw) ? raw : (raw.items || [])
-      users.value = list
+      const normalizedList = list.map((user: DashboardUser) => ({
+        ...user,
+        online: normalizeOnlineFlag(user.online)
+      }))
+      users.value = normalizedList
       
       // 计算统计数据
-      stats.total = list.length
-      stats.active = list.filter((u: DashboardUser) => u.status === 1).length
-      stats.pending = list.filter((u: DashboardUser) => u.status === 0).length
-      stats.banned = list.filter((u: DashboardUser) => u.status === -1).length
-      stats.admins = list.filter((u: DashboardUser) => 
+      stats.total = normalizedList.length
+      stats.active = normalizedList.filter((u: DashboardUser) => u.status === 1).length
+      stats.pending = normalizedList.filter((u: DashboardUser) => u.status === 0).length
+      stats.banned = normalizedList.filter((u: DashboardUser) => u.status === -1).length
+      stats.admins = normalizedList.filter((u: DashboardUser) => 
         normalizeRole(u.role) === 'admin' || normalizeRole(u.role) === 'super_admin'
       ).length
+      syncOnlineStats(normalizedList)
       
       // 同步刷新全局用户缓存，让其他页面受益
       refreshUserCache()
@@ -864,6 +1106,11 @@ onMounted(async () => {
   await loadUsers()
   // 加载用户后自动从问答日志获取活动数据（IP和最近登录时间）
   loadUserActivity()
+  startOnlineStatusWatch()
+})
+
+onBeforeUnmount(() => {
+  stopOnlineStatusWatch()
 })
 </script>
 
@@ -923,7 +1170,7 @@ onMounted(async () => {
 /* 统计卡片 */
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -976,6 +1223,11 @@ onMounted(async () => {
 
 .stat-icon.admin {
   background: linear-gradient(135deg, #909399 0%, #c0c4cc 100%);
+  color: white;
+}
+
+.stat-icon.online {
+  background: linear-gradient(135deg, #14b8a6 0%, #34d399 100%);
   color: white;
 }
 
@@ -1287,6 +1539,10 @@ onMounted(async () => {
   margin: 0;
   font-size: 20px;
   color: #303133;
+}
+
+.detail-value {
+  word-break: break-all;
 }
 
 /* 响应式 */
