@@ -15,6 +15,10 @@ import {
   mockGetQALogDetail,
   mockGetQALogDates,
 } from '@/mocks/qaLogsMocks';
+import {
+  mockGetWritingLogsByDate,
+  mockGetWritingLogDetail,
+} from '@/mocks/writingLogsMocks';
 
 /**
  * SSE流式响应处理器
@@ -150,12 +154,17 @@ export async function sendStreamChatRequest(
   onMessage: (message: StreamMessage) => void,
   signal?: AbortSignal
 ): Promise<void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
-    },
+    headers,
     body: JSON.stringify(payload),
     signal
   });
@@ -580,6 +589,106 @@ export async function getQALogDates(token: string): Promise<QALogDatesResponse> 
   }
   
   const response = await llmHttp.get(API_ENDPOINTS.QA_LOGS.DATES, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+// ==================== 写作日志相关 API ====================
+
+/**
+ * 写作日志记录项
+ */
+export interface WritingLogItem {
+  id?: string;
+  timestamp: string;
+  type: string;
+  operation?: string;
+  user_id?: string;
+  session_id?: string;
+  writing_type?: string;
+  instruction?: string;
+  content?: string;
+  result?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * 写作日志详情
+ */
+export interface WritingLogDetail extends WritingLogItem {
+  detail?: string;
+}
+
+/**
+ * 写作日志列表查询参数
+ */
+export interface WritingLogListParams {
+  date?: string;
+  writing_type?: string;
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * 写作日志列表响应
+ */
+export interface WritingLogListResponse {
+  date?: string;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages?: number;
+  logs: WritingLogItem[];
+}
+
+/**
+ * 获取某天的写作日志记录
+ */
+export async function getWritingLogsByDate(
+  token: string,
+  params: WritingLogListParams = {}
+): Promise<WritingLogListResponse> {
+  if (isMockEnabled()) {
+    return mockGetWritingLogsByDate(token, params) as Promise<WritingLogListResponse>;
+  }
+
+  const queryParams = new URLSearchParams();
+  if (params.date) queryParams.append('date', params.date);
+  if (params.writing_type) queryParams.append('writing_type', params.writing_type);
+  if (params.page) queryParams.append('page', String(params.page));
+  if (params.page_size) queryParams.append('page_size', String(params.page_size));
+
+  const queryString = queryParams.toString();
+  const url = `${API_ENDPOINTS.WRITING_LOGS.DAILY}${queryString ? '?' + queryString : ''}`;
+
+  const response = await llmHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+/**
+ * 获取单条写作日志详情
+ */
+export async function getWritingLogDetail(
+  token: string,
+  id: string
+): Promise<WritingLogDetail> {
+  if (isMockEnabled()) {
+    return mockGetWritingLogDetail(token, id) as Promise<WritingLogDetail>;
+  }
+
+  const queryParams = new URLSearchParams();
+  queryParams.append('id', id);
+
+  const url = `${API_ENDPOINTS.WRITING_LOGS.DETAIL}?${queryParams.toString()}`;
+
+  const response = await llmHttp.get(url, {
     headers: {
       'Authorization': `Bearer ${token}`
     }

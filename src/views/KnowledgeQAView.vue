@@ -89,11 +89,14 @@
                   </el-tooltip>
 
                   <div class="toggles">
-                    <el-checkbox v-model="insertBlock" border size="default">
+                    <el-checkbox v-model="insertBlock" border size="default" :disabled="streamTestEnabled">
                       <span class="toggle-label"><el-icon><Aim /></el-icon> 精准检索</span>
                     </el-checkbox>
                     <el-checkbox v-model="thinkingMode" border size="default">
                       <span class="toggle-label"><el-icon><Operation /></el-icon> 思考模式</span>
+                    </el-checkbox>
+                    <el-checkbox v-if="streamTestAvailable" v-model="streamTestEnabled" border size="default">
+                      <span class="toggle-label"><el-icon><Monitor /></el-icon> Local SSE</span>
                     </el-checkbox>
                     <el-checkbox v-model="mcqMode" border size="default" @change="handleMcqModeChange">
                       <span class="toggle-label"><el-icon><Document /></el-icon> 选择题模式</span>
@@ -524,6 +527,7 @@ import {
   submitDislikeFeedback,
   type ReferenceSource,
   type StreamMessage,
+  type ChatRequest,
   type KeywordsData
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, SHOW_HIDDEN_NODES } from '@/config/api/api';
@@ -705,6 +709,43 @@ export default defineComponent({
 
     const mockReferencesEnabled = shouldUseReferenceMocks();
 
+    const streamTestEnabled = ref(false);
+    const streamTestAvailable = computed(() => {
+      const userId = Number(store.state.user.id);
+      return Boolean(API_ENDPOINTS.KNOWLEDGE.STREAM_TEST)
+        && process.env.NODE_ENV !== 'production'
+        && userId === 1;
+    });
+    const streamEndpoint = computed(() => {
+      return streamTestEnabled.value && streamTestAvailable.value
+        ? API_ENDPOINTS.KNOWLEDGE.STREAM_TEST
+        : API_ENDPOINTS.KNOWLEDGE.CHAT;
+    });
+    const streamToken = computed(() => (streamTestEnabled.value ? '' : store.state.user.token));
+
+    const buildStreamPayload = (prompt: string) => {
+      const payload: ChatRequest = {
+        question: prompt,
+        thinking: thinkingMode.value
+      };
+
+      if (!streamTestEnabled.value) {
+        payload.rerank_top_n = rerankTopN.value;
+        payload.model_id = modelId.value;
+        payload.use_insert_block = insertBlock.value;
+        payload.insert_block_llm_id = modelId.value;
+        payload.user_id = store.state.user.id || null;
+      }
+
+      return payload;
+    };
+
+    watch(streamTestEnabled, (enabled) => {
+      if (enabled) {
+        insertBlock.value = false;
+      }
+    });
+
     // 模拟流式输出效果
     const simulateStreamOutput = async (text: string, targetRef: typeof answer | typeof thinking, delay = 30) => {
       const chars = text.split('');
@@ -837,17 +878,9 @@ export default defineComponent({
           
           return new Promise((resolve) => {
             sendStreamChatRequest(
-              API_ENDPOINTS.KNOWLEDGE.CHAT,
-              {
-                question: formattedQuestion,
-                thinking: thinkingMode.value,
-                rerank_top_n: rerankTopN.value,
-                model_id: modelId.value,
-                use_insert_block: insertBlock.value,
-                insert_block_llm_id: modelId.value,
-                user_id: store.state.user.id || null
-              },
-              store.state.user.token,
+              streamEndpoint.value,
+              buildStreamPayload(formattedQuestion),
+              streamToken.value,
               (message: StreamMessage) => {
                 if (message.type === 'CONTENT' && !isStatusMessage(message.data)) {
                   mcqResults.value[index].answer += message.data;
@@ -975,17 +1008,9 @@ export default defineComponent({
 
       try {
         await sendStreamChatRequest(
-          API_ENDPOINTS.KNOWLEDGE.CHAT,
-          {
-            question: lastQuestion.value,
-            thinking: thinkingMode.value,
-            rerank_top_n: rerankTopN.value,
-            model_id: modelId.value,
-            use_insert_block: insertBlock.value,
-            insert_block_llm_id: modelId.value,
-            user_id: store.state.user.id || null
-          },
-          store.state.user.token,
+          streamEndpoint.value,
+          buildStreamPayload(lastQuestion.value),
+          streamToken.value,
           (message: StreamMessage) => {
             handleStreamMessage(message);
           }
@@ -1200,17 +1225,9 @@ export default defineComponent({
 
       try {
         await sendStreamChatRequest(
-          API_ENDPOINTS.KNOWLEDGE.CHAT,
-          {
-            question: lastQuestion.value,
-            thinking: thinkingMode.value,
-            rerank_top_n: rerankTopN.value,
-            model_id: modelId.value,
-            use_insert_block: insertBlock.value,
-            insert_block_llm_id: modelId.value,
-            user_id: store.state.user.id || null
-          },
-          store.state.user.token,
+          streamEndpoint.value,
+          buildStreamPayload(lastQuestion.value),
+          streamToken.value,
           (message: StreamMessage) => {
             handleStreamMessage(message);
           }
@@ -1459,6 +1476,7 @@ export default defineComponent({
     return {
       question, answer, thinking, references, filteredReferences, referenceIdMap, processedAnswer, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
+      streamTestEnabled, streamTestAvailable,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
       // 答案归纳相关
@@ -1937,11 +1955,11 @@ export default defineComponent({
 
 .brand-text h1 {
   font-size: 2rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ai-text);
   margin: 0;
   letter-spacing: 2px;
-  text-shadow: 0 0 20px rgba(0, 180, 255, 0.3);
+  text-shadow: 0 0 8px rgba(0, 180, 255, 0.2);
 }
 
 .brand-text .subtitle {
@@ -2281,13 +2299,13 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 .progress-value {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ai-warning);
-  text-shadow: 0 0 10px rgba(240, 255, 0, 0.5);
+  text-shadow: 0 0 6px rgba(240, 255, 0, 0.35);
   font-family: 'Orbitron', monospace;
 }
 
@@ -2336,7 +2354,7 @@ export default defineComponent({
   font-weight: 600;
   font-size: 18px;
   color: var(--ai-primary);
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 .mcq-tabs :deep(.el-tabs__nav-wrap) {
@@ -2354,8 +2372,8 @@ export default defineComponent({
 
 .mcq-tabs :deep(.el-tabs__item.is-active) {
   color: var(--ai-primary);
-  font-weight: 600;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  font-weight: 500;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 .mcq-tabs :deep(.el-tabs__active-bar) {
@@ -2476,10 +2494,10 @@ export default defineComponent({
 .thinking-header {
   display: flex;
   align-items: center;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ai-secondary);
   gap: 0.5rem;
-  text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+  text-shadow: 0 0 6px rgba(255, 0, 255, 0.3);
 }
 
 .thinking-header .el-icon {
@@ -2550,12 +2568,12 @@ export default defineComponent({
 
 .answer-card .card-header .title {
   font-size: 1.1rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ai-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 .answer-card .card-header .actions :deep(.el-button) {
@@ -2597,7 +2615,7 @@ export default defineComponent({
 }
 
 .markdown-body :deep(a:hover) {
-  text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+  text-shadow: 0 0 6px rgba(255, 0, 255, 0.3);
 }
 
 .answer-footer {
@@ -2660,7 +2678,7 @@ export default defineComponent({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ai-primary);
 }
 
@@ -2668,7 +2686,7 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 .meta-header :deep(.el-tag) {
@@ -2687,7 +2705,7 @@ export default defineComponent({
 
 .group-label {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ai-text-dim);
   margin-bottom: 6px;
   display: block;
@@ -2804,7 +2822,7 @@ export default defineComponent({
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 2px;
-  font-weight: 700;
+  font-weight: 600;
   font-family: 'Orbitron', monospace;
 }
 
@@ -2898,7 +2916,7 @@ export default defineComponent({
 .keywords-label {
   font-size: 12px;
   color: var(--ai-text-dim);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .ref-keywords :deep(.el-tag--warning) {
@@ -2939,7 +2957,7 @@ export default defineComponent({
 }
 
 .expand-btn:hover {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
 }
 
 /* ========== AI科技感 Markdown 样式 ========== */
@@ -2982,7 +3000,7 @@ export default defineComponent({
 .markdown-body :deep(h3),
 .markdown-body :deep(h4) {
   color: var(--ai-primary);
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
 }
@@ -3643,7 +3661,7 @@ export default defineComponent({
 
 .summary-answer .answer-text {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ai-success);
   background: linear-gradient(135deg, #10b981 0%, #22d3ee 100%);
   -webkit-background-clip: text;

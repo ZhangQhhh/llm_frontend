@@ -8,13 +8,22 @@ export interface PerformanceState {
   enableDebugLogs: boolean;     // 启用调试日志
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+const storedDebugLogs = localStorage.getItem('enable-debug-logs');
+const storedLogLevel = localStorage.getItem('log-level');
+const hasDebugLevel = storedLogLevel !== null && parseInt(storedLogLevel, 10) === 0;
+
 const state: PerformanceState = {
   lowPerformanceMode: localStorage.getItem('global-low-performance-mode') === 'true',
   disableAnimations: localStorage.getItem('disable-animations') === 'true',
   disable3DBackground: localStorage.getItem('disable-3d-background') === 'true',
   reduceEffects: localStorage.getItem('reduce-effects') === 'true',
   simplifyUI: localStorage.getItem('simplify-ui') === 'true',
-  enableDebugLogs: localStorage.getItem('enable-debug-logs') === 'true',
+  enableDebugLogs: storedDebugLogs !== null
+    ? storedDebugLogs === 'true'
+    : storedLogLevel !== null
+      ? hasDebugLevel
+      : !isProduction,
 };
 
 export default {

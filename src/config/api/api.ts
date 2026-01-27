@@ -3,6 +3,7 @@ export const LLM_BASE_URL = process.env.VUE_APP_LLM_BASE_URL;
 export const SHOW_HIDDEN_NODES = process.env.VUE_APP_SHOW_HIDDEN_NODES === 'true';
 export const MCQ_BASE_URL = process.env.VUE_APP_MCQ_BASE_URL;
 export const WRITER_BASE_URL = process.env.VUE_APP_WRITER_URL || LLM_BASE_URL;
+export const STREAM_TEST_URL = process.env.VUE_APP_STREAM_TEST_URL;
 // OCR服务URL
 export const OCR_BASE_URL = process.env.VUE_APP_OCR_BASE_URL || 'http://53.3.1.2:9000';
 // 定义所有API端点
@@ -16,6 +17,12 @@ export const API_ENDPOINTS = {
     PENDING_USERS: `/api/admin/users/pending/`,
     APPROVE_USER: `/api/admin/users/approve/`,
     REJECT_USER: `/api/admin/users/reject/`,
+    // 分组权限管理
+    GROUPS_LIST: `/api/admin/groups`,
+    GROUPS_CREATE: `/api/admin/groups`,
+    GROUPS_DETAIL: (groupId: string | number) => `/api/admin/groups/${groupId}`,
+    GROUPS_PERMISSIONS: (groupId: string | number) => `/api/admin/groups/${groupId}/permissions`,
+    GROUPS_USER_UPDATE: (userId: string | number) => `/api/admin/groups/users/${userId}`,
     // 题库管理
     IMPORT_TEMPLATE: '/admin/import_template/public_file',
     EXPORT_TEACHER_DOCX: '/admin/export_teacher_docx',
@@ -35,12 +42,17 @@ export const API_ENDPOINTS = {
     REGISTER: `/user/account/register/`,
     INFO: `/user/account/info/`
   },
+  PERMISSIONS: {
+    LIST: `/user/permissions`,
+    CHECK: `/permission/check`
+  },
   // 知识问答相关API
   KNOWLEDGE: {
     // 单轮对话（无会话）- 使用完整URL（用于fetch流式请求）
     CHAT: `${LLM_BASE_URL}/knowledge_chat`,
     CHAT_12367:`${LLM_BASE_URL}/knowledge_chat_12367`,
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
+    STREAM_TEST: STREAM_TEST_URL || '',
     // MCQ策略判断 - 使用完整URL
     MCQ_STRATEGY: `${LLM_BASE_URL}/mcq_strategy`,
     // MCQ格式化 - 使用完整URL
@@ -62,6 +74,7 @@ export const API_ENDPOINTS = {
     LIKE: `/feedback/like`,
     DISLIKE: `/feedback/dislike`,
     LIST: `/feedback/show/list`,
+    PAGE: `/feedback/show/page`,
     DETAIL: (feedbackId: string | number) => `/feedback/show/${feedbackId}`,
   },
   // 认证相关API
@@ -123,6 +136,11 @@ export const API_ENDPOINTS = {
     DAILY: `/qa_logs/daily`,           // GET 获取某天的所有日志记录
     DETAIL: `/qa_logs/detail`,         // GET 获取单条日志详情
     DATES: `/qa_logs/dates`,           // GET 获取有日志的日期列表
+  },
+  // 写作日志相关API（使用llmHttp，baseURL已包含/api前缀）
+  WRITING_LOGS: {
+    DAILY: `/writing_logs/daily`,      // GET 获取某天的写作日志记录
+    DETAIL: `/writing_logs/detail`,    // GET 获取单条写作日志详情
   },
   // 知识库管理API（使用llmHttp，baseURL已包含/api前缀）
   KNOWLEDGE_BASE: {

@@ -51,7 +51,7 @@
                 <el-icon><Setting /></el-icon>
                 <span>超管中心</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isSuperAdmin" command="user-dashboard">
+              <el-dropdown-item v-if="isAdmin" command="user-dashboard">
                 <el-icon><DataBoard /></el-icon>
                 <span>用户仪表盘</span>
               </el-dropdown-item>

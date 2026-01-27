@@ -3,17 +3,20 @@
     <!-- Hero Section -->
     <section class="hero">
       <!-- HUD Decorations -->
-      <div class="hud-corner top-left"></div>
-      <div class="hud-corner top-right"></div>
-      <div class="hud-corner bottom-left"></div>
-      <div class="hud-corner bottom-right"></div>
-      <div class="scan-line"></div>
+      <template v-if="!shouldReduceEffects">
+        <div class="hud-corner top-left"></div>
+        <div class="hud-corner top-right"></div>
+        <div class="hud-corner bottom-left"></div>
+        <div class="hud-corner bottom-right"></div>
+        <div class="scan-line"></div>
+      </template>
 
       <!-- 3D Canvas Background -->
-      <canvas ref="threeCanvas" class="three-canvas"></canvas>
+      <canvas v-show="!shouldDisable3DBackground" ref="threeCanvas" class="three-canvas"></canvas>
       
       <!-- Video Background -->
-      <video 
+      <video
+        v-if="!shouldReduceEffects"
         class="video-background" 
         :src="require('@/assets/allPic/public/tech.mp4')"
         autoplay 
@@ -23,12 +26,14 @@
       ></video>
       
       <!-- Animated Grid Background -->
-      <div class="grid-background"></div>
+      <div v-if="!shouldReduceEffects" class="grid-background"></div>
       
       <!-- Glowing Orbs -->
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
+      <template v-if="!shouldReduceEffects">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+      </template>
       
       <div class="hero-content">
         <!-- <div class="hero-badge">
@@ -315,7 +320,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
+import { defineComponent, onMounted, onUnmounted, ref, computed, watch } from 'vue';
+import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import * as THREE from 'three';
 import { 
@@ -340,14 +346,29 @@ export default defineComponent({
     DataLine
   },
   setup() {
+    const store = useStore();
+    const shouldDisable3DBackground = computed(
+      () => store.getters['performance/shouldDisable3DBackground']
+    );
+    const shouldReduceEffects = computed(
+      () => store.getters['performance/shouldReduceEffects']
+    );
+    const shouldDisableAnimations = computed(
+      () => store.getters['performance/shouldDisableAnimations']
+    );
+    const shouldDisableScrollEffects = computed(
+      () => shouldReduceEffects.value || shouldDisableAnimations.value
+    );
     const threeCanvas = ref<HTMLCanvasElement | null>(null);
-    let scene: THREE.Scene;
-    let camera: THREE.PerspectiveCamera;
-    let renderer: THREE.WebGLRenderer;
-    let particles: THREE.Points;
-    let animationId: number;
+    let scene: THREE.Scene | null = null;
+    let camera: THREE.PerspectiveCamera | null = null;
+    let renderer: THREE.WebGLRenderer | null = null;
+    let particles: THREE.Points | null = null;
+    let animationId: number | null = null;
     let particlesGeometry: THREE.BufferGeometry | null = null;
     let particlesMaterial: THREE.PointsMaterial | null = null;
+    let isThreeActive = false;
+    let scrollEffectsEnabled = false;
 
     const handleResize = () => {
       if (!renderer || !camera) return;
@@ -377,7 +398,8 @@ export default defineComponent({
 
     // 初始化Three.js场景
     const initThree = () => {
-      if (!threeCanvas.value) return;
+      if (!threeCanvas.value || isThreeActive) return;
+      animationId = null;
 
       // 创建场景
       scene = new THREE.Scene();
@@ -429,6 +451,10 @@ export default defineComponent({
       const animate = () => {
         animationId = requestAnimationFrame(animate);
 
+        if (!scene || !camera || !renderer || !particles) {
+          return;
+        }
+
         // 旋转粒子
         particles.rotation.x += 0.0005;
         particles.rotation.y += 0.0008;
@@ -440,6 +466,35 @@ export default defineComponent({
 
       // 窗口大小调整
       window.addEventListener('resize', handleResize);
+      isThreeActive = true;
+    };
+
+    const cleanupThree = () => {
+      if (!isThreeActive) return;
+
+      if (animationId !== null) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+      if (renderer) {
+        renderer.dispose();
+      }
+      if (particlesGeometry) {
+        particlesGeometry.dispose();
+        particlesGeometry = null;
+      }
+      if (particlesMaterial) {
+        particlesMaterial.dispose();
+        particlesMaterial = null;
+      }
+
+      window.removeEventListener('resize', handleResize);
+
+      renderer = null;
+      camera = null;
+      scene = null;
+      particles = null;
+      isThreeActive = false;
     };
 
     // 滚动动画处理
@@ -478,30 +533,76 @@ export default defineComponent({
       });
     };
 
-    onMounted(() => {
-      initThree();
+    const resetScrollEffects = () => {
+      const gridBackground = document.querySelector('.grid-background') as HTMLElement;
+      if (gridBackground) {
+        gridBackground.style.transform = '';
+      }
+
+      const heroContent = document.querySelector('.hero-content') as HTMLElement;
+      if (heroContent) {
+        heroContent.style.transform = '';
+        heroContent.style.opacity = '';
+      }
+
+      const particles = document.querySelectorAll('.particle');
+      particles.forEach((particle) => {
+        (particle as HTMLElement).style.transform = '';
+      });
+
+      const elements = document.querySelectorAll('.tech-advantages, .cta');
+      elements.forEach((element) => {
+        element.classList.add('visible');
+      });
+    };
+
+    const enableScrollEffects = () => {
+      if (scrollEffectsEnabled) return;
       window.addEventListener('scroll', handleScroll, { passive: true });
-      // 初始检查
       handleScroll();
+      scrollEffectsEnabled = true;
+    };
+
+    const disableScrollEffects = () => {
+      if (!scrollEffectsEnabled) {
+        resetScrollEffects();
+        return;
+      }
+      window.removeEventListener('scroll', handleScroll);
+      scrollEffectsEnabled = false;
+      resetScrollEffects();
+    };
+
+    onMounted(() => {
+      if (!shouldDisable3DBackground.value) {
+        initThree();
+      }
+      if (shouldDisableScrollEffects.value) {
+        disableScrollEffects();
+      } else {
+        enableScrollEffects();
+      }
     });
 
     onUnmounted(() => {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
+      cleanupThree();
+      disableScrollEffects();
+    });
+
+    watch(shouldDisable3DBackground, (value) => {
+      if (value) {
+        cleanupThree();
+      } else {
+        initThree();
       }
-      if (renderer) {
-        renderer.dispose();
+    });
+
+    watch(shouldDisableScrollEffects, (value) => {
+      if (value) {
+        disableScrollEffects();
+      } else {
+        enableScrollEffects();
       }
-      if (particlesGeometry) {
-        particlesGeometry.dispose();
-        particlesGeometry = null;
-      }
-      if (particlesMaterial) {
-        particlesMaterial.dispose();
-        particlesMaterial = null;
-      }
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResize);
     });
 
     // 帮助中心暂未开放
@@ -512,7 +613,9 @@ export default defineComponent({
     return {
       threeCanvas,
       getParticleStyle,
-      handleHelpClick
+      handleHelpClick,
+      shouldReduceEffects,
+      shouldDisable3DBackground
     };
   }
 });

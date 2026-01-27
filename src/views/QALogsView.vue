@@ -17,11 +17,22 @@
 
       <h1 class="page-title">
         <el-icon :size="32" style="vertical-align: middle; margin-right: 0.5rem;"><Document /></el-icon>
-        问答日志管理
+        {{ pageTitle }}
       </h1>
 
       <!-- 筛选栏 -->
       <div class="filter-bar">
+        <div class="filter-item">
+          <label>日志类型：</label>
+          <el-select
+            v-model="logCategory"
+            style="width: 200px;"
+            @change="handleLogCategoryChange"
+          >
+            <el-option label="问答日志" value="qa" />
+            <el-option label="公文写作日志" value="official_document" />
+          </el-select>
+        </div>
         <div class="filter-item">
           <label>选择日期：</label>
           <el-date-picker
@@ -71,7 +82,7 @@
           <span class="stat-label">当前页:</span>
           <span class="stat-value">{{ logData.page }} / {{ logData.total_pages || 1 }}</span>
         </div>
-        <div class="stat-item">
+        <div class="stat-item" v-if="!isWritingLogs">
           <span class="stat-label">可用日期数:</span>
           <span class="stat-value highlight">{{ availableDates.length }}</span>
         </div>
@@ -99,8 +110,8 @@
       <!-- 日志列表 -->
       <div v-else class="log-list">
         <div
-          v-for="log in logs"
-          :key="log.id"
+          v-for="(log, index) in logs"
+          :key="getLogId(log, index, true)"
           class="log-item"
           @click="viewDetail(log)"
         >
@@ -113,21 +124,29 @@
           </div>
           <div class="log-question">
             <el-icon><ChatDotRound /></el-icon>
-            {{ log.question }}
+            {{ getLogTitle(log) }}
           </div>
-          <div class="log-preview">{{ log.answer_preview }}</div>
+          <div v-if="getLogPreview(log)" class="log-preview">{{ getLogPreview(log) }}</div>
           <div class="log-meta">
-            <span v-if="log.metadata.user_id" class="meta-item">
+            <span v-if="getLogUserId(log)" class="meta-item">
               <el-icon><User /></el-icon>
-              {{ getUserName(log.metadata.user_id) }}
+              {{ getUserName(getLogUserId(log)) }}
             </span>
-            <span v-if="log.metadata.ip" class="meta-item">
+            <span v-if="getLogOperation(log)" class="meta-item">
+              <el-icon><EditPen /></el-icon>
+              {{ getOperationLabel(getLogOperation(log)) }}
+            </span>
+            <span v-if="getLogSessionId(log)" class="meta-item">
+              <el-icon><Link /></el-icon>
+              {{ getLogSessionId(log) }}
+            </span>
+            <span v-if="getLogIp(log)" class="meta-item">
               <el-icon><Location /></el-icon>
-              {{ log.metadata.ip }}
+              {{ getLogIp(log) }}
             </span>
-            <span v-if="log.metadata.answer_type" class="meta-item">
+            <span v-if="getLogAnswerType(log)" class="meta-item">
               <el-icon><Cpu /></el-icon>
-              {{ log.metadata.answer_type }}
+              {{ getLogAnswerType(log) }}
             </span>
           </div>
         </div>
@@ -164,7 +183,7 @@
           <div class="detail-grid">
             <div class="detail-item">
               <label>日志ID:</label>
-              <span class="mono">{{ logDetail.id }}</span>
+              <span class="mono">{{ getLogId(logDetail) }}</span>
             </div>
             <div class="detail-item">
               <label>时间:</label>
@@ -174,35 +193,54 @@
               <label>类型:</label>
               <span class="log-type" :class="getTypeClass(logDetail.type)">{{ getTypeLabel(logDetail.type) }}</span>
             </div>
-            <div class="detail-item" v-if="logDetail.metadata.user_id">
+            <div class="detail-item" v-if="getLogUserId(logDetail)">
               <label>用户:</label>
-              <span>{{ getUserName(logDetail.metadata.user_id) }}</span>
+              <span>{{ getUserName(getLogUserId(logDetail)) }}</span>
             </div>
-            <div class="detail-item" v-if="logDetail.metadata.ip">
+            <div class="detail-item" v-if="getLogOperation(logDetail)">
+              <label>写作操作:</label>
+              <span>{{ getOperationLabel(getLogOperation(logDetail)) }}</span>
+            </div>
+            <div class="detail-item" v-if="getLogSessionId(logDetail)">
+              <label>会话ID:</label>
+              <span class="mono">{{ getLogSessionId(logDetail) }}</span>
+            </div>
+            <div class="detail-item" v-if="getLogIp(logDetail)">
               <label>IP地址:</label>
-              <span class="mono">{{ logDetail.metadata.ip }}</span>
+              <span class="mono">{{ getLogIp(logDetail) }}</span>
             </div>
-            <div class="detail-item" v-if="logDetail.metadata.answer_type">
+            <div class="detail-item" v-if="getLogAnswerType(logDetail)">
               <label>回答类型:</label>
-              <span>{{ logDetail.metadata.answer_type }}</span>
+              <span>{{ getLogAnswerType(logDetail) }}</span>
             </div>
           </div>
         </div>
 
-        <div class="detail-section">
-          <h4>用户问题</h4>
-          <div class="detail-content question-content">{{ logDetail.question }}</div>
+        <div v-if="isWritingLogs">
+          <div class="detail-section">
+            <h4>写作请求</h4>
+            <div class="detail-content question-content">{{ getWritingDetailRequest(logDetail) }}</div>
+          </div>
+          <div v-if="getWritingDetailResult(logDetail)" class="detail-section">
+            <h4>写作结果</h4>
+            <div class="detail-content answer-content" v-html="renderMarkdown(getWritingDetailResult(logDetail))"></div>
+          </div>
+        </div>
+        <div v-else>
+          <div class="detail-section">
+            <h4>用户问题</h4>
+            <div class="detail-content question-content">{{ getQADetailQuestion(logDetail) }}</div>
+          </div>
+          <div class="detail-section">
+            <h4>系统回答</h4>
+            <div class="detail-content answer-content" v-html="renderMarkdown(getQADetailAnswer(logDetail))"></div>
+          </div>
         </div>
 
-        <div class="detail-section">
-          <h4>系统回答</h4>
-          <div class="detail-content answer-content" v-html="renderMarkdown(logDetail.answer)"></div>
-        </div>
-
-        <div class="detail-section" v-if="Object.keys(logDetail.metadata).length > 0">
+        <div class="detail-section" v-if="Object.keys(getLogMetadata(logDetail)).length > 0">
           <h4>元数据</h4>
           <div class="metadata-json">
-            <pre>{{ JSON.stringify(logDetail.metadata, null, 2) }}</pre>
+            <pre>{{ JSON.stringify(getLogMetadata(logDetail), null, 2) }}</pre>
           </div>
         </div>
       </div>
@@ -211,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import {
@@ -225,6 +263,8 @@ import {
   User,
   Location,
   Cpu,
+  EditPen,
+  Link,
   Loading
 } from '@element-plus/icons-vue';
 import {
@@ -233,7 +273,10 @@ import {
   getQALogDates,
   type QALogItem,
   type QALogDetail,
-  type QALogListResponse
+  getWritingLogsByDate,
+  getWritingLogDetail,
+  type WritingLogItem,
+  type WritingLogDetail
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
 import { buildUserFilterParams } from '@/utils/qaLogFilters';
@@ -245,11 +288,24 @@ const store = useStore();
 // 模拟数据模式
 const isMockMode = ref(isMockEnabled());
 
+type LogCategory = 'qa' | 'official_document';
+type LogItem = QALogItem | WritingLogItem;
+type LogDetail = QALogDetail | WritingLogDetail;
+
+interface LogListState {
+  date: string;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  logs: LogItem[];
+}
+
 // 状态
 const loading = ref(false);
 const error = ref('');
-const logs = ref<QALogItem[]>([]);
-const logData = ref<QALogListResponse>({
+const logs = ref<LogItem[]>([]);
+const logData = ref<LogListState>({
   date: '',
   total: 0,
   page: 1,
@@ -259,10 +315,15 @@ const logData = ref<QALogListResponse>({
 });
 
 // 筛选条件
+const logCategory = ref<LogCategory>('qa');
 const selectedDate = ref<string>(getTodayDate());
 const filterUserName = ref('');
 const currentPage = ref(1);
 const pageSize = ref(20);
+
+const refreshIntervalMs = 10000;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let autoRefreshing = false;
 
 // 可用日期列表
 const availableDates = ref<string[]>([]);
@@ -270,7 +331,10 @@ const availableDates = ref<string[]>([]);
 // 详情弹窗
 const showDetailDialog = ref(false);
 const detailLoading = ref(false);
-const logDetail = ref<QALogDetail | null>(null);
+const logDetail = ref<LogDetail | null>(null);
+
+const isWritingLogs = computed(() => logCategory.value === 'official_document');
+const pageTitle = computed(() => (isWritingLogs.value ? '公文写作日志' : '问答日志管理'));
 
 // 获取今天日期
 function getTodayDate(): string {
@@ -291,7 +355,9 @@ function getTypeLabel(type: string): string {
     'knowledge_qa_stream': '知识问答',
     'knowledge_chat': '知识对话',
     'conversation': '多轮对话',
-    'mcq': '选择题'
+    'mcq': '选择题',
+    'writing_start': '写作请求',
+    'writing_result': '写作结果'
   };
   return typeMap[type] || type;
 }
@@ -302,7 +368,9 @@ function getTypeClass(type: string): string {
     'knowledge_qa_stream': 'type-qa',
     'knowledge_chat': 'type-chat',
     'conversation': 'type-conv',
-    'mcq': 'type-mcq'
+    'mcq': 'type-mcq',
+    'writing_start': 'type-writing-start',
+    'writing_result': 'type-writing-result'
   };
   return classMap[type] || 'type-default';
 }
@@ -321,8 +389,152 @@ function formatTime(timestamp: string): string {
   });
 }
 
+function pickFirstString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getLogId(log: LogItem, index?: number, allowIndexFallback = false): string {
+  const direct = (log as any).id ?? (log as any).log_id ?? (log as any).detail_id;
+  if (direct) {
+    return String(direct);
+  }
+  const timestamp = (log as any).timestamp;
+  const lineIndex = (log as any).line_index;
+  if (timestamp && lineIndex !== undefined) {
+    return `${timestamp}_${lineIndex}`;
+  }
+  if (allowIndexFallback && index !== undefined) {
+    return timestamp ? `${timestamp}_${index}` : `log_${index}`;
+  }
+  return '';
+}
+
+function getLogUserId(log: LogItem): string | undefined {
+  const userId = (log as any).metadata?.user_id ?? (log as any).user_id;
+  if (userId === undefined || userId === null || userId === '') {
+    return undefined;
+  }
+  return String(userId);
+}
+
+function getLogOperation(log: LogItem): string | undefined {
+  const operation = (log as any).operation;
+  return typeof operation === 'string' ? operation : undefined;
+}
+
+function getOperationLabel(operation?: string): string {
+  if (!operation) return '';
+  const normalized = operation.toLowerCase();
+  const map: Record<string, string> = {
+    generate: '生成',
+    edit: '编辑',
+    complete: '补全'
+  };
+  return map[normalized] || operation;
+}
+
+function getLogSessionId(log: LogItem): string | undefined {
+  const sessionId = (log as any).session_id;
+  if (sessionId === undefined || sessionId === null || sessionId === '') {
+    return undefined;
+  }
+  return String(sessionId);
+}
+
+function getLogIp(log: LogItem): string | undefined {
+  const ip = (log as any).metadata?.ip;
+  return typeof ip === 'string' ? ip : undefined;
+}
+
+function getLogAnswerType(log: LogItem): string | undefined {
+  const answerType = (log as any).metadata?.answer_type;
+  return typeof answerType === 'string' ? answerType : undefined;
+}
+
+function getLogTitle(log: LogItem): string {
+  if (isWritingLogs.value) {
+    const instruction = pickFirstString([
+      (log as any).instruction,
+      (log as any).content,
+      (log as any).prompt,
+      (log as any).detail
+    ]);
+    if (instruction) {
+      return instruction;
+    }
+    const opLabel = getOperationLabel(getLogOperation(log));
+    const sessionId = getLogSessionId(log);
+    if (opLabel && sessionId) {
+      return `${opLabel} · ${sessionId}`;
+    }
+    return opLabel || sessionId || '写作记录';
+  }
+
+  return (log as QALogItem).question || '-';
+}
+
+function getLogPreview(log: LogItem): string {
+  if (!isWritingLogs.value) {
+    return (log as QALogItem).answer_preview || '';
+  }
+
+  return (
+    pickFirstString([
+      (log as any).result,
+      (log as any).output,
+      (log as any).answer
+    ]) || ''
+  );
+}
+
+function getWritingDetailRequest(detail: LogDetail): string {
+  return (
+    pickFirstString([
+      (detail as any).instruction,
+      (detail as any).content,
+      (detail as any).prompt,
+      (detail as any).detail
+    ]) || '-'
+  );
+}
+
+function getWritingDetailResult(detail: LogDetail): string {
+  return (
+    pickFirstString([
+      (detail as any).result,
+      (detail as any).output,
+      (detail as any).answer
+    ]) || ''
+  );
+}
+
+function getLogMetadata(detail: LogDetail): Record<string, unknown> {
+  const metadata = (detail as any).metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return {};
+  }
+  return metadata as Record<string, unknown>;
+}
+
+function getQADetailQuestion(detail: LogDetail): string {
+  return (detail as QALogDetail).question || '';
+}
+
+function getQADetailAnswer(detail: LogDetail): string {
+  return (detail as QALogDetail).answer || '';
+}
+
 // 加载可用日期列表
 async function loadAvailableDates() {
+  if (isWritingLogs.value) {
+    availableDates.value = [];
+    return;
+  }
   try {
     const token = store.state.user.token;
     const result = await getQALogDates(token);
@@ -337,45 +549,111 @@ function getUserName(userId?: string): string {
 }
 
 // 加载日志列表
-async function loadLogs() {
-  loading.value = true;
-  error.value = '';
+async function loadLogs(options: { silent?: boolean } = {}) {
+  const { silent = false } = options;
+  if (!silent) {
+    loading.value = true;
+    error.value = '';
+  }
 
   try {
     const token = store.state.user.token;
+    const hasUserFilter = filterUserName.value.trim().length > 0;
     const userFilterResult = await buildUserFilterParams(filterUserName.value);
-    if (userFilterResult.status === 'ambiguous') {
+    if (!silent && userFilterResult.status === 'ambiguous') {
       const keyword = userFilterResult.keyword || filterUserName.value.trim();
       ElMessage.warning(`用户名“${keyword}”匹配多个用户，请输入更完整的用户名`);
     }
-    const result = await getQALogsByDate(token, {
-      date: selectedDate.value,
-      ...userFilterResult.params,
-      page: currentPage.value,
-      page_size: pageSize.value
-    });
+    if (isWritingLogs.value) {
+      const result = await getWritingLogsByDate(token, {
+        date: selectedDate.value,
+        writing_type: logCategory.value,
+        page: currentPage.value,
+        page_size: pageSize.value
+      });
 
-    logData.value = result;
-    logs.value = result.logs || [];
+      let writingLogs = (result.logs || []).map((log) => {
+        const resolvedId = getLogId(log);
+        return resolvedId ? { ...log, id: resolvedId } : log;
+      });
+
+      if (hasUserFilter) {
+        const keyword = userFilterResult.keyword || filterUserName.value.trim();
+        const filterUserId = userFilterResult.params.user_id;
+        writingLogs = writingLogs.filter((log) => {
+          const userId = getLogUserId(log);
+          if (filterUserId && userId === filterUserId) {
+            return true;
+          }
+          const userName = getUserNameById(userId);
+          if (userName && userName.includes(keyword)) {
+            return true;
+          }
+          return userId ? userId.includes(keyword) : false;
+        });
+      }
+
+      const total = typeof result.total === 'number' ? result.total : writingLogs.length;
+      const page = result.page ?? currentPage.value;
+      const page_size = result.page_size ?? pageSize.value;
+      const totalForDisplay = hasUserFilter ? writingLogs.length : total;
+      const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
+      const total_pages = hasUserFilter
+        ? fallbackTotalPages
+        : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
+
+      logData.value = {
+        date: result.date || selectedDate.value,
+        total: totalForDisplay,
+        page,
+        page_size,
+        total_pages,
+        logs: writingLogs
+      };
+      logs.value = writingLogs;
+    } else {
+      const result = await getQALogsByDate(token, {
+        date: selectedDate.value,
+        ...userFilterResult.params,
+        page: currentPage.value,
+        page_size: pageSize.value
+      });
+
+      logData.value = result as LogListState;
+      logs.value = result.logs || [];
+    }
+    error.value = '';
   } catch (err: any) {
-    error.value = err.response?.data?.message || err.message || '加载失败，请稍后重试';
+    if (!silent) {
+      error.value = err.response?.data?.message || err.message || '加载失败，请稍后重试';
+    }
     console.error('加载日志列表失败:', err);
   } finally {
-    loading.value = false;
+    if (!silent) {
+      loading.value = false;
+    }
   }
 }
 
 // 查看详情
-async function viewDetail(log: QALogItem) {
+async function viewDetail(log: LogItem) {
   showDetailDialog.value = true;
   detailLoading.value = true;
   logDetail.value = null;
 
   try {
     const token = store.state.user.token;
-    logDetail.value = await getQALogDetail(token, log.id, selectedDate.value);
+    if (isWritingLogs.value) {
+      const logId = getLogId(log);
+      if (!logId) {
+        throw new Error('日志ID缺失，无法查看详情');
+      }
+      logDetail.value = await getWritingLogDetail(token, logId);
+    } else {
+      logDetail.value = await getQALogDetail(token, (log as QALogItem).id, selectedDate.value);
+    }
   } catch (err: any) {
-    ElMessage.error(err.response?.data?.message || '加载详情失败');
+    ElMessage.error(err.response?.data?.message || err.message || '加载详情失败');
     showDetailDialog.value = false;
   } finally {
     detailLoading.value = false;
@@ -386,6 +664,13 @@ async function viewDetail(log: QALogItem) {
 function handleDateChange() {
   currentPage.value = 1;
   loadLogs();
+}
+
+function handleLogCategoryChange() {
+  currentPage.value = 1;
+  loadAvailableDates();
+  loadLogs();
+  syncAutoRefresh();
 }
 
 // 处理搜索
@@ -416,10 +701,60 @@ function handlePageChange(page: number) {
   loadLogs();
 }
 
+function shouldAutoRefresh(): boolean {
+  return selectedDate.value === getTodayDate();
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+function startAutoRefresh() {
+  if (refreshTimer || !shouldAutoRefresh()) {
+    return;
+  }
+
+  refreshTimer = window.setInterval(() => {
+    if (!shouldAutoRefresh()) {
+      stopAutoRefresh();
+      return;
+    }
+
+    if (document.hidden || loading.value || autoRefreshing) {
+      return;
+    }
+
+    autoRefreshing = true;
+    loadLogs({ silent: true }).finally(() => {
+      autoRefreshing = false;
+    });
+  }, refreshIntervalMs);
+}
+
+function syncAutoRefresh() {
+  if (shouldAutoRefresh()) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+}
+
+watch(selectedDate, () => {
+  syncAutoRefresh();
+});
+
 onMounted(async () => {
   await ensureUserCacheLoaded();  // 确保用户缓存已加载
   loadAvailableDates();
   loadLogs();
+  syncAutoRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
 });
 </script>
 
@@ -607,6 +942,16 @@ onMounted(async () => {
 .type-mcq {
   background: #f3e8ff;
   color: #7c3aed;
+}
+
+.type-writing-start {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.type-writing-result {
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .type-default {

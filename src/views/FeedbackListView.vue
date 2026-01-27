@@ -45,16 +45,17 @@
       </div>
 
       <!-- 反馈列表 -->
-      <div v-else class="feedback-list">
+      <div v-else class="feedback-list" ref="listRef">
         <div
           v-for="feedback in feedbacks"
           :key="feedback.feedbackId"
           class="feedback-item"
+          :data-feedback-id="feedback.feedbackId"
         >
           <div class="feedback-id">ID {{ feedback.feedbackId }}</div>
           <div class="feedback-type">
-            <el-icon :size="32" :color="feedback.feedbackType === 'LIKE' ? '#10b981' : '#ef4444'">
-              <CircleCheck v-if="feedback.feedbackType === 'LIKE'" />
+            <el-icon :size="32" :color="isLike(feedback.feedbackType) ? '#10b981' : '#ef4444'">
+              <CircleCheck v-if="isLike(feedback.feedbackType)" />
               <CircleClose v-else />
             </el-icon>
           </div>
@@ -71,90 +72,245 @@
             查看详情
           </button>
         </div>
+        <div class="pagination-wrapper">
+          <el-pagination
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="pagination.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handlePageChange"
+          />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, reactive, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import http from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
-import { 
-  DocumentCopy, 
-  WarningFilled, 
-  FolderOpened, 
-  CircleCheck, 
+import {
+  getFeedbackListCache,
+  updateFeedbackListCache,
+  type FeedbackListItem,
+} from '@/utils/feedbackListCache';
+import {
+  DocumentCopy,
+  WarningFilled,
+  FolderOpened,
+  CircleCheck,
   CircleClose,
   Calendar,
   User,
   OfficeBuilding,
-  Cpu
+  Cpu,
 } from '@element-plus/icons-vue';
 
-interface Feedback {
-  feedbackId: number;
-  feedbackType: 'LIKE' | 'DISLIKE';
-  question: string;
-  answer: string;
-  modelId: string;
-  createAt: string;
-  reporterName?: string;
-  reporterUnit?: string;
-  reason?: string;
-}
+type FeedbackTypeFilter = '' | 'like' | 'dislike';
 
 const router = useRouter();
-const feedbacks = ref<Feedback[]>([]);
+const feedbacks = ref<FeedbackListItem[]>([]);
 const loading = ref(true);
 const error = ref('');
+const listRef = ref<HTMLElement | null>(null);
+const feedbackType = ref<FeedbackTypeFilter>('');
 
-// 统计信息
+const pagination = reactive({
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  pages: 0,
+});
+
+const isLike = (type?: string) => String(type || '').toUpperCase() === 'LIKE';
+
 const stats = computed(() => {
-  const total = feedbacks.value.length;
-  const likeCount = feedbacks.value.filter(f => f.feedbackType === 'LIKE').length;
-  const dislikeCount = feedbacks.value.filter(f => f.feedbackType === 'DISLIKE').length;
-  const lastUpdate = feedbacks.value.length > 0 ? feedbacks.value[0].createAt : '无';
+  const likeCount = feedbacks.value.filter((f) => isLike(f.feedbackType)).length;
+  const dislikeCount = feedbacks.value.filter((f) => !isLike(f.feedbackType)).length;
+  const total = pagination.total || feedbacks.value.length;
+  const lastUpdate = feedbacks.value.length > 0 ? feedbacks.value[0].createAt : '?';
 
   return {
     total,
     likeCount,
     dislikeCount,
-    lastUpdate
+    lastUpdate,
   };
 });
 
-// 加载反馈列表
-const loadFeedbackList = async () => {
-  loading.value = true;
-  error.value = '';
+const normalizeFeedbackType = (type?: string) => String(type || '').toUpperCase();
 
-  try {
-    const response = await http.get(API_ENDPOINTS.FEEDBACK.LIST);
-    
-    if (response.data.success) {
-      feedbacks.value = response.data.data.feedbacks || [];
-    } else {
-      error.value = response.data.message || '获取数据失败';
+const applyCache = () => {
+  const cache = getFeedbackListCache();
+  if (!cache || !cache.restoreOnNextEnter || cache.records.length === 0) {
+    return false;
+  }
+
+  feedbacks.value = cache.records;
+  pagination.page = cache.pageNum;
+  pagination.pageSize = cache.pageSize;
+  pagination.total = cache.total;
+  pagination.pages = cache.pages;
+  feedbackType.value = (cache.feedbackType as FeedbackTypeFilter) || '';
+
+  updateFeedbackListCache({ restoreOnNextEnter: false });
+  return true;
+};
+
+const restoreScrollPosition = async () => {
+  const cache = getFeedbackListCache();
+  if (!cache) return;
+
+  await nextTick();
+
+  const targetId = cache.lastClickedId;
+  if (targetId) {
+    const selector = `[data-feedback-id="${targetId}"]`;
+    const target =
+      listRef.value?.querySelector(selector) ?? document.querySelector(selector);
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ block: 'center' });
+      return;
     }
-  } catch (err: any) {
-    error.value = err.response?.data?.message || '加载失败，请稍后重试';
-    console.error('加载反馈列表失败:', err);
-  } finally {
-    loading.value = false;
+  }
+
+  if (cache.scrollTop > 0) {
+    window.scrollTo({ top: cache.scrollTop });
   }
 };
 
-// 查看详情
+const syncCache = () => {
+  updateFeedbackListCache({
+    pageNum: pagination.page,
+    pageSize: pagination.pageSize,
+    feedbackType: feedbackType.value,
+    total: pagination.total,
+    pages: pagination.pages,
+    records: feedbacks.value,
+  });
+};
+
+const loadFeedbackPage = async (options?: { showLoading?: boolean; restoreScroll?: boolean }) => {
+  let success = false;
+  const showLoading = options?.showLoading !== false;
+  const restoreScroll = options?.restoreScroll === true;
+
+  if (showLoading) {
+    loading.value = true;
+  } else {
+    loading.value = false;
+  }
+  error.value = '';
+
+  try {
+    const params: Record<string, string | number> = {
+      pageNum: pagination.page,
+      pageSize: pagination.pageSize,
+    };
+    if (feedbackType.value) {
+      params.feedbackType = feedbackType.value;
+    }
+
+    const response = await http.get(API_ENDPOINTS.FEEDBACK.PAGE, { params });
+
+    if (response.data.success) {
+      const data = response.data.data || {};
+      const records = Array.isArray(data.records) ? data.records : [];
+      feedbacks.value = records.map((record: FeedbackListItem) => ({
+        ...record,
+        feedbackType: normalizeFeedbackType(record.feedbackType),
+      }));
+
+      const total = typeof data.total === 'number' ? data.total : Number(data.total) || records.length;
+      const size = typeof data.size === 'number' ? data.size : Number(data.size) || pagination.pageSize;
+      const pages = typeof data.pages === 'number' ? data.pages : Number(data.pages) || Math.ceil(total / size);
+      const current = typeof data.current === 'number' ? data.current : Number(data.current) || pagination.page;
+
+      pagination.total = total;
+      pagination.pageSize = size;
+      pagination.pages = pages;
+      pagination.page = current;
+
+      syncCache();
+      success = true;
+    } else if (feedbacks.value.length === 0) {
+      error.value = response.data.message || '获取数据失败';
+    }
+  } catch (err: any) {
+    if (feedbacks.value.length === 0) {
+      error.value = err.response?.data?.message || '加载失败，请稍后重试';
+    } else {
+      console.error('加载反馈列表失败:', err);
+    }
+  } finally {
+    if (showLoading) {
+      loading.value = false;
+    }
+  }
+
+  if (restoreScroll) {
+    await restoreScrollPosition();
+  }
+  return success;
+};
+
+const handlePageChange = async (page: number) => {
+  const previousPage = pagination.page;
+  pagination.page = page;
+  updateFeedbackListCache({ lastClickedId: null, scrollTop: 0 });
+  const loaded = await loadFeedbackPage();
+  if (!loaded) {
+    pagination.page = previousPage;
+    return;
+  }
+  window.scrollTo({ top: 0 });
+};
+
+const handleSizeChange = async (size: number) => {
+  const previousPage = pagination.page;
+  const previousSize = pagination.pageSize;
+  pagination.pageSize = size;
+  pagination.page = 1;
+  updateFeedbackListCache({ lastClickedId: null, scrollTop: 0 });
+  const loaded = await loadFeedbackPage();
+  if (!loaded) {
+    pagination.page = previousPage;
+    pagination.pageSize = previousSize;
+    return;
+  }
+  window.scrollTo({ top: 0 });
+};
+
 const viewDetail = (feedbackId: number) => {
+  updateFeedbackListCache({
+    pageNum: pagination.page,
+    pageSize: pagination.pageSize,
+    feedbackType: feedbackType.value,
+    total: pagination.total,
+    pages: pagination.pages,
+    records: feedbacks.value,
+    scrollTop: window.scrollY,
+    lastClickedId: feedbackId,
+    restoreOnNextEnter: true,
+  });
+
   router.push({ name: 'feedback-detail', params: { id: feedbackId } });
 };
 
-onMounted(() => {
-  loadFeedbackList();
+onMounted(async () => {
+  const restored = applyCache();
+  if (restored) {
+    loading.value = false;
+    await restoreScrollPosition();
+  }
+  await loadFeedbackPage({ showLoading: !restored, restoreScroll: restored });
 });
 </script>
+
 
 <style scoped>
 .feedback-list-page {
@@ -283,6 +439,14 @@ onMounted(() => {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .feedback-item {
