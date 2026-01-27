@@ -138,7 +138,8 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       requiresAuth: true,
       title: '个人设置',
-      pageCode: 'PAGE_009'
+      pageCode: 'PAGE_009',
+      publicAccess: true
     }
   },
   {
@@ -148,7 +149,8 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       requiresAuth: true,
       title: 'Excel 工具',
-      pageCode: 'PAGE_010'
+      pageCode: 'PAGE_010',
+      publicAccess: true
     }
   },
   {
@@ -158,7 +160,8 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       requiresAuth: true,
       title: '选择题格式化工具',
-      pageCode: 'PAGE_011'
+      pageCode: 'PAGE_011',
+      publicAccess: true
     }
   },
   {
@@ -217,7 +220,7 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/DataAnalysisView.vue'),
     meta: { 
       requiresAuth: true,
-      title: '报告生成',
+      title: '数研报告',
       pageCode: 'PAGE_017'
     }
   },
