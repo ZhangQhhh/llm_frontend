@@ -224,6 +224,16 @@ const routes: Array<RouteRecordRaw> = [
       requiresAuth: true,
       title: '视频中心'
     }
+  },
+  {
+    path: '/saq-grading',
+    name: 'saq-grading',
+    component: () => import('../views/SaqGradingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '简答题评分'
+    }
   }
 ]
 

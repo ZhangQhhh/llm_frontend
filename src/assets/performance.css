@@ -70,7 +70,7 @@ body.low-performance-mode::before {
   bottom: 20px;
   right: 20px;
   background: rgba(96, 165, 250, 0.9);
-  color: white;
+  color: #333333;
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 12px;
