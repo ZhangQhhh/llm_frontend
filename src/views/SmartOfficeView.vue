@@ -1,5 +1,5 @@
 <template>
-  <div class="smart-office-page">
+  <div :class="['smart-office-page', { 'low-perf-mode': isLowPerformanceMode }]">
     <!-- 重新启用 ThreeBackground，粒子数已优化到30个 -->
     <ThreeBackground />
     <el-container class="smart-office-layout container-fluid">
@@ -39,7 +39,7 @@
           
           <div class="session-list" v-loading="sessionListLoading">
             <div
-              v-for="sess in sessionList"
+              v-for="sess in visibleSessionList"
               :key="sess.session_id"
               :class="['session-item', { active: sess.session_id === sessionId }]"
               @click="switchSession(sess.session_id)"
@@ -59,6 +59,26 @@
                 @click.stop="deleteSessionById(sess.session_id)"
               >
                 <el-icon :size="12"><Delete /></el-icon>
+              </el-button>
+            </div>
+            <div v-if="sessionList.length > sessionDisplayLimit" class="session-load-more">
+              <el-button 
+                v-if="sessionDisplayLimit < sessionList.length"
+                type="primary" 
+                link 
+                size="small"
+                @click="loadMoreSessions"
+              >
+                加载更多 ({{ sessionList.length - sessionDisplayLimit }})
+              </el-button>
+              <el-button 
+                v-if="sessionDisplayLimit > 20"
+                type="info" 
+                link 
+                size="small"
+                @click="collapseSessions"
+              >
+                收起
               </el-button>
             </div>
             <div v-if="!sessionList.length && !sessionListLoading" class="session-empty">
@@ -137,22 +157,39 @@
             <span class="list-title">文档列表</span>
             <el-badge :value="kbFiles.length" :max="99" type="primary" />
           </div>
+          <div class="kb-search-box">
+            <el-input
+              v-model="kbSearchQuery"
+              placeholder="搜索文档..."
+              size="small"
+              clearable
+              :prefix-icon="Search"
+            />
+          </div>
           <div class="kb-list-body">
             <div v-if="!kbFiles.length" class="kb-empty">
               <el-icon :size="48" color="#c0c4cc"><Document /></el-icon>
               <p class="empty-text">暂无文档</p>
               <p class="empty-hint">请先上传文件到知识库</p>
             </div>
+            <div v-else-if="filteredKbFiles.length === 0" class="kb-empty">
+              <el-icon :size="32" color="#c0c4cc"><Search /></el-icon>
+              <p class="empty-text">未找到匹配文档</p>
+            </div>
             <el-scrollbar v-else style="height: 100%" id="kbList">
               <div
-                v-for="(file, index) in kbFiles"
+                v-for="file in visibleKbFiles"
                 :key="file.name"
                 class="kb-item"
+                @dblclick="previewKbFile(file.name)"
               >
-                <el-checkbox v-model="file.selected" />
-                <span v-if="file.selected" class="kb-file-index">[{{ getKbFileGlobalIndex(index) }}]</span>
+                <el-checkbox 
+                  v-model="file.selected" 
+                  @change="(val: boolean) => onKbFileSelectChange(file, val)"
+                />
+                <span v-if="file.selected" class="kb-file-index">[{{ getKbFileGlobalIndex(kbFiles.indexOf(file)) }}]</span>
                 <el-icon class="file-icon"><Document /></el-icon>
-                <span class="kb-file-name" :title="file.name">
+                <span class="kb-file-name" :title="file.name + ' (双击预览)'">
                   {{ file.name }}
                 </span>
                 <el-icon 
@@ -161,6 +198,24 @@
                 >
                   <Delete />
                 </el-icon>
+              </div>
+              <div v-if="filteredKbFiles.length > kbDisplayLimit" class="kb-load-more">
+                <el-button 
+                  v-if="kbDisplayLimit < kbFiles.length"
+                  type="primary" 
+                  link 
+                  @click="loadMoreKbFiles"
+                >
+                  加载更多 ({{ kbFiles.length - kbDisplayLimit }} 个)
+                </el-button>
+                <el-button 
+                  v-if="kbDisplayLimit > 20"
+                  type="info" 
+                  link 
+                  @click="collapseKbFiles"
+                >
+                  收起
+                </el-button>
               </div>
             </el-scrollbar>
           </div>
@@ -319,10 +374,12 @@
                     size="small"
                     style="width: 160px;"
                   >
-                    <!-- <el-option label="Qwen-Plus (云端)" value="qwen-plus" /> -->
+                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
                     <el-option label="Qwen (通用)" valwue="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
                     <el-option label="DeepSeekv3_2" value="deepseek" />
+                    <el-option label="DeepSeek 云端" value="deepseek-cloud" />
+                    <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" />
                   </el-select>
                 </div>
                 <div class="config-item">
@@ -368,6 +425,20 @@
                     inactive-text="关"
                     size="small"
                     style="--el-switch-on-color: #409eff"
+                  />
+                </div>
+                <div class="config-item temperature-config">
+                  <span class="item-label">Temperature</span>
+                  <el-input-number
+                    v-model="temperatureValue"
+                    :min="0"
+                    :max="2"
+                    :step="0.1"
+                    :precision="1"
+                    :controls="true"
+                    :value-on-clear="0.7"
+                    size="small"
+                    style="width: 110px;"
                   />
                 </div>
               </div>
@@ -825,11 +896,24 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 文档预览对话框 -->
+    <el-dialog
+      v-model="kbPreviewVisible"
+      :title="'文档预览 - ' + kbPreviewFilename"
+      width="70%"
+      top="5vh"
+      class="kb-preview-dialog"
+    >
+      <div class="kb-preview-content" v-loading="kbPreviewLoading">
+        <pre v-if="!kbPreviewLoading">{{ kbPreviewContent }}</pre>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, nextTick, computed } from 'vue';
+import { defineComponent, onMounted, ref, nextTick, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -857,6 +941,7 @@ import {
   ArrowRight,
   InfoFilled,
   CircleClose,
+  Search,
 } from '@element-plus/icons-vue';
 import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -919,11 +1004,79 @@ export default defineComponent({
     const sessionListLoading = ref<boolean>(false);
     const sessionCreating = ref<boolean>(false);
     const sessionSidebarCollapsed = ref<boolean>(false);
+    
+    // 会话列表懒加载
+    const sessionDisplayLimit = ref<number>(20);
+    const visibleSessionList = computed(() => {
+      return sessionList.value.slice(0, sessionDisplayLimit.value);
+    });
+    const loadMoreSessions = () => {
+      sessionDisplayLimit.value = Math.min(sessionDisplayLimit.value + 10, sessionList.value.length);
+    };
+    const collapseSessions = () => {
+      sessionDisplayLimit.value = 20;
+    };
+
+    // 低配模式检测
+    const isLowPerformanceMode = computed(() => store.getters['performance/isLowPerformanceMode']);
 
     const useKb = ref<boolean>(false);
     const kbPassword = ref<string>('');
     const kbFiles = ref<KbFile[]>([]);
     const kbUploading = ref<boolean>(false);
+    
+    // 搜索和懒加载
+    const kbSearchQuery = ref<string>('');
+    const kbDisplayLimit = ref<number>(20);
+    
+    // 根据搜索词过滤文档
+    const filteredKbFiles = computed(() => {
+      if (!kbSearchQuery.value.trim()) {
+        return kbFiles.value;
+      }
+      const query = kbSearchQuery.value.toLowerCase();
+      return kbFiles.value.filter(file => file.name.toLowerCase().includes(query));
+    });
+    
+    // 懒加载显示
+    const visibleKbFiles = computed(() => {
+      return filteredKbFiles.value.slice(0, kbDisplayLimit.value);
+    });
+    const loadMoreKbFiles = () => {
+      kbDisplayLimit.value = Math.min(kbDisplayLimit.value + 20, filteredKbFiles.value.length);
+    };
+    const collapseKbFiles = () => {
+      kbDisplayLimit.value = 20;
+    };
+    
+    // 文档预览
+    const kbPreviewVisible = ref<boolean>(false);
+    const kbPreviewFilename = ref<string>('');
+    const kbPreviewContent = ref<string>('');
+    const kbPreviewLoading = ref<boolean>(false);
+    
+    const previewKbFile = async (filename: string) => {
+      kbPreviewFilename.value = filename;
+      kbPreviewVisible.value = true;
+      kbPreviewLoading.value = true;
+      kbPreviewContent.value = '';
+      
+      try {
+        const resp = await fetch(`${writerBase}/writer/kb/content?filename=${encodeURIComponent(filename)}`, {
+          headers: getAuthHeaders(),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          kbPreviewContent.value = data.content || '(文档内容为空)';
+        } else {
+          kbPreviewContent.value = `获取失败: ${data.error || '未知错误'}`;
+        }
+      } catch (e: any) {
+        kbPreviewContent.value = `请求失败: ${e?.message || String(e)}`;
+      } finally {
+        kbPreviewLoading.value = false;
+      }
+    };
 
     const sessionFiles = ref<string[]>([]);
     const sessionUploading = ref<boolean>(false);
@@ -947,6 +1100,16 @@ export default defineComponent({
     const thinkingMode = ref<boolean>(false);
     const writeMode = ref<'generate' | 'complete'>('generate');
     const selectedModel = ref<string>('Qwen (通用)');
+    const temperatureValue = ref<number>(0.7);  // temperature 参数，默认 0.7
+    
+    // 根据模型自动调整 temperature 默认值
+    watch(selectedModel, (newModel) => {
+      if (newModel.toLowerCase().includes('deepseek')) {
+        temperatureValue.value = 1.0;
+      } else {
+        temperatureValue.value = 0.7;
+      }
+    });
     
     // 提示词模式：raw(原生) / standard(标准) / skeleton(骨架)
     const promptMode = ref<'raw' | 'standard' | 'skeleton'>('standard');
@@ -1241,7 +1404,35 @@ export default defineComponent({
       }
     };
 
-    const MAX_SESSION_FILES = 5;  // 会话文档总数限制
+    const MAX_TOTAL_DOCS = 5;  // 会话文档+知识库文档总数限制
+    
+    // 计算当前已使用的文档总数
+    const totalSelectedDocs = computed(() => {
+      const sessionCount = sessionFiles.value.length;
+      const kbSelectedCount = kbFiles.value.filter(f => f.selected).length;
+      return sessionCount + kbSelectedCount;
+    });
+    
+    // 剩余可用文档数
+    const remainingDocSlots = computed(() => {
+      return Math.max(0, MAX_TOTAL_DOCS - totalSelectedDocs.value);
+    });
+    
+    // 知识库文档勾选变更处理
+    const onKbFileSelectChange = (file: KbFile, selected: boolean) => {
+      if (selected && totalSelectedDocs.value > MAX_TOTAL_DOCS) {
+        // 超出限制，撤销选择并弹出提醒
+        file.selected = false;
+        ElMessageBox.alert(
+          `文档总数已达上限（${MAX_TOTAL_DOCS}个），请先取消勾选其他知识库文档或删除会话文档后再试。`,
+          '文档数量限制',
+          {
+            confirmButtonText: '我知道了',
+            type: 'warning',
+          }
+        );
+      }
+    };
 
     const uploadSessionFiles = async () => {
       const input = sessionFileInputRef.value;
@@ -1250,17 +1441,27 @@ export default defineComponent({
         return;
       }
 
-      // 检查总数限制
-      const currentCount = sessionFiles.value.length;
+      // 检查总数限制（会话+知识库）
+      const kbSelectedCount = kbFiles.value.filter(f => f.selected).length;
+      const currentSessionCount = sessionFiles.value.length;
+      const totalCurrent = currentSessionCount + kbSelectedCount;
       const newFiles = Array.from(input.files);
-      if (currentCount >= MAX_SESSION_FILES) {
-        ElMessage.warning(`会话文档最多${MAX_SESSION_FILES}个，请先删除已有文档`);
+      
+      if (totalCurrent >= MAX_TOTAL_DOCS) {
+        ElMessageBox.alert(
+          `文档总数已达上限（${MAX_TOTAL_DOCS}个：会话${currentSessionCount}个 + 知识库${kbSelectedCount}个），请先删除会话文档或取消勾选知识库文档后再试。`,
+          '文档数量限制',
+          {
+            confirmButtonText: '我知道了',
+            type: 'warning',
+          }
+        );
         input.value = '';
         return;
       }
-      const allowedCount = MAX_SESSION_FILES - currentCount;
+      const allowedCount = MAX_TOTAL_DOCS - totalCurrent;
       if (newFiles.length > allowedCount) {
-        ElMessage.warning(`当前已有${currentCount}个文档，最多还能上传${allowedCount}个`);
+        ElMessage.warning(`当前已使用${totalCurrent}个文档，最多还能上传${allowedCount}个`);
       }
 
       await ensureSession();
@@ -1754,6 +1955,7 @@ export default defineComponent({
         prompt_mode: promptMode.value,
         skeleton_config: promptMode.value === 'skeleton' ? skeletonConfig.value : undefined,
         temp_docs: tempDocs.length > 0 ? tempDocs : undefined,
+        temperature: temperatureValue.value,  // 可选的 temperature 参数
       };
 
       const ac = new AbortController();
@@ -2110,6 +2312,10 @@ export default defineComponent({
       sessionListLoading,
       sessionCreating,
       sessionSidebarCollapsed,
+      sessionDisplayLimit,
+      visibleSessionList,
+      loadMoreSessions,
+      collapseSessions,
       refreshSessionList,
       createNewSession,
       switchSession,
@@ -2119,6 +2325,22 @@ export default defineComponent({
       kbPassword,
       kbFiles,
       kbUploading,
+      kbDisplayLimit,
+      visibleKbFiles,
+      loadMoreKbFiles,
+      collapseKbFiles,
+      kbSearchQuery,
+      filteredKbFiles,
+      kbPreviewVisible,
+      kbPreviewFilename,
+      kbPreviewContent,
+      kbPreviewLoading,
+      previewKbFile,
+      Search,
+      totalSelectedDocs,
+      remainingDocSlots,
+      onKbFileSelectChange,
+      MAX_TOTAL_DOCS,
       sessionFiles,
       sessionUploading,
       sessionFileInputRef,
@@ -2145,6 +2367,7 @@ export default defineComponent({
       clearOcrResults,
       thinkingMode,
       writeMode,
+      temperatureValue,
       promptMode,
       skeletonConfig,
       skeletonDialogVisible,
@@ -2174,6 +2397,7 @@ export default defineComponent({
       formatMessage,
       hasExportableContent,
       exportToWord,
+      isLowPerformanceMode,
     };
   },
 });
@@ -2186,11 +2410,12 @@ export default defineComponent({
   background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
   padding: 2rem 0;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .smart-office-layout {
-  height: 100%;
+  height: 1100px;
+  min-height: 1100px;
   max-width: 1600px;
   margin: 0 auto;
   border-radius: 16px;
@@ -2203,16 +2428,20 @@ export default defineComponent({
   z-index: 1;
   display: flex;
   flex-direction: row;
+  align-items: stretch;
 }
 
 /* ========== 左侧知识库区域 ========== */
 .kb-aside {
   padding: 24px;
+  padding-left: 36px;
   border-right: 1px solid rgba(232, 234, 237, 0.5);
   background: linear-gradient(180deg, rgba(248, 249, 250, 0.6) 0%, rgba(255, 255, 255, 0.4) 100%);
   backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
 }
 
 /* ========== 会话列表可收起侧边栏 ========== */
@@ -2220,6 +2449,7 @@ export default defineComponent({
   position: relative;
   width: 220px;
   min-width: 220px;
+  height: 100%;
   flex-shrink: 0;
   align-self: stretch;
   background: #ffffff;
@@ -2227,17 +2457,21 @@ export default defineComponent({
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 
 .session-sidebar.collapsed {
   width: 0;
   min-width: 0;
   border-right: none;
+  overflow: visible;
+  height: 100%;
+  min-height: 100%;
 }
 
 .session-sidebar-toggle {
   position: absolute;
-  right: -12px;
+  right: -24px;
   top: 50%;
   transform: translateY(-50%);
   width: 24px;
@@ -2248,7 +2482,7 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 100;
   color: white;
   box-shadow: 2px 0 8px rgba(102, 126, 234, 0.3);
   transition: all 0.2s;
@@ -2335,6 +2569,8 @@ export default defineComponent({
   gap: 6px;
   min-height: 0;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #c0c4cc #f0f0f0;
 }
 
 /* 会话列表滚动条样式 */
@@ -2353,6 +2589,15 @@ export default defineComponent({
 
 .session-list::-webkit-scrollbar-thumb:hover {
   background: rgba(102, 126, 234, 0.5);
+}
+
+.session-load-more {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.2);
+  margin-top: 6px;
 }
 
 .session-item {
@@ -2505,12 +2750,20 @@ export default defineComponent({
   min-height: 0;
 }
 
+.kb-list-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .kb-list-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 550px;
 }
+
 
 .kb-switch-wrapper {
   display: flex;
@@ -2566,6 +2819,38 @@ export default defineComponent({
 .empty-hint {
   font-size: 12px;
   color: #9ca3af;
+  margin: 0;
+}
+
+.kb-search-box {
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+.kb-load-more {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 8px;
+}
+
+.kb-preview-content {
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.kb-preview-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #374151;
   margin: 0;
 }
 
@@ -2629,6 +2914,8 @@ export default defineComponent({
   flex-direction: column;
   background: rgba(250, 251, 252, 0.5);
   backdrop-filter: blur(10px);
+  height: 100%;
+  overflow-y: auto;
 }
 
 /* ========== 页面头部 ========== */
@@ -2764,6 +3051,10 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.config-item.temperature-config {
+  gap: 6px;
 }
 
 .item-label {
@@ -3191,6 +3482,13 @@ export default defineComponent({
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+.chat-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .chat-window {
   flex: 1;
   overflow-y: auto;
@@ -3199,7 +3497,7 @@ export default defineComponent({
   backdrop-filter: blur(5px);
   border-radius: 8px;
   border: 1px solid rgba(232, 234, 237, 0.3);
-  min-height: 400px;
+  min-height: 200px;
 }
 
 .chat-empty {
@@ -3379,7 +3677,9 @@ export default defineComponent({
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  flex-shrink: 0;
 }
 
 .input-wrapper {
@@ -3727,5 +4027,23 @@ export default defineComponent({
   .bubble {
     max-width: 85%;
   }
+}
+
+/* ========== 低配模式样式覆盖 ========== */
+.smart-office-page.low-perf-mode .chat-row.user .bubble {
+  color: #1f2937;
+  background: #e5e7eb;
+}
+
+.smart-office-page.low-perf-mode .session-new-btn {
+  color: #1f2937;
+}
+
+.smart-office-page.low-perf-mode .new-session-btn {
+  color: #1f2937;
+}
+
+.smart-office-page.low-perf-mode .stop-btn {
+  color: #1f2937;
 }
 </style>

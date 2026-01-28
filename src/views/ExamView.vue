@@ -46,12 +46,20 @@
           <el-badge v-if="wrongBookTotal > 0" :value="wrongBookTotal" :max="99" class="wrong-badge" />
         </el-button>
         
+        <el-button type="info" @click="openExamHistory" :disabled="examStarted" size="default">
+          <el-icon><List /></el-icon>
+          考试记录
+        </el-button>
+        
         <div class="time">
           <span class="muted">倒计时：</span>
           <span class="pill">{{ timerDisplay }}</span>
         </div>
         
         <div class="user-actions">
+          <el-tag v-if="isLowPerformanceMode" type="warning" size="small" effect="plain" style="margin-right: 8px;">
+            ⚡ 低配模式
+          </el-tag>
           <span class="user-name">{{ username }}</span>
         </div>
       </div>
@@ -103,9 +111,9 @@
     </div>
 
     <!-- 主布局 -->
-    <div class="wrap">
-      <!-- 左侧导航 -->
-      <div class="side card" v-if="examStarted && questions.length > 0">
+    <div :class="['wrap', { 'low-perf-mode': isLowPerformanceMode }]">
+      <!-- 左侧导航（低配模式下简化显示） -->
+      <div class="side card" v-if="examStarted && questions.length > 0 && !isLowPerformanceMode">
         <h3>题目导航</h3>
         <!-- 单选题导航 -->
         <div v-if="singleQuestions.length > 0" class="nav-section">
@@ -158,8 +166,49 @@
             </button>
           </div>
         </div>
+        <!-- 简答题导航 -->
+        <div v-if="saqQuestions.length > 0" class="nav-section">
+          <div class="nav-section-title">
+            <span class="nav-type-tag saq">简答</span>
+            <span class="nav-count">{{ saqQuestions.length }}题</span>
+          </div>
+          <div class="navgrid">
+            <button
+              v-for="(q, idx) in saqQuestions"
+              :key="q.qid"
+              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              @click="scrollToQuestion(q.qid)"
+            >
+              {{ idx + 1 }}
+            </button>
+          </div>
+        </div>
         <div class="nav-summary" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(96, 165, 250, 0.2);">
           <span class="muted">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
+        </div>
+      </div>
+      <!-- 低配模式下的简化导航 -->
+      <div class="side card simple-nav" v-if="examStarted && questions.length > 0 && isLowPerformanceMode">
+        <h3>答题进度</h3>
+        <div class="simple-nav-stats">
+          <div class="stat-item">
+            <span class="stat-label">总题数</span>
+            <span class="stat-value">{{ questions.length }}</span>
+          </div>
+          <div class="stat-item answered">
+            <span class="stat-label">已答</span>
+            <span class="stat-value">{{ answeredCount }}</span>
+          </div>
+          <div class="stat-item pending">
+            <span class="stat-label">未答</span>
+            <span class="stat-value">{{ questions.length - answeredCount }}</span>
+          </div>
+        </div>
+        <div class="simple-nav-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: (answeredCount / questions.length * 100) + '%' }"></div>
+          </div>
+          <span class="progress-text">{{ Math.round(answeredCount / questions.length * 100) }}%</span>
         </div>
       </div>
 
@@ -184,6 +233,11 @@
               <span class="stat-label">不定项</span>
               <span class="stat-value">{{ indeterminateQuestions.length }}题</span>
             </span>
+            <span class="head-divider" v-if="indeterminateQuestions.length > 0 && saqQuestions.length > 0">|</span>
+            <span class="head-stat" v-if="saqQuestions.length > 0">
+              <span class="stat-label">简答</span>
+              <span class="stat-value">{{ saqQuestions.length }}题</span>
+            </span>
             <span class="head-divider">|</span>
             <span class="head-stat">
               <span class="stat-label">共</span>
@@ -203,25 +257,33 @@
 
         <div v-else class="qlist">
           <!-- 单选题区域 -->
-          <div v-if="singleQuestions.length > 0" class="question-section">
+          <div v-if="visibleSingleQuestions.length > 0" class="question-section">
             <div class="section-header">
               <span class="section-tag single">一、单选题</span>
-              <span class="section-count">共 {{ singleQuestions.length }} 题</span>
+              <span class="section-count">{{ isLowPerformanceMode ? `本页 ${visibleSingleQuestions.length} 题` : `共 ${singleQuestions.length} 题` }}</span>
             </div>
-            <div v-for="(q, idx) in singleQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+            <div v-for="(q, idx) in visibleSingleQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
               <div class="qheader">
-                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <b><span>{{ getQuestionIndexInType(q, idx, 'single') }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag single">单选</span>
               </div>
-              <!-- 题干图片 -->
+              <!-- 题干图片（低配模式懒加载） -->
               <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
-                <img
-                  v-for="(img, imgIdx) in q.stem_images"
-                  :key="imgIdx"
-                  :src="'data:' + img.content_type + ';base64,' + img.base64"
-                  class="q-image"
-                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                />
+                <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_stem']">
+                  <div class="image-placeholder" @click="loadedImages[q.qid + '_stem'] = true">
+                    📷 点击加载图片 ({{ q.stem_images.length }}张)
+                  </div>
+                </template>
+                <template v-else>
+                  <img
+                    v-for="(img, imgIdx) in q.stem_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="q-image"
+                    loading="lazy"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </template>
               </div>
               <div class="opts">
                 <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
@@ -232,15 +294,23 @@
                   >
                     <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                   </button>
-                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <!-- 选项图片（低配模式懒加载） -->
                   <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
-                    <img
-                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
-                      :key="imgIdx"
-                      :src="'data:' + img.content_type + ';base64,' + img.base64"
-                      class="opt-image"
-                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                    />
+                    <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_' + opt.label]">
+                      <div class="image-placeholder small" @click="loadedImages[q.qid + '_' + opt.label] = true">
+                        📷 加载图片
+                      </div>
+                    </template>
+                    <template v-else>
+                      <img
+                        v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        class="opt-image"
+                        loading="lazy"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </template>
                   </div>
                 </div>
               </div>
@@ -248,25 +318,33 @@
           </div>
 
           <!-- 多选题区域 -->
-          <div v-if="multiQuestions.length > 0" class="question-section">
+          <div v-if="visibleMultiQuestions.length > 0" class="question-section">
             <div class="section-header">
               <span class="section-tag multi">{{ singleQuestions.length > 0 ? '二' : '一' }}、多选题</span>
-              <span class="section-count">共 {{ multiQuestions.length }} 题</span>
+              <span class="section-count">{{ isLowPerformanceMode ? `本页 ${visibleMultiQuestions.length} 题` : `共 ${multiQuestions.length} 题` }}</span>
             </div>
-            <div v-for="(q, idx) in multiQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+            <div v-for="(q, idx) in visibleMultiQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
               <div class="qheader">
-                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <b><span>{{ getQuestionIndexInType(q, idx, 'multi') }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag multi">多选</span>
               </div>
-              <!-- 题干图片 -->
+              <!-- 题干图片（低配模式懒加载） -->
               <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
-                <img
-                  v-for="(img, imgIdx) in q.stem_images"
-                  :key="imgIdx"
-                  :src="'data:' + img.content_type + ';base64,' + img.base64"
-                  class="q-image"
-                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                />
+                <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_stem']">
+                  <div class="image-placeholder" @click="loadedImages[q.qid + '_stem'] = true">
+                    📷 点击加载图片 ({{ q.stem_images.length }}张)
+                  </div>
+                </template>
+                <template v-else>
+                  <img
+                    v-for="(img, imgIdx) in q.stem_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="q-image"
+                    loading="lazy"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </template>
               </div>
               <div class="opts">
                 <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
@@ -277,15 +355,23 @@
                   >
                     <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                   </button>
-                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <!-- 选项图片（低配模式懒加载） -->
                   <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
-                    <img
-                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
-                      :key="imgIdx"
-                      :src="'data:' + img.content_type + ';base64,' + img.base64"
-                      class="opt-image"
-                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                    />
+                    <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_' + opt.label]">
+                      <div class="image-placeholder small" @click="loadedImages[q.qid + '_' + opt.label] = true">
+                        📷 加载图片
+                      </div>
+                    </template>
+                    <template v-else>
+                      <img
+                        v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        class="opt-image"
+                        loading="lazy"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </template>
                   </div>
                 </div>
               </div>
@@ -293,25 +379,33 @@
           </div>
 
           <!-- 不定项选择题区域 -->
-          <div v-if="indeterminateQuestions.length > 0" class="question-section">
+          <div v-if="visibleIndeterminateQuestions.length > 0" class="question-section">
             <div class="section-header">
               <span class="section-tag indeterminate">{{ (singleQuestions.length > 0 ? 1 : 0) + (multiQuestions.length > 0 ? 1 : 0) === 2 ? '三' : ((singleQuestions.length > 0 || multiQuestions.length > 0) ? '二' : '一') }}、不定项选择题</span>
-              <span class="section-count">共 {{ indeterminateQuestions.length }} 题</span>
+              <span class="section-count">{{ isLowPerformanceMode ? `本页 ${visibleIndeterminateQuestions.length} 题` : `共 ${indeterminateQuestions.length} 题` }}</span>
             </div>
-            <div v-for="(q, idx) in indeterminateQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
+            <div v-for="(q, idx) in visibleIndeterminateQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
               <div class="qheader">
-                <b><span>{{ idx + 1 }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <b><span>{{ getQuestionIndexInType(q, idx, 'indeterminate') }}. </span><span v-html="formatText(q.stem)"></span></b>
                 <span class="tag indeterminate">不定项</span>
               </div>
-              <!-- 题干图片 -->
+              <!-- 题干图片（低配模式懒加载） -->
               <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
-                <img
-                  v-for="(img, imgIdx) in q.stem_images"
-                  :key="imgIdx"
-                  :src="'data:' + img.content_type + ';base64,' + img.base64"
-                  class="q-image"
-                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                />
+                <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_stem']">
+                  <div class="image-placeholder" @click="loadedImages[q.qid + '_stem'] = true">
+                    📷 点击加载图片 ({{ q.stem_images.length }}张)
+                  </div>
+                </template>
+                <template v-else>
+                  <img
+                    v-for="(img, imgIdx) in q.stem_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="q-image"
+                    loading="lazy"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </template>
               </div>
               <div class="opts">
                 <div v-for="opt in q.options" :key="opt.label" class="opt-wrapper">
@@ -322,19 +416,104 @@
                   >
                     <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
                   </button>
-                  <!-- 选项图片（在按钮外部，可点击预览） -->
+                  <!-- 选项图片（低配模式懒加载） -->
                   <div v-if="getOptionImages(q, opt.label).length > 0" class="opt-images-outer">
-                    <img
-                      v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
-                      :key="imgIdx"
-                      :src="'data:' + img.content_type + ';base64,' + img.base64"
-                      class="opt-image"
-                      @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                    />
+                    <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_' + opt.label]">
+                      <div class="image-placeholder small" @click="loadedImages[q.qid + '_' + opt.label] = true">
+                        📷 加载图片
+                      </div>
+                    </template>
+                    <template v-else>
+                      <img
+                        v-for="(img, imgIdx) in getOptionImages(q, opt.label)"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        class="opt-image"
+                        loading="lazy"
+                        @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </template>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- 简答题区域 -->
+          <div v-if="isLowPerformanceMode ? visibleSaqQuestions.length > 0 : saqQuestions.length > 0" class="question-section">
+            <div class="section-header">
+              <span class="section-tag saq">{{ getSaqSectionNumber() }}、简答题</span>
+              <span class="section-count">{{ isLowPerformanceMode ? `本页 ${visibleSaqQuestions.length} 题` : `共 ${filteredSaqQuestions.length} 题` }}</span>
+            </div>
+            <!-- 岗位分类筛选标签 -->
+            <div v-if="saqCategories.length > 0 && visibleSaqQuestions.length > 0" class="category-filter">
+              <span class="filter-label">岗位筛选：</span>
+              <el-radio-group v-model="selectedSaqCategory" size="small">
+                <el-radio-button label="all">全部 ({{ saqQuestions.length }})</el-radio-button>
+                <el-radio-button v-for="cat in saqCategories" :key="cat" :label="cat">
+                  {{ cat }} ({{ saqQuestions.filter(q => q.category === cat).length }})
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+            <div v-for="(q, idx) in visibleSaqQuestions" :key="q.qid" :id="'q-' + q.qid" class="q saq-question">
+              <div class="qheader">
+                <b><span>{{ getQuestionIndexInType(q, idx, 'saq') }}. </span><span v-html="formatText(q.stem)"></span></b>
+                <span class="tag saq">简答</span>
+              </div>
+              <!-- 题干图片（低配模式懒加载） -->
+              <div v-if="q.stem_images && q.stem_images.length > 0" class="stem-images">
+                <template v-if="isLowPerformanceMode && !loadedImages[q.qid + '_stem']">
+                  <div class="image-placeholder" @click="loadedImages[q.qid + '_stem'] = true">
+                    📷 点击加载图片 ({{ q.stem_images.length }}张)
+                  </div>
+                </template>
+                <template v-else>
+                  <img
+                    v-for="(img, imgIdx) in q.stem_images"
+                    :key="imgIdx"
+                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                    class="q-image"
+                    loading="lazy"
+                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                  />
+                </template>
+              </div>
+              <!-- 简答题答题区域 -->
+              <div class="saq-answer-area">
+                <el-input
+                  v-model="answersState[q.qid]"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="请输入您的答案..."
+                  :disabled="submitted"
+                  resize="vertical"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 分页导航（低配模式） -->
+          <div v-if="isLowPerformanceMode && lowModeTotalPages > 1" class="pagination-section">
+            <div class="pagination-info">
+              第 {{ currentPage }} / {{ lowModeTotalPages }} 页，共 {{ questions.length }} 题
+              <span class="page-detail">
+                （本页：
+                <span v-if="visibleSingleQuestions.length">单选 {{ visibleSingleQuestions.length }} 题</span>
+                <span v-if="visibleMultiQuestions.length">{{ visibleSingleQuestions.length ? '、' : '' }}多选 {{ visibleMultiQuestions.length }} 题</span>
+                <span v-if="visibleIndeterminateQuestions.length">{{ (visibleSingleQuestions.length || visibleMultiQuestions.length) ? '、' : '' }}不定项 {{ visibleIndeterminateQuestions.length }} 题</span>
+                <span v-if="visibleSaqQuestions.length">{{ (visibleSingleQuestions.length || visibleMultiQuestions.length || visibleIndeterminateQuestions.length) ? '、' : '' }}简答 {{ visibleSaqQuestions.length }} 题</span>
+                ）
+              </span>
+            </div>
+            <el-pagination
+              v-model:current-page="currentPage"
+              :page-size="pageSize"
+              :total="questions.length"
+              layout="prev, pager, next"
+              :pager-count="5"
+              background
+              small
+            />
           </div>
         </div>
 
@@ -474,11 +653,11 @@
         <div v-if="reviewData" class="card review-panel">
           <h3>答案与解析</h3>
           <div class="review-list">
-            <div v-for="(item, idx) in reviewData.items" :key="idx" class="q">
+            <div v-for="(item, idx) in sortedReviewItems" :key="idx" class="q">
               <div class="qheader">
                 <b><span>{{ idx + 1 }}. </span><span v-html="formatText(item.stem)"></span></b>
-                <span :class="['tag', item.qtype === 'multi' ? 'multi' : 'single']">
-                  {{ item.qtype === 'multi' ? '多选' : '单选' }}
+                <span :class="['tag', item.qtype]">
+                  {{ item.qtype === 'multi' ? '多选' : (item.qtype === 'indeterminate' ? '不定项' : (item.qtype === 'saq' ? '简答' : '单选')) }}
                 </span>
               </div>
               <!-- 题干图片 -->
@@ -491,18 +670,49 @@
                   @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
                 />
               </div>
-              <div class="muted" style="margin: 8px 0">
-                标准答案：{{ item.correct_labels.join('') }}
+              <div class="muted" style="margin: 8px 0" v-if="item.qtype !== 'saq'">
+                标准答案：{{ item.correct_labels?.join('') || '' }}
                 ｜ 我的作答：{{ item.my_labels?.join('') || '(未作答)' }}
                 ｜ 判定：{{ item.is_correct ? '正确' : '错误' }}
               </div>
-              <div class="opts">
+              <!-- SAQ答案显示区域 -->
+              <div class="saq-review-area" v-else>
+                <div class="saq-review-row">
+                  <span class="saq-label">得分：</span>
+                  <el-tag 
+                    :type="item.is_correct === null ? 'info' : (item.is_correct === true ? 'success' : (item.is_correct === 'partial' ? 'warning' : 'danger'))" 
+                    size="small"
+                  >
+                    {{ item.is_correct === null ? '待人工评分' : `${item.score || 0} / ${item.full_score || 10} 分` }}
+                  </el-tag>
+                  <span 
+                    v-if="item.is_correct !== null" 
+                    :class="['saq-status', item.is_correct === true ? 'correct' : (item.is_correct === 'partial' ? 'partial' : 'wrong')]"
+                  >
+                    {{ item.is_correct === true ? '满分' : (item.is_correct === 'partial' ? '部分正确' : '错误') }}
+                  </span>
+                  <span v-if="item.comment" class="saq-comment">评语：{{ item.comment }}</span>
+                </div>
+                <div class="saq-review-row">
+                  <span class="saq-label">我的作答：</span>
+                </div>
+                <div class="saq-answer-box my-answer">
+                  <pre class="saq-answer-content">{{ (item.my_answer && item.my_answer.length > 0 && item.my_answer !== '[]') ? item.my_answer : '(未作答)' }}</pre>
+                </div>
+                <div class="saq-review-row">
+                  <span class="saq-label">参考答案：</span>
+                </div>
+                <div class="saq-answer-box ref-answer">
+                  <pre class="saq-answer-content">{{ item.correct_answer || '(无)' }}</pre>
+                </div>
+              </div>
+              <div class="opts" v-if="item.qtype !== 'saq' && item.options?.length">
                 <button
                   v-for="opt in item.options"
                   :key="opt.label"
                   :class="['opt', { 
                     active: item.my_labels?.includes(opt.label),
-                    correct: item.correct_labels.includes(opt.label)
+                    correct: item.correct_labels?.includes(opt.label)
                   }]"
                   disabled
                 >
@@ -627,8 +837,17 @@
               <el-input-number v-model="practiceConfig.indeterminateCount" :min="0" :max="50" size="default" />
             </div>
             <div class="config-item-dialog">
+              <label>简答题数量</label>
+              <el-input-number v-model="practiceConfig.saqCount" :min="0" :max="20" size="default" />
+            </div>
+          </div>
+          <div class="config-row-dialog">
+            <div class="config-item-dialog">
               <label>练习时长（分钟）</label>
               <el-input-number v-model="practiceConfig.duration" :min="5" :max="180" size="default" />
+            </div>
+            <div class="config-item-dialog">
+              <!-- 占位 -->
             </div>
           </div>
           <div class="config-summary-dialog">
@@ -654,6 +873,90 @@
       </template>
     </el-dialog>
 
+    <!-- 考试记录对话框 -->
+    <el-dialog
+      v-model="examHistoryVisible"
+      title="📋 我的考试记录"
+      width="900px"
+      :close-on-click-modal="true"
+    >
+      <div class="exam-history-dialog">
+        <div class="history-filter">
+          <el-checkbox v-model="includePractice" @change="loadExamHistory">包含练习记录</el-checkbox>
+        </div>
+        <div v-if="loadingHistory" class="loading-wrap">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <span>加载中...</span>
+        </div>
+        <div v-else-if="examHistory.length === 0" class="empty-wrap">
+          <el-empty description="暂无考试记录" />
+        </div>
+        <div v-else class="history-list">
+          <div v-for="record in examHistory" :key="record.attempt_id" class="history-item" :class="record.status">
+            <div class="history-header">
+              <span class="history-title">{{ record.title }}</span>
+              <el-tag v-if="record.is_practice" size="small" type="info">练习</el-tag>
+              <el-tag v-if="record.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
+              <el-tag v-else-if="record.status === 'timeout'" size="small" type="danger">已超时</el-tag>
+              <el-tag v-else-if="record.status === 'completed'" size="small" type="success">已完成</el-tag>
+            </div>
+            <div class="history-info">
+              <span class="info-item">
+                <el-icon><Clock /></el-icon>
+                开始时间：{{ record.start_time }}
+              </span>
+              <span v-if="record.status === 'in_progress'" class="info-item">
+                <el-icon><Timer /></el-icon>
+                剩余：{{ Math.floor(record.left_sec / 60) }}分{{ record.left_sec % 60 }}秒
+              </span>
+              <span v-if="record.status === 'completed'" class="info-item">
+                <el-icon><Trophy /></el-icon>
+                得分：{{ record.score?.toFixed(1) || '-' }} | 正确率：{{ record.correct_rate || 0 }}%
+              </span>
+              <span v-if="record.switch_count > 0" class="info-item warning">
+                ⚠️ 切屏：{{ record.switch_count }}次
+              </span>
+            </div>
+            <div class="history-actions">
+              <el-button 
+                v-if="record.status === 'in_progress'" 
+                type="primary" 
+                size="small"
+                @click="continueExam(record)"
+              >
+                继续答题
+              </el-button>
+              <el-button 
+                v-if="record.status === 'completed'" 
+                type="success" 
+                size="small"
+                @click="viewExamResult(record)"
+              >
+                查看结果
+              </el-button>
+              <el-button 
+                v-if="record.status === 'timeout'" 
+                type="warning" 
+                size="small"
+                @click="submitTimeoutExam(record)"
+              >
+                提交评分
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small"
+                text
+                @click="deleteExamRecord(record)"
+              >
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 错题本对话框 -->
     <el-dialog
       v-model="wrongBookVisible"
@@ -674,8 +977,8 @@
             <div class="wrong-header">
               <span class="wrong-num">{{ idx + 1 }}</span>
               <span class="wrong-stem" v-html="formatText(q.stem)"></span>
-              <el-tag size="small" :type="q.qtype === 'multi' ? 'danger' : 'primary'">
-                {{ q.qtype === 'multi' ? '多选' : (q.qtype === 'indeterminate' ? '不定项' : '单选') }}
+              <el-tag size="small" :type="q.qtype === 'multi' ? 'danger' : (q.qtype === 'saq' ? 'info' : 'primary')">
+                {{ q.qtype === 'multi' ? '多选' : (q.qtype === 'indeterminate' ? '不定项' : (q.qtype === 'saq' ? '简答' : '单选')) }}
               </el-tag>
               <el-button 
                 size="small" 
@@ -698,7 +1001,8 @@
                 @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
               />
             </div>
-            <div class="wrong-options">
+            <!-- 选择题选项 -->
+            <div class="wrong-options" v-if="q.qtype !== 'saq'">
               <div v-for="opt in q.options" :key="opt.label" class="wrong-opt">
                 <span :class="{ 'correct-label': q.answer.includes(opt.label), 'my-wrong': q.my_answer?.includes(opt.label) && !q.answer.includes(opt.label) }">
                   {{ opt.label }}. {{ opt.text }}
@@ -715,9 +1019,32 @@
                 </div>
               </div>
             </div>
-            <div class="wrong-answer-info">
+            <!-- 选择题答案 -->
+            <div class="wrong-answer-info" v-if="q.qtype !== 'saq'">
               <span class="correct-answer">正确答案：{{ q.answer }}</span>
               <span class="my-answer">我的答案：{{ q.my_answer?.join('') || '未作答' }}</span>
+              <span class="review-info" v-if="q.review_count > 0">已复习 {{ q.review_count }} 次</span>
+            </div>
+            <!-- 简答题显示 -->
+            <div class="saq-wrong-area" v-if="q.qtype === 'saq'">
+              <div class="saq-wrong-row">
+                <span class="saq-label">参考答案：</span>
+                <div class="saq-answer-box ref-answer">
+                  <pre class="saq-answer-content">{{ q.answer || '(无)' }}</pre>
+                </div>
+              </div>
+              <div class="saq-wrong-row">
+                <span class="saq-label">我的答案：</span>
+                <div class="saq-answer-box my-answer">
+                  <pre class="saq-answer-content">{{ q.my_answer || '(未作答)' }}</pre>
+                </div>
+              </div>
+              <div class="saq-wrong-row">
+                <span class="saq-score-info">
+                  得分：{{ q.saq_score || 0 }} / {{ q.saq_full_score || 10 }}
+                  <span v-if="q.saq_comment" class="saq-comment">评语：{{ q.saq_comment }}</span>
+                </span>
+              </div>
               <span class="review-info" v-if="q.review_count > 0">已复习 {{ q.review_count }} 次</span>
             </div>
             <div v-if="q.explain" class="wrong-explain">
@@ -755,7 +1082,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, react
 import { useStore } from 'vuex'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading } from '@element-plus/icons-vue'
+import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading, List, Timer, Trophy } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -777,7 +1104,9 @@ const API_ENDPOINTS = {
     PROGRESS: `${MCQ_BASE_URL}/exam/progress`,
     SAVE_PROGRESS: `${MCQ_BASE_URL}/exam/save_progress`,
     ABANDON_PROGRESS: `${MCQ_BASE_URL}/exam/abandon_progress`,
-    NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`
+    NOTIFICATIONS: `${MCQ_BASE_URL}/exam/notifications`,
+    HISTORY: `${MCQ_BASE_URL}/exam/history`,
+    DELETE_RECORD: `${MCQ_BASE_URL}/exam/delete_record`
   },
   STUDENT: {
     EXPORT_MY_REPORT_DOCX: `${MCQ_BASE_URL}/student/export_my_report_docx`,
@@ -808,6 +1137,7 @@ interface Question {
   options: Array<{ label: string; text: string; images?: ImageData[] }>
   stem_images?: ImageData[]
   option_images?: Record<string, ImageData[]>
+  category?: string  // 简答题岗位分类
 }
 
 interface Paper {
@@ -831,8 +1161,13 @@ interface ReviewItem extends Question {
   correct_labels: string[]
   my_labels?: string[]
   analysis: string
-  is_correct: boolean
+  is_correct: boolean | 'partial' | null
   analysis_images?: ImageData[]
+  score?: number
+  full_score?: number
+  comment?: string
+  my_answer?: string
+  correct_answer?: string
 }
 
 interface ReviewData {
@@ -866,17 +1201,18 @@ export default defineComponent({
       singleCount: 10,
       multiCount: 5,
       indeterminateCount: 0,
+      saqCount: 0,
       duration: 30
     })
     const startingPractice = ref(false)
     const practiceTotalCount = computed(() => {
-      return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount
+      return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount + practiceConfig.saqCount
     })
 
     // 答题相关
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
-    const pageSize = ref(3)
+    const pageSize = ref(10)  // 低配模式每页10题
     
     // 自动保存相关
     const autoSaveHandle = ref<number | null>(null)
@@ -914,6 +1250,12 @@ export default defineComponent({
     const loadingWrongBook = ref(false)  // 加载中
     const savingToWrongBook = ref(false)  // 保存中
     const randomPracticeVisible = ref(false)  // 随机练习弹窗
+
+    // ======= 考试记录相关 =======
+    const examHistoryVisible = ref(false)  // 考试记录弹窗
+    const examHistory = ref<any[]>([])  // 考试记录列表
+    const loadingHistory = ref(false)  // 加载中
+    const includePractice = ref(true)  // 是否包含练习记录（默认包含）
 
     // 解析Tab切换状态（复杂验证策略时可切换查看单个选项）
     const analysisActiveTab = reactive<Record<number, string>>({})
@@ -1066,10 +1408,26 @@ export default defineComponent({
       return Math.round((correctCount.value / total) * 100)
     })
 
-    // 错题列表
+    // 按题型排序的解析列表（单选→多选→不定项→简答）
+    const sortedReviewItems = computed(() => {
+      if (!reviewData.value) return []
+      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, saq: 3 }
+      return [...reviewData.value.items].sort((a, b) => {
+        return (typeOrder[a.qtype] ?? 99) - (typeOrder[b.qtype] ?? 99)
+      })
+    })
+
+    // 错题列表（包括SAQ未得满分的题目）
     const wrongQuestions = computed(() => {
       if (!reviewData.value) return []
-      return reviewData.value.items.filter(item => !item.is_correct)
+      return reviewData.value.items.filter(item => {
+        if (item.qtype === 'saq') {
+          // SAQ: 未得满分且已评分才算错题
+          return item.is_correct !== true && item.is_correct !== null
+        }
+        // 选择题: 错误才算错题
+        return !item.is_correct
+      })
     })
 
     // 单选题列表
@@ -1086,6 +1444,114 @@ export default defineComponent({
     const indeterminateQuestions = computed(() => {
       return questions.value.filter(q => q.qtype === 'indeterminate')
     })
+
+    // 简答题列表
+    const saqQuestions = computed(() => {
+      return questions.value.filter(q => q.qtype === 'saq')
+    })
+
+    // ======= 简答题岗位分类筛选 =======
+    const selectedSaqCategory = ref<string>('all')  // 当前选中的岗位分类，'all' 表示全部
+    
+    // 获取所有简答题的岗位分类列表
+    const saqCategories = computed(() => {
+      const categories = new Set<string>()
+      saqQuestions.value.forEach(q => {
+        if (q.category) {
+          categories.add(q.category)
+        }
+      })
+      return Array.from(categories).sort()
+    })
+    
+    // 按岗位分类筛选后的简答题
+    const filteredSaqQuestions = computed(() => {
+      if (selectedSaqCategory.value === 'all') {
+        return saqQuestions.value
+      }
+      return saqQuestions.value.filter(q => q.category === selectedSaqCategory.value)
+    })
+
+    // ======= 性能优化：低配模式分页 =======
+    const isLowPerformanceMode = computed(() => store.getters['performance/isLowPerformanceMode'])
+
+    // 按题型顺序排序的题目列表（单选→多选→不定项→简答）
+    // 低配模式下使用筛选后的简答题，确保分页与岗位筛选同步
+    const sortedQuestions = computed(() => {
+      return [
+        ...singleQuestions.value,
+        ...multiQuestions.value,
+        ...indeterminateQuestions.value,
+        ...filteredSaqQuestions.value  // 使用筛选后的简答题
+      ]
+    })
+
+    // 低配模式下的分页题目（按题型顺序分页）
+    const pagedQuestions = computed(() => {
+      if (!isLowPerformanceMode.value) return sortedQuestions.value
+      const start = (currentPage.value - 1) * pageSize.value
+      return sortedQuestions.value.slice(start, start + pageSize.value)
+    })
+
+    // 低配模式下按类型过滤当前页的题目
+    const visibleSingleQuestions = computed(() => {
+      if (!isLowPerformanceMode.value) return singleQuestions.value
+      return pagedQuestions.value.filter(q => q.qtype === 'single')
+    })
+    
+    const visibleMultiQuestions = computed(() => {
+      if (!isLowPerformanceMode.value) return multiQuestions.value
+      return pagedQuestions.value.filter(q => q.qtype === 'multi')
+    })
+    
+    const visibleIndeterminateQuestions = computed(() => {
+      if (!isLowPerformanceMode.value) return indeterminateQuestions.value
+      return pagedQuestions.value.filter(q => q.qtype === 'indeterminate')
+    })
+
+    const visibleSaqQuestions = computed(() => {
+      // 使用已筛选的简答题列表
+      if (!isLowPerformanceMode.value) return filteredSaqQuestions.value
+      // 低配模式下从分页结果中过滤（sortedQuestions已使用filteredSaqQuestions）
+      return pagedQuestions.value.filter(q => q.qtype === 'saq')
+    })
+
+    // 低配模式总页数
+    const lowModeTotalPages = computed(() => {
+      return Math.max(1, Math.ceil(sortedQuestions.value.length / pageSize.value))
+    })
+
+    // 获取题目在其题型中的实际序号（低配模式下使用）
+    const getQuestionIndexInType = (q: Question, visibleIdx: number, qtype: string): number => {
+      if (!isLowPerformanceMode.value) {
+        return visibleIdx + 1
+      }
+      // 在完整题型列表中找到该题目的位置
+      let fullList: Question[] = []
+      if (qtype === 'single') {
+        fullList = singleQuestions.value
+      } else if (qtype === 'multi') {
+        fullList = multiQuestions.value
+      } else if (qtype === 'indeterminate') {
+        fullList = indeterminateQuestions.value
+      } else if (qtype === 'saq') {
+        fullList = filteredSaqQuestions.value
+      }
+      const idx = fullList.findIndex(item => item.qid === q.qid)
+      return idx >= 0 ? idx + 1 : visibleIdx + 1
+    }
+
+    // 重置分页状态（开始新考试时）
+    const resetLazyLoad = () => {
+      currentPage.value = 1
+      // 清空已加载图片状态
+      Object.keys(loadedImages).forEach(key => {
+        delete loadedImages[key]
+      })
+    }
+
+    // 图片懒加载状态（低配模式下使用）
+    const loadedImages = reactive<Record<string, boolean>>({})
 
     // 已答题目数
     const answeredCount = computed(() => {
@@ -1228,6 +1694,16 @@ export default defineComponent({
         ...q,
         options: normalizeOptions(q.options)
       }))
+    }
+
+    // 计算简答题章节编号
+    const getSaqSectionNumber = () => {
+      let num = 0
+      if (singleQuestions.value.length > 0) num++
+      if (multiQuestions.value.length > 0) num++
+      if (indeterminateQuestions.value.length > 0) num++
+      const numbers = ['一', '二', '三', '四', '五']
+      return numbers[num] || '四'
     }
 
     // 将 <NEWLINE> 标识符转换为换行显示
@@ -1384,7 +1860,9 @@ export default defineComponent({
 
     // 保存答题进度到后端
     const saveProgress = async (force = false) => {
-      if (!attemptId.value || submitted.value || savingProgress.value) return
+      if (!attemptId.value || submitted.value) return
+      // force 模式下（如切屏检测）不受 savingProgress 限制
+      if (!force && savingProgress.value) return
       
       const answers = collectAnswersForSave()
       // 计算答案hash，避免重复保存相同内容
@@ -1421,12 +1899,13 @@ export default defineComponent({
       }
     }
 
-    // 启动自动保存定时器（每30秒保存一次）
+    // 启动自动保存定时器（低配模式60秒，正常模式30秒）
     const startAutoSave = () => {
       if (autoSaveHandle.value) clearInterval(autoSaveHandle.value)
+      const interval = isLowPerformanceMode.value ? 60000 : 30000  // 低配模式60秒，正常30秒
       autoSaveHandle.value = window.setInterval(() => {
         saveProgress()
-      }, 30000)  // 30秒保存一次
+      }, interval)
     }
 
     // 停止自动保存
@@ -1452,6 +1931,43 @@ export default defineComponent({
     }
 
     // 检查是否有未完成的考试
+    // 获取已放弃的考试列表（本次会话内不再提醒）
+    const getAbandonedAttempts = (): string[] => {
+      try {
+        return JSON.parse(sessionStorage.getItem('abandoned_attempts') || '[]')
+      } catch {
+        return []
+      }
+    }
+    
+    // 标记考试为已放弃
+    const markAttemptAbandoned = (attemptId: string) => {
+      const abandoned = getAbandonedAttempts()
+      if (!abandoned.includes(attemptId)) {
+        abandoned.push(attemptId)
+        sessionStorage.setItem('abandoned_attempts', JSON.stringify(abandoned))
+      }
+    }
+
+    // ======= 本地存储切屏次数相关函数（必须在使用前定义）=======
+    const getSwitchCountKey = (aId?: string) => `exam_switch_count_${aId || attemptId.value}`
+    
+    const saveSwitchCountToLocal = () => {
+      if (!attemptId.value) return
+      localStorage.setItem(getSwitchCountKey(), String(switchCount.value))
+    }
+    
+    const loadSwitchCountFromLocal = (aId?: string): number => {
+      const key = getSwitchCountKey(aId)
+      const saved = localStorage.getItem(key)
+      return saved ? parseInt(saved, 10) || 0 : 0
+    }
+    
+    const clearSwitchCountLocal = () => {
+      if (!attemptId.value) return
+      localStorage.removeItem(getSwitchCountKey())
+    }
+
     const checkInProgressExam = async () => {
       const studentId = store.state.user.username
       // 未登录用户不检查进度（避免 anonymous 用户互相恢复进度）
@@ -1463,33 +1979,44 @@ export default defineComponent({
         const data = await mcqFetch(url)
         
         if (data.ok && data.has_progress) {
+          // 检查是否已放弃过此考试（本次会话内不再提醒）
+          const abandonedList = getAbandonedAttempts()
+          if (abandonedList.includes(data.attempt_id)) {
+            return
+          }
+          
           // 找到未完成的考试，询问是否恢复
+          // 取后端和本地存储的最大值显示
+          const backendSwitchCount = data.switch_count || 0
+          const localSwitchCount = loadSwitchCountFromLocal(data.attempt_id)
+          const actualSwitchCount = Math.max(backendSwitchCount, localSwitchCount)
+          const switchInfo = actualSwitchCount > 0 ? `\n⚠️ 已切屏 ${actualSwitchCount} 次` : ''
           try {
             await ElMessageBox.confirm(
-              `您有一个未完成的考试「${data.title}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？`,
+              `您有一个未完成的考试「${data.title}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？${switchInfo}`,
               '发现未完成的考试',
               {
                 confirmButtonText: '继续答题',
-                cancelButtonText: '放弃并重新开始',
+                cancelButtonText: '放弃',
                 type: 'warning'
               }
             )
             // 用户选择恢复考试
             resumeExam(data)
           } catch {
-            // 用户选择放弃，调用后端 API 清除进度
-            try {
-              await mcqFetch(API_ENDPOINTS.EXAM.ABANDON_PROGRESS, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  student_id: studentId,
-                  attempt_id: data.attempt_id
-                })
+            // 用户选择放弃，直接标记为已放弃，不再提醒
+            markAttemptAbandoned(data.attempt_id)
+            // 清除本地存储的切屏次数
+            localStorage.removeItem(`exam_switch_count_${data.attempt_id}`)
+            // 静默调用后端 API 清除进度
+            mcqFetch(API_ENDPOINTS.EXAM.ABANDON_PROGRESS, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                student_id: studentId,
+                attempt_id: data.attempt_id
               })
-            } catch (e) {
-              console.error('放弃进度失败:', e)
-            }
+            }).catch(e => console.error('放弃进度失败:', e))
           }
         }
       } catch (error: any) {
@@ -1501,7 +2028,7 @@ export default defineComponent({
     const resumeExam = (progressData: any) => {
       attemptId.value = progressData.attempt_id
       leftSeconds.value = progressData.left_sec
-      questions.value = progressData.items || []
+      questions.value = normalizeQuestions(progressData.items || [])
       paperTitle.value = progressData.title || '试卷'
       selectedPaperId.value = progressData.paper_id
       
@@ -1517,11 +2044,18 @@ export default defineComponent({
       })
       answersState.value = newAnswersState
       
-      // 恢复切屏次数（防作弊）
-      switchCount.value = progressData.switch_count || 0
+      // 恢复切屏次数（防作弊）- 取后端和本地存储的最大值
+      const backendCount = progressData.switch_count || 0
+      const localCount = loadSwitchCountFromLocal(progressData.attempt_id)
+      switchCount.value = Math.max(backendCount, localCount)
       lastSwitchTimestamp.value = 0
       switchLogs.value = []
       switchWarningVisible.value = false
+      
+      // 如果本地记录更多，同步到后端
+      if (localCount > backendCount) {
+        saveSwitchCount()
+      }
       
       examStarted.value = true
       currentPage.value = 1
@@ -1529,30 +2063,40 @@ export default defineComponent({
       gradeReport.value = null
       reviewData.value = null
       
+      // 重置懒加载状态（低配模式）
+      resetLazyLoad()
+      
       // 启动倒计时和自动保存
       startTimer()
       startAutoSave()
       
-      const resumeMsg = progressData.switch_count > 0 
-        ? `已恢复考试进度（已切屏 ${progressData.switch_count} 次）`
+      const resumeMsg = switchCount.value > 0 
+        ? `已恢复考试进度（已切屏 ${switchCount.value} 次）`
         : '已恢复考试进度'
       ElMessage.success(resumeMsg)
     }
 
-    // 使用 sendBeacon 保存进度（用于页面卸载时确保数据不丢失）
-    const saveProgressWithBeacon = () => {
+    // 保存切屏次数（本地存储 + 后端同步）
+    const saveSwitchCount = () => {
       if (!attemptId.value || submitted.value) return
       
-      const answers = collectAnswersForSave()
-      const data = JSON.stringify({
-        attempt_id: attemptId.value,
-        answers,
-        switch_count: switchCount.value
-      })
+      // 1. 先保存到本地存储（确保即时生效）
+      saveSwitchCountToLocal()
       
-      // sendBeacon 确保页面卸载时数据能被发送
+      // 2. 同步到后端
+      const answers = collectAnswersForSave()
       const url = API_ENDPOINTS.EXAM.SAVE_PROGRESS
-      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+      
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attempt_id: attemptId.value,
+          answers,
+          switch_count: switchCount.value
+        }),
+        keepalive: true
+      }).catch(e => console.error('保存切屏次数失败:', e))
     }
 
     // 页面关闭前警告
@@ -1560,7 +2104,7 @@ export default defineComponent({
       if (examStarted.value && !submitted.value) {
         // 记录切屏并保存
         handleSwitchDetected('关闭/刷新页面')
-        saveProgressWithBeacon()
+        saveSwitchCount()
         e.preventDefault()
         e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
         return e.returnValue
@@ -1570,7 +2114,7 @@ export default defineComponent({
     // pagehide 事件处理（更可靠的页面卸载检测）
     const handlePageHide = () => {
       if (examStarted.value && !submitted.value) {
-        saveProgressWithBeacon()
+        saveSwitchCount()
       }
     }
 
@@ -1594,8 +2138,8 @@ export default defineComponent({
       lastSwitchTime.value = time
       switchLogs.value.push({ time, type })
       
-      // 立即使用 sendBeacon 保存切屏记录（确保页面卸载时数据不丢失）
-      saveProgressWithBeacon()
+      // 立即保存切屏次数（使用 fetch + keepalive 确保可靠保存）
+      saveSwitchCount()
       
       if (switchCount.value >= maxSwitchCount) {
         // 达到最大次数，自动提交
@@ -1677,7 +2221,13 @@ export default defineComponent({
     const loadPublishedExams = async () => {
       loadingExamNotifications.value = true
       try {
-        const data = await mcqFetch(API_ENDPOINTS.EXAM.NOTIFICATIONS)
+        // 传入用户部门，按部门过滤考试通知
+        const userDepartment = store.state.user.department || ''
+        let url = API_ENDPOINTS.EXAM.NOTIFICATIONS
+        if (userDepartment) {
+          url += `?user_department=${encodeURIComponent(userDepartment)}`
+        }
+        const data = await mcqFetch(url)
         if (data?.ok !== false) {
           publishedExams.value = Array.isArray(data.exams) ? data.exams : []
         }
@@ -1757,11 +2307,15 @@ export default defineComponent({
 
         // 2. 按题型分类（只取已通过的题目）
         const approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
-        const singleQuestions = approvedQuestions.filter((q: any) => {
+        // 简答题
+        const saqQuestions = approvedQuestions.filter((q: any) => q.qtype === 'saq')
+        // 选择题（非SAQ）
+        const mcqQuestions = approvedQuestions.filter((q: any) => q.qtype !== 'saq')
+        const singleQuestions = mcqQuestions.filter((q: any) => {
           const answer = (q.answer || '').toUpperCase()
           return answer.length === 1
         })
-        const multiQuestions = approvedQuestions.filter((q: any) => {
+        const multiQuestions = mcqQuestions.filter((q: any) => {
           const answer = (q.answer || '').toUpperCase()
           return answer.length > 1
         })
@@ -1786,11 +2340,15 @@ export default defineComponent({
         const remainingMulti = shuffle(multiQuestions.filter((q: any) => !selectedMulti.includes(q))).slice(0, indeterminateMultiCount)
         const selectedIndeterminate = [...remainingSingle, ...remainingMulti]
 
+        // 简答题
+        const selectedSaq = shuffle(saqQuestions).slice(0, practiceConfig.saqCount)
+
         // 4. 检查是否有足够的题目
         const actualSingleCount = selectedSingle.length
         const actualMultiCount = selectedMulti.length
         const actualIndeterminateCount = selectedIndeterminate.length
-        const actualTotal = actualSingleCount + actualMultiCount + actualIndeterminateCount
+        const actualSaqCount = selectedSaq.length
+        const actualTotal = actualSingleCount + actualMultiCount + actualIndeterminateCount + actualSaqCount
 
         if (actualTotal === 0) {
           ElMessage.warning('题库中没有足够的已通过题目')
@@ -1842,6 +2400,11 @@ export default defineComponent({
           paperItems.push(buildPaperItem(q, 'indeterminate'))
         })
 
+        // 添加简答题
+        selectedSaq.forEach((q: any) => {
+          paperItems.push(buildPaperItem(q, 'saq'))
+        })
+
         // 6. 直接使用临时题目数据开始练习（不保存为试卷文件）
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
         const practiceTitle = `随机练习_${timestamp}`
@@ -1868,6 +2431,9 @@ export default defineComponent({
         examStarted.value = true
         isPracticeMode.value = true
         currentExamId.value = ''
+        
+        // 重置懒加载状态（低配模式）
+        resetLazyLoad()
         
         // 初始化答案
         answersState.value = {}
@@ -1928,7 +2494,7 @@ export default defineComponent({
         leftSeconds.value = startData.left_sec || durationMin.value * 60
 
         // 直接使用 exam_start 返回的题目（已根据学生ID随机打乱顺序）
-        questions.value = startData.items || []
+        questions.value = normalizeQuestions(startData.items || [])
         paperTitle.value = startData.title || '试卷'
 
         // 初始化答案状态
@@ -1944,6 +2510,9 @@ export default defineComponent({
         submitted.value = false
         gradeReport.value = null
         reviewData.value = null
+
+        // 重置懒加载状态（低配模式）
+        resetLazyLoad()
 
         // 重置防作弊状态
         resetAntiCheat()
@@ -2045,6 +2614,7 @@ export default defineComponent({
         submitMessage.value = '评分完成'
         stopTimer()
         stopAutoSave()
+        clearSwitchCountLocal()  // 清除本地存储的切屏次数
 
         // 绘制圆环图
         await nextTick()
@@ -2213,21 +2783,48 @@ export default defineComponent({
       const studentId = store.state.user.username
       if (!studentId || !reviewData.value) return
       
-      // 收集错题
+      // 收集错题（包括SAQ未得满分的题目）
       const wrongItems = reviewData.value.items
-        .filter(item => !item.is_correct)
-        .map(item => ({
-          qid: item.qid,
-          stem: item.stem,
-          options: item.options,
-          answer: item.correct_labels.join(''),
-          explain: item.analysis || '',
-          my_answer: item.my_labels || [],
-          qtype: item.qtype,
-          stem_images: item.stem_images,
-          option_images: item.option_images,
-          analysis_images: item.analysis_images
-        }))
+        .filter(item => {
+          if (item.qtype === 'saq') {
+            // SAQ: 未得满分（部分正确或错误）才算错题
+            return item.is_correct !== true && item.is_correct !== null
+          }
+          // 选择题: 错误才算错题
+          return !item.is_correct
+        })
+        .map(item => {
+          if (item.qtype === 'saq') {
+            // SAQ 数据结构
+            return {
+              qid: item.qid,
+              stem: item.stem,
+              options: [],  // SAQ无选项
+              answer: item.correct_answer || '',  // 参考答案
+              explain: item.analysis || '',
+              my_answer: item.my_answer || '',  // 文本答案
+              qtype: item.qtype,
+              stem_images: item.stem_images,
+              analysis_images: item.analysis_images,
+              saq_score: item.score,
+              saq_full_score: item.full_score,
+              saq_comment: item.comment
+            }
+          }
+          // 选择题数据结构
+          return {
+            qid: item.qid,
+            stem: item.stem,
+            options: item.options,
+            answer: item.correct_labels?.join('') || '',
+            explain: item.analysis || '',
+            my_answer: item.my_labels || [],
+            qtype: item.qtype,
+            stem_images: item.stem_images,
+            option_images: item.option_images,
+            analysis_images: item.analysis_images
+          }
+        })
       
       if (wrongItems.length === 0) {
         ElMessage.info('本次考试没有错题')
@@ -2288,6 +2885,162 @@ export default defineComponent({
       loadWrongBook()
     }
 
+    // ======= 考试记录相关函数 =======
+    // 打开考试记录
+    const openExamHistory = () => {
+      examHistoryVisible.value = true
+      loadExamHistory()
+    }
+
+    // 加载考试记录
+    const loadExamHistory = async () => {
+      const studentId = store.state.user.username
+      if (!studentId) return
+      
+      loadingHistory.value = true
+      try {
+        const url = `${API_ENDPOINTS.EXAM.HISTORY}?student_id=${encodeURIComponent(studentId)}&include_practice=${includePractice.value}`
+        const data = await mcqFetch(url)
+        if (data.ok) {
+          examHistory.value = data.records || []
+        }
+      } catch (error: any) {
+        console.error('加载考试记录失败:', error)
+      } finally {
+        loadingHistory.value = false
+      }
+    }
+
+    // 继续答题（进行中的考试）
+    const continueExam = async (record: any) => {
+      const studentId = store.state.user.username
+      if (!studentId) return
+      
+      try {
+        // 获取进度数据
+        const url = `${API_ENDPOINTS.EXAM.PROGRESS}?student_id=${encodeURIComponent(studentId)}`
+        const data = await mcqFetch(url)
+        
+        if (data.ok && data.has_progress && data.attempt_id === record.attempt_id) {
+          resumeExam(data)
+          examHistoryVisible.value = false
+        } else {
+          ElMessage.warning('该考试已不可继续')
+          loadExamHistory()
+        }
+      } catch (error: any) {
+        ElMessage.error('恢复考试失败：' + (error.message || '未知错误'))
+      }
+    }
+
+    // 查看已完成考试的结果
+    const viewExamResult = async (record: any) => {
+      try {
+        const data = await mcqFetch(
+          `${API_ENDPOINTS.EXAM.REVIEW}?attempt_id=${encodeURIComponent(record.attempt_id)}`
+        )
+        if (data.ok) {
+          // 设置状态显示结果
+          attemptId.value = record.attempt_id
+          paperTitle.value = record.title
+          questions.value = normalizeQuestions(data.items || [])
+          
+          // 规范化选项格式用于 reviewData
+          if (data.items) {
+            data.items = normalizeQuestions(data.items)
+          }
+          reviewData.value = data
+          
+          // 构建成绩报告
+          gradeReport.value = {
+            total_score: record.score || 0,
+            items: data.items.map((item: any) => ({
+              qid: item.qid,
+              is_correct: item.is_correct,
+              score: item.score ?? (item.is_correct ? 1 : 0)
+            }))
+          }
+          
+          examStarted.value = true
+          submitted.value = true
+          examHistoryVisible.value = false
+          
+          // 绘制圆环图
+          await nextTick()
+          if (scoreChartRef.value) {
+            const correctCount = data.items.filter((i: any) => i.is_correct).length
+            drawRing(scoreChartRef.value, correctCount, data.items.length)
+          }
+        } else {
+          ElMessage.error(data.detail || '获取结果失败')
+        }
+      } catch (error: any) {
+        ElMessage.error('获取结果失败：' + (error.message || '未知错误'))
+      }
+    }
+
+    // 提交超时的考试
+    const submitTimeoutExam = async (record: any) => {
+      try {
+        // 直接提交（空答案也可以提交）
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.SUBMIT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attempt_id: record.attempt_id,
+            answers: []
+          })
+        })
+        
+        if (data.ok) {
+          ElMessage.success('已提交评分')
+          loadExamHistory()
+        } else {
+          ElMessage.error(data.detail || '提交失败')
+        }
+      } catch (error: any) {
+        ElMessage.error('提交失败：' + (error.message || '未知错误'))
+      }
+    }
+
+    // 删除考试记录
+    const deleteExamRecord = async (record: any) => {
+      const studentId = store.state.user.username
+      if (!studentId) return
+      
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除「${record.title}」的考试记录吗？此操作不可恢复。`,
+          '删除确认',
+          {
+            confirmButtonText: '删除',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        const data = await mcqFetch(API_ENDPOINTS.EXAM.DELETE_RECORD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: studentId,
+            attempt_id: record.attempt_id
+          })
+        })
+        
+        if (data.ok) {
+          ElMessage.success('已删除')
+          loadExamHistory()
+        } else {
+          ElMessage.error(data.detail || '删除失败')
+        }
+      } catch (error: any) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败：' + (error.message || '未知错误'))
+        }
+      }
+    }
+
     // 使用错题本开始练习
     const startWrongBookPractice = async () => {
       const studentId = store.state.user.username
@@ -2345,6 +3098,9 @@ export default defineComponent({
         currentExamId.value = ''
         wrongBookVisible.value = false
         
+        // 重置懒加载状态（低配模式）
+        resetLazyLoad()
+        
         // 初始化答案
         answersState.value = {}
         questions.value.forEach((q: any) => {
@@ -2364,10 +3120,8 @@ export default defineComponent({
     // 监听路由离开（Vue Router 导航）
     onBeforeRouteLeave((to, from, next) => {
       if (examStarted.value && !submitted.value) {
-        // 记录切屏
+        // 记录切屏（handleSwitchDetected 内部会调用 saveSwitchCount with keepalive）
         handleSwitchDetected('离开考试页面')
-        // 使用 sendBeacon 确保数据保存
-        saveProgressWithBeacon()
       }
       next()
     })
@@ -2427,10 +3181,26 @@ export default defineComponent({
       correctCount,
       correctRate,
       reviewData,
+      sortedReviewItems,
       wrongQuestions,
       singleQuestions,
       multiQuestions,
       indeterminateQuestions,
+      saqQuestions,
+      saqCategories,
+      selectedSaqCategory,
+      filteredSaqQuestions,
+      visibleSingleQuestions,
+      visibleMultiQuestions,
+      visibleIndeterminateQuestions,
+      visibleSaqQuestions,
+      sortedQuestions,
+      getSaqSectionNumber,
+      getQuestionIndexInType,
+      pagedQuestions,
+      lowModeTotalPages,
+      isLowPerformanceMode,
+      loadedImages,
       answeredCount,
       currentQid,
       scrollToQuestion,
@@ -2498,6 +3268,17 @@ export default defineComponent({
       removeFromWrongBook,
       openWrongBook,
       startWrongBookPractice,
+      // 考试记录相关
+      examHistoryVisible,
+      examHistory,
+      loadingHistory,
+      includePractice,
+      openExamHistory,
+      loadExamHistory,
+      continueExam,
+      viewExamResult,
+      submitTimeoutExam,
+      deleteExamRecord,
       // Icons
       Bell,
       Refresh,
@@ -2508,7 +3289,10 @@ export default defineComponent({
       Collection,
       View,
       Delete,
-      Loading
+      Loading,
+      List,
+      Timer,
+      Trophy
     }
   }
 })
@@ -3002,6 +3786,15 @@ export default defineComponent({
   background-clip: text;
 }
 
+/* 低配模式下试卷标题使用白色 */
+.low-perf-mode .head h2 {
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: #fff;
+  background-clip: unset;
+  color: #fff;
+}
+
 .head .sub {
   display: flex;
   align-items: center;
@@ -3075,6 +3868,11 @@ export default defineComponent({
 
 .tag.indeterminate {
   background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  color: #fff;
+}
+
+.tag.saq {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
   color: #fff;
 }
 
@@ -3283,16 +4081,40 @@ export default defineComponent({
 .lg.ok {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
 }
 
 .lg.partial {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: #fff;
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
 }
 
 .lg.bad {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #fff;
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
+}
+
+/* 低配模式下结果面板中的图例文字使用黑色 */
+.result-panel .lg.ok,
+.result-panel .lg.bad,
+.result-panel .lg.partial {
+  color: #1f2937 !important;
+  background: none !important;
+  box-shadow: none !important;
+  padding: 4px 8px;
+}
+
+.result-panel .lg.ok {
+  color: #059669 !important;
+}
+
+.result-panel .lg.bad {
+  color: #dc2626 !important;
 }
 
 .stat-text {
@@ -3729,6 +4551,10 @@ export default defineComponent({
   background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
 }
 
+.nav-type-tag.saq {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+}
+
 .nav-count {
   font-size: 12px;
   color: #94a3b8;
@@ -3755,6 +4581,48 @@ export default defineComponent({
   backdrop-filter: blur(10px);
 }
 
+/* 岗位分类筛选 */
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+}
+
+.category-filter .filter-label {
+  font-size: 13px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.category-filter :deep(.el-radio-group) {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-filter :deep(.el-radio-button__inner) {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #94a3b8;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.category-filter :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  border-color: #60a5fa;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.3);
+}
+
+.category-filter :deep(.el-radio-button__inner:hover) {
+  color: #60a5fa;
+}
+
 .section-tag {
   font-size: 16px;
   font-weight: 600;
@@ -3773,6 +4641,101 @@ export default defineComponent({
 
 .section-tag.indeterminate {
   background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.section-tag.saq {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: #fff !important;
+}
+
+/* 简答题答题区域 */
+.saq-answer-area {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(96, 165, 250, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.saq-answer-area :deep(.el-textarea__inner) {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.saq-answer-area :deep(.el-textarea__inner:focus) {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+/* 简答题解析区域样式 */
+.saq-review-area {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(96, 165, 250, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.15);
+}
+
+.saq-review-row {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saq-label {
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.saq-comment {
+  margin-left: 16px;
+  color: #60a5fa;
+  font-size: 13px;
+}
+
+.saq-status {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.saq-status.correct { color: #22c55e; }
+.saq-status.partial { color: #f59e0b; }
+.saq-status.wrong { color: #ef4444; }
+
+.saq-answer-box {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.saq-answer-box.my-answer {
+  background: rgba(96, 165, 250, 0.08);
+  border-color: rgba(96, 165, 250, 0.25);
+}
+
+.saq-answer-box.ref-answer {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.25);
+}
+
+.saq-answer-content {
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .section-count {
@@ -3905,6 +4868,217 @@ export default defineComponent({
 .wrong-book-actions {
   display: flex;
   gap: 12px;
+}
+
+/* 考试记录对话框 */
+.exam-history-dialog {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.history-filter {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #9ca3af;
+}
+
+.history-item.in_progress {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.history-item.completed {
+  border-left-color: #10b981;
+  background: #ecfdf5;
+}
+
+.history-item.timeout {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.history-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.history-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.history-info .info-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-info .info-item.warning {
+  color: #f59e0b;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 分页导航（低配模式） */
+.pagination-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  margin-top: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.pagination-info .page-detail {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* 图片懒加载占位符 */
+.image-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px dashed #60a5fa;
+  border-radius: 8px;
+  padding: 16px 24px;
+  color: #3b82f6;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 150px;
+}
+
+.image-placeholder:hover {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+}
+
+.image-placeholder.small {
+  padding: 8px 12px;
+  font-size: 12px;
+  min-width: auto;
+}
+
+/* 低配模式简化导航 */
+.simple-nav {
+  padding: 16px !important;
+}
+
+.simple-nav h3 {
+  margin-bottom: 16px;
+}
+
+.simple-nav-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.simple-nav-stats .stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 6px;
+}
+
+.simple-nav-stats .stat-item.answered {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.simple-nav-stats .stat-item.answered .stat-value {
+  color: #10b981;
+}
+
+.simple-nav-stats .stat-item.pending {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.simple-nav-stats .stat-item.pending .stat-value {
+  color: #f59e0b;
+}
+
+.simple-nav-stats .stat-label {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.simple-nav-stats .stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.simple-nav-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.simple-nav-progress .progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(96, 165, 250, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.simple-nav-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.simple-nav-progress .progress-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #10b981;
+  min-width: 40px;
+  text-align: right;
 }
 
 /* 随机练习对话框 */
@@ -4094,6 +5268,17 @@ export default defineComponent({
   font-size: 13px;
   color: #475569;
   line-height: 1.7;
+}
+
+.saq-wrong-area {
+  margin: 12px 0 12px 34px;
+}
+.saq-wrong-row {
+  margin-bottom: 10px;
+}
+.saq-score-info {
+  font-size: 14px;
+  color: #475569;
 }
 
 .explain-label {

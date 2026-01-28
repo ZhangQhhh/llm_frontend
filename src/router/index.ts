@@ -296,6 +296,16 @@ const routes: Array<RouteRecordRaw> = [
       title: '部门设置测试'
     }
   },
+  {
+    path: '/saq-grading',
+    name: 'saq-grading',
+    component: () => import('../views/SaqGradingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '简答题评分'
+    }
+  }
 ]
 
 const router = createRouter({
