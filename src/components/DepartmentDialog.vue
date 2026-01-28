@@ -65,15 +65,15 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, reactive } from 'vue'
+import { defineComponent, ref, computed, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { OfficeBuilding, Warning } from '@element-plus/icons-vue'
 import http from '@/config/api/http'
 import { API_ENDPOINTS } from '@/config/api/api'
-import { createModuleLogger, LogModules } from '@/utils/logger'
+// import { createModuleLogger, LogModules } from '@/utils/logger'
 
-const log = createModuleLogger(LogModules.DEPARTMENT)
+// const log = createModuleLogger(LogModules.DEPARTMENT)
 
 // 部门选项
 const DEPARTMENT_OPTIONS = [
@@ -96,12 +96,12 @@ export default defineComponent({
     OfficeBuilding,
     Warning
   },
-  setup() {
+  setup(_, { expose }) {
     const store = useStore()
     const showDialog = ref(false)
     const loading = ref(false)
     const formRef = ref<FormInstance>()
-    const hasChecked = ref(false)  // 是否已检查过
+    // const hasChecked = ref(false)  // 是否已检查过
 
     const formData = reactive({
       department: ''
@@ -111,10 +111,10 @@ export default defineComponent({
     const currentUsername = computed(() => store.state.user.username)
     
     // 获取用户是否已登录
-    const isLoggedIn = computed(() => store.state.user.is_login)
+    // const isLoggedIn = computed(() => store.state.user.is_login)
 
     // 获取用户是否已改名 - 部门弹窗依赖改名完成
-    const hasChangedName = computed(() => store.state.user.hasChangedName)
+    // const hasChangedName = computed(() => store.state.user.hasChangedName)
 
     // 部门选项
     const departmentOptions = ref(DEPARTMENT_OPTIONS)
@@ -127,70 +127,73 @@ export default defineComponent({
     }
 
     // 从后端获取用户是否已设置部门
-    const checkHasDepartment = async () => {
-      log.debug('开始检查部门')
-      log.debug('hasChecked:', hasChecked.value)
-      log.debug('hasChangedName:', hasChangedName.value)
-      log.debug('store.state.user.department:', store.state.user.department)
-      log.debug('store.getters.hasDepartment:', store.getters.hasDepartment)
-      
-      if (hasChecked.value) {
-        log.debug('已检查过，跳过')
-        return
-      }
-      
-      // 确保用户已改名才检查部门
-      if (!hasChangedName.value) {
-        log.debug('用户还未改名，跳过部门检查')
-        return
-      }
-      
-      // 先检查本地 store 中是否已有部门信息
-      if (store.getters.hasDepartment) {
-        log.debug('用户已设置部门，跳过部门检查:', store.state.user.department)
-        hasChecked.value = true
-        return
-      }
-      
-      log.debug('本地无部门信息，调用后端API')
-      try {
-        const response = await http.get(API_ENDPOINTS.USER_DEPARTMENT.CHECK_DEPARTMENT_REQUIRED)
-        // 后端返回 { department: string | null }
-        const result = response.data
-        
-        log.debug('后端返回结果:', result)
-        
-        if (!result.department) {
-          log.debug('后端返回部门为空，显示弹窗')
-          showDialog.value = true
-        } else {
-          log.debug('后端返回部门:', result.department)
-        }
-        
-        // 更新 store 中的状态
-        if (result.department) {
-          store.commit('setDepartment', result.department)
-        }
-        
-        hasChecked.value = true
-      } catch (error) {
-        log.error('获取用户部门信息失败:', error)
-      }
-    }
+    // 临时禁用部门检查功能
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // const checkHasDepartment = async () => {
+    //   log.debug('开始检查部门')
+    //   log.debug('hasChecked:', hasChecked.value)
+    //   log.debug('hasChangedName:', hasChangedName.value)
+    //   log.debug('store.state.user.department:', store.state.user.department)
+    //   log.debug('store.getters.hasDepartment:', store.getters.hasDepartment)
+    //   
+    //   if (hasChecked.value) {
+    //     log.debug('已检查过，跳过')
+    //     return
+    //   }
+    //   
+    //   // 确保用户已改名才检查部门
+    //   if (!hasChangedName.value) {
+    //     log.debug('用户还未改名，跳过部门检查')
+    //     return
+    //   }
+    //   
+    //   // 先检查本地 store 中是否已有部门信息
+    //   if (store.getters.hasDepartment) {
+    //     log.debug('用户已设置部门，跳过部门检查:', store.state.user.department)
+    //     hasChecked.value = true
+    //     return
+    //   }
+    //   
+    //   log.debug('本地无部门信息，调用后端API')
+    //   try {
+    //     const response = await http.get(API_ENDPOINTS.USER_DEPARTMENT.CHECK_DEPARTMENT_REQUIRED)
+    //     // 后端返回 { department: string | null }
+    //     const result = response.data
+    //     
+    //     log.debug('后端返回结果:', result)
+    //     
+    //     if (!result.department) {
+    //       log.debug('后端返回部门为空，显示弹窗')
+    //       showDialog.value = true
+    //     } else {
+    //       log.debug('后端返回部门:', result.department)
+    //     }
+    //     
+    //     // 更新 store 中的状态
+    //     if (result.department) {
+    //       store.commit('setDepartment', result.department)
+    //     }
+    //     
+    //     hasChecked.value = true
+    //   } catch (error) {
+    //     log.error('获取用户部门信息失败:', error)
+    //   }
+    // }
 
     // 监听登录状态和改名状态变化
-    watch(
-      [isLoggedIn, hasChangedName],
-      ([loggedIn, changedName]) => {
-        if (loggedIn && changedName) {
-          // 只有在登录状态且已改名的情况下才检查部门
-          checkHasDepartment()
-        } else if (!loggedIn) {
-          hasChecked.value = false
-        }
-      },
-      { immediate: true }
-    )
+    // 临时禁用部门检查功能，避免接口超时导致界面卡顿
+    // watch(
+    //   [isLoggedIn, hasChangedName],
+    //   ([loggedIn, changedName]) => {
+    //     if (loggedIn && changedName) {
+    //       // 只有在登录状态且已改名的情况下才检查部门
+    //       checkHasDepartment()
+    //     } else if (!loggedIn) {
+    //       hasChecked.value = false
+    //     }
+    //   },
+    //   { immediate: true }
+    // )
 
     // 提交部门选择
     const handleSubmit = async () => {
@@ -227,6 +230,13 @@ export default defineComponent({
         loading.value = false
       }
     }
+
+    const openDialog = () => {
+      formData.department = store.state.user.department || ''
+      showDialog.value = true
+    }
+
+    expose({ openDialog })
 
     return {
       showDialog,

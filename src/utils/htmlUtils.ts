@@ -32,7 +32,12 @@ const STATUS_KEYWORDS = [
 ];
 
 export function isStatusMessage(text: string): boolean {
-  if (!text || text.trim() === '') return true;
+  if (!text) return true;
+  const normalized = text.replace(/\r/g, '');
+  if (normalized.trim() === '') {
+    // 仅包含换行时，保留用于渲染换行
+    return !/\n/.test(normalized);
+  }
   
   for (const keyword of STATUS_KEYWORDS) {
     if (text.includes(keyword)) {

@@ -286,7 +286,16 @@ const routes: Array<RouteRecordRaw> = [
       title: '视频中心',
       pageCode: 'PAGE_023'
     }
-  }
+  },
+  {
+    path: '/test-department',
+    name: 'test-department',
+    component: () => import('../views/DepartmentTestView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '部门设置测试'
+    }
+  },
 ]
 
 const router = createRouter({

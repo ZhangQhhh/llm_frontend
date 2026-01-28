@@ -82,11 +82,11 @@
                 <el-input v-model="myNewPassword" type="password" placeholder="新密码" style="width: 200px; margin-left: 10px" />
                 <el-button @click="changeMyPassword" :loading="changingPassword" style="margin-left: 10px">修改</el-button>
               </el-form-item>
-              <el-form-item label="重置密码">
-                <el-input v-model="resetUsername" placeholder="用户名" style="width: 200px" />
-                <el-input v-model="resetPassword" type="password" placeholder="新密码" style="width: 200px; margin-left: 10px" />
-                <el-button @click="resetUserPassword" :loading="resettingPassword" style="margin-left: 10px">重置</el-button>
-              </el-form-item>
+              <!-- <el-form-item label="重置密码"> -->
+                <!-- <el-input v-model="resetUsername" placeholder="用户名" style="width: 200px" /> -->
+                <!-- <el-input v-model="resetPassword" type="password" placeholder="新密码" style="width: 200px; margin-left: 10px" /> -->
+                <!-- <el-button @click="resetUserPassword" :loading="resettingPassword" style="margin-left: 10px">重置</el-button> -->
+              <!-- </el-form-item> -->
             </el-form>
           </div>
         </el-tab-pane>
@@ -2173,7 +2173,7 @@ export default defineComponent({
       if (!myNewPassword.value) return ElMessage.warning('新密码不可为空')
       changingPassword.value = true
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.AUTH.CHANGE_PASSWORD), {
+        const response = await fetchWithAuth(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2199,7 +2199,7 @@ export default defineComponent({
       if (!resetUsername.value || !resetPassword.value) return ElMessage.warning('请输入用户名和新密码')
       resettingPassword.value = true
       try {
-        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.AUTH.RESET_PASSWORD), {
+        const response = await fetchWithAuth(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
