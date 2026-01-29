@@ -6,6 +6,10 @@ export const WRITER_BASE_URL = process.env.VUE_APP_WRITER_URL || LLM_BASE_URL;
 export const STREAM_TEST_URL = process.env.VUE_APP_STREAM_TEST_URL;
 // OCR服务URL
 export const OCR_BASE_URL = process.env.VUE_APP_OCR_BASE_URL || 'http://53.3.1.2:9000';
+
+// 数研报告API前缀：从环境变量读取
+export const DAV_PREFIX = process.env.VUE_APP_DAV_PREFIX || '';
+
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {
@@ -128,17 +132,17 @@ export const API_ENDPOINTS = {
     STATUS: '/tasks/status',
   },
   LLM_SUMMARY: {
-    DOX_SUMMARY: `/entry-exit/generate-full-report`,
-    MAX_SUMMARY: `/entryExit/summary-entrance-comprehensive`,
-    TOTAL_FORECAST: `/entryExit/forecast-total`
+    DOX_SUMMARY: `${DAV_PREFIX}/entry-exit/generate-full-report`,
+    MAX_SUMMARY: `${DAV_PREFIX}/entryExit/summary-entrance-comprehensive`,
+    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`
   },
   // 文档管理接口
   DOCUMENTS: {
-    UPLOAD: `/documents/upload`,
-    LIST: `/documents`,
-    PREVIEW: (filename: string) => `/documents/${encodeURIComponent(filename)}/preview`,
-    DOWNLOAD: (filename: string) => `/documents/${encodeURIComponent(filename)}/download`,
-    DELETE: (filename: string) => `/documents/${encodeURIComponent(filename)}`
+    UPLOAD: `${DAV_PREFIX}/documents/upload`,
+    LIST: `${DAV_PREFIX}/documents`,
+    PREVIEW: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}/preview`,
+    DOWNLOAD: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}/download`,
+    DELETE: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}`
   },
   // 问答日志相关API（使用llmHttp，baseURL已包含/api前缀）
   QA_LOGS: {

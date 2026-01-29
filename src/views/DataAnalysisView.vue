@@ -389,7 +389,7 @@ import {
   Close, QuestionFilled
 } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
-import http from '@/config/api/http';
+import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
 
 // --- State ---
@@ -499,7 +499,7 @@ const handleForecast = async () => {
   hasForecastData.value = false;
   
   try {
-    const res: any = await http.get(API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST, {
+    const res: any = await davHttp.get(API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST, {
       params: { steps: forecastMonths.value }
     });
     
@@ -655,7 +655,7 @@ const handleGenerate = async () => {
     const compareMonthNum = compareMonth.value.split('-')[1];
     formData.append('months', `${baseMonthNum},${compareMonthNum}`);
 
-    const response = await http.post(
+    const response = await davHttp.post(
         API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
         formData,
         {
@@ -737,7 +737,7 @@ const handleUploadDoc = async () => {
     formData.append('file', uploadDocFile.value);
     formData.append('overwrite', overwriteDoc.value.toString());
 
-    const res = await http.post(API_ENDPOINTS.DOCUMENTS.UPLOAD, formData, {
+    const res = await davHttp.post(API_ENDPOINTS.DOCUMENTS.UPLOAD, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
@@ -761,7 +761,7 @@ const handleUploadDoc = async () => {
 const loadDocuments = async () => {
   loadingDocs.value = true;
   try {
-    const res = await http.get(API_ENDPOINTS.DOCUMENTS.LIST);
+    const res = await davHttp.get(API_ENDPOINTS.DOCUMENTS.LIST);
     if (res.data && res.data.success) {
       documents.value = res.data.data || [];
     }
@@ -797,7 +797,7 @@ const deleteDocument = async (doc: DocumentItem) => {
       }
     );
 
-    await http.delete(API_ENDPOINTS.DOCUMENTS.DELETE(doc.name));
+    await davHttp.delete(API_ENDPOINTS.DOCUMENTS.DELETE(doc.name));
     ElMessage.success('删除成功');
     loadDocuments();
   } catch (error: any) {

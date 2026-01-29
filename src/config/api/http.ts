@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { API_BASE_URL, STORAGE_KEYS } from './api';
+import { API_BASE_URL, STORAGE_KEYS, DAV_PREFIX } from './api';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { forceLogout } from '@/utils/userStatusChecker';
 
@@ -65,4 +65,60 @@ http.interceptors.response.use(
   }
 );
 
+// 创建专门用于数研报告的 Axios 实例
+const davHttp: AxiosInstance = axios.create({
+  baseURL: DAV_PREFIX,
+  timeout: 600000, // 数研报告生成时间较长，设置10分钟超时
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// 复用相同的请求拦截器
+davHttp.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+    if (userStr && config.headers) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role) {
+          config.headers['X-User-Role'] = user.role;
+        }
+        if (user.username) {
+          config.headers['X-User-Name'] = encodeURIComponent(user.username);
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+    return config;
+  },
+  (error: AxiosError) => {
+    return Promise.reject(error);
+  }
+);
+
+// 复用相同的响应拦截器
+davHttp.interceptors.response.use(
+  (response: AxiosResponse) => {
+    return response;
+  },
+  (error: AxiosError) => {
+    const status = error.response?.status;
+    const bizCode = (error.response?.data as any)?.code;
+
+    if (status === 401 || status === 460 || bizCode === 'BANNED') {
+      forceLogout('登录已失效或账号已被封禁，请重新登录');
+    }
+
+    ErrorHandler.handleHttpError(error);
+    return Promise.reject(error);
+  }
+);
+
 export default http;
+export { davHttp };
