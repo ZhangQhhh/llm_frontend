@@ -23,6 +23,8 @@ interface UserInfo {
 interface UserState extends UserInfo {
   token: string;
   is_login: boolean;
+  permissions: string[];
+  permissionsLoaded: boolean;
 }
 
 // [4] 定义 updateUser mutation 的载荷 (payload) 类型
@@ -71,6 +73,8 @@ const state: UserState = {
   token: "",
   role: "",   
   is_login: false,
+  permissions: [],
+  permissionsLoaded: false,
   status: "",  // 1 表示没有被封禁，0表示被封禁
   email: null,
   policeId: null,
@@ -109,7 +113,20 @@ export default {
     // 检查特定权限
     hasPermission: (state: UserState) => (permission: string) => {
       return hasPermission(state.role as UserRole, permission as any);
-    }
+    },
+    // 鑾峰彇鐢ㄦ埛鏉冮檺鍒楄〃
+    userPermissions(state: UserState): string[] {
+      return Array.isArray(state.permissions) ? state.permissions : [];
+    },
+    permissionsLoaded(state: UserState): boolean {
+      return state.permissionsLoaded === true;
+    },
+    // 妫€鏌ユ槸鍚﹀叿鏈夐〉闈㈡潈闄?
+    hasPagePermission: (state: UserState) => (pageCode: string) => {
+      const code = String(pageCode || '').trim();
+      if (!code) return false;
+      return Array.isArray(state.permissions) && state.permissions.includes(code);
+    },
   },
   mutations: {
     // [10] 为 state 和 user 参数添加类型
@@ -143,6 +160,8 @@ export default {
       state.token = "";
       state.role = "";
       state.is_login = false;
+      state.permissions = [];
+      state.permissionsLoaded = false;
       state.status = "";
       state.email = null;
       state.policeId = null;
@@ -153,7 +172,15 @@ export default {
       // 清除 localStorage 中的用户信息
       localStorage.removeItem('multi_turn_chat_user');
     },
-    // 更新用户名
+    // Set permissions
+    setPermissions(state: UserState, permissions: string[]) {
+      const list = Array.isArray(permissions) ? permissions : [];
+      state.permissions = list;
+      state.permissionsLoaded = true;
+    },
+    setPermissionsLoaded(state: UserState, loaded: boolean) {
+      state.permissionsLoaded = loaded === true;
+    },
     updateUsername(state: UserState, username: string) {
       state.username = username;
     },
@@ -253,12 +280,99 @@ export default {
           };
 
           context.commit("updateUser", userData);
+          // 鍔犺浇鐢ㄦ埛鏉冮檺鍒楄〃锛堜笉鍋滄祦璇锋眰锛?
+          context.dispatch("getPermissions").catch(() => null);
           data.success(resp);
         } else {
           data.error(resp);
         }
       } catch (error: any) {
         data.error(error.response || error);
+      }
+    },
+
+    // Load user permissions
+    async getPermissions(context: ActionContext<UserState, RootState>): Promise<string[]> {
+      try {
+        const response = await http.get<XspaceResult<any>>(
+          API_ENDPOINTS.PERMISSIONS.LIST
+        );
+
+        const resp = response.data;
+        if (resp && (resp.success || resp.code === 200)) {
+          const payload = resp.data?.data || resp.data || {};
+          const codes: string[] = [];
+
+          const normalizePermissionList = (candidate: any): string[] => {
+            if (!candidate) return [];
+
+            if (Array.isArray(candidate)) {
+              const list: string[] = [];
+              candidate.forEach((item) => {
+                if (Array.isArray(item)) {
+                  list.push(...item.map((value) => String(value).trim()));
+                } else if (typeof item === 'string' || typeof item === 'number') {
+                  list.push(String(item).trim());
+                } else if (item && typeof item === 'object') {
+                  if (item.code) list.push(String(item.code).trim());
+                  if (item.permission) list.push(String(item.permission).trim());
+                  if (Array.isArray(item.permissions)) {
+                    list.push(...item.permissions.map((value: any) => String(value).trim()));
+                  }
+                }
+              });
+              return list;
+            }
+
+            if (typeof candidate === 'string' || typeof candidate === 'number') {
+              return String(candidate)
+                .split(/[,;\s]+/)
+                .map((value) => value.trim())
+                .filter(Boolean);
+            }
+
+            if (typeof candidate === 'object') {
+              const list: string[] = [];
+              const keys = [
+                'permissions',
+                'permissionCodes',
+                'permission_codes',
+                'perms',
+                'permCodes',
+                'groupPermissions',
+                'pageCodes',
+                'page_codes',
+                'pagePermissions',
+                'pages'
+              ];
+              keys.forEach((key) => {
+                const value = (candidate as any)[key];
+                if (Array.isArray(value)) {
+                  list.push(...value.map((item: any) => String(item).trim()));
+                }
+              });
+              if ((candidate as any).code) list.push(String((candidate as any).code).trim());
+              return list;
+            }
+
+            return [];
+          };
+
+          const candidates = [payload, (payload as any).data];
+          candidates.forEach((candidate) => {
+            codes.push(...normalizePermissionList(candidate));
+          });
+
+          const deduped = Array.from(new Set(codes.filter(Boolean)));
+          context.commit("setPermissions", deduped);
+          return deduped;
+        }
+
+        context.commit("setPermissionsLoaded", false);
+        return [];
+      } catch {
+        context.commit("setPermissionsLoaded", false);
+        return [];
       }
     }
   },

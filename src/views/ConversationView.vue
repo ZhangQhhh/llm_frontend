@@ -46,7 +46,7 @@
                 <select v-model="modelId">
                   <option value="qwen3-32b">Qwen(通用)</option>
                   <option value="qwen2025">Qwen(增强)</option>
-                  <option value="deepseek">DeepSeek-R1</option>
+                  <option value="deepseek">DeepSeek-3.1</option>
                 </select>
               </label>
 
@@ -84,7 +84,7 @@
         <!-- 对话和参考来源区域 -->
         <div class="content-area">
           <!-- 对话区 -->
-          <div class="conversation-box" ref="conversationBox">
+          <div class="conversation-box" ref="conversationBox" @scroll="handleConversationScroll">
             <div v-if="messages.length === 0" class="welcome-message">
               欢迎使用智能对话系统，请输入问题开始对话
             </div>
@@ -377,6 +377,11 @@ export default defineComponent({
     // DOM引用
     const conversationBox = ref<HTMLElement | null>(null);
     const mockReferencesEnabled = shouldUseReferenceMocks();
+    
+    // 滚动控制：节流和用户滚动检测
+    let lastScrollTime = 0;
+    const SCROLL_THROTTLE_MS = 150; // 节流间隔（毫秒）
+    let userHasScrolledUp = false; // 用户是否手动向上滚动
 
     const applyConversationMocks = () => {
       const mockHistory = getMockConversation();
@@ -421,13 +426,40 @@ export default defineComponent({
       return true;
     };
 
-    // 滚动到底部
-    const scrollToBottom = () => {
+    // 滚动到底部（带节流和平滑滚动）
+    const scrollToBottom = (force = false) => {
+      const now = Date.now();
+      
+      // 如果用户手动向上滚动了，不自动滚动（除非强制）
+      if (userHasScrolledUp && !force) {
+        return;
+      }
+      
+      // 节流：限制滚动频率
+      if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
+        return;
+      }
+      lastScrollTime = now;
+      
       nextTick(() => {
         if (conversationBox.value) {
-          conversationBox.value.scrollTop = conversationBox.value.scrollHeight;
+          // 使用平滑滚动
+          conversationBox.value.scrollTo({
+            top: conversationBox.value.scrollHeight,
+            behavior: 'smooth'
+          });
         }
       });
+    };
+    
+    // 检测用户是否手动向上滚动
+    const handleConversationScroll = () => {
+      if (!conversationBox.value) return;
+      
+      const { scrollTop, scrollHeight, clientHeight } = conversationBox.value;
+      // 如果距离底部超过 100px，认为用户在查看历史
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      userHasScrolledUp = distanceFromBottom > 100;
     };
 
     // 初始化
@@ -643,13 +675,16 @@ export default defineComponent({
 
       const userQuestion = question.value.trim();
       question.value = '';
+      
+      // 重置滚动状态，确保新消息时自动滚动
+      userHasScrolledUp = false;
 
       // 添加用户消息
       messages.value.push({
         role: 'user',
         content: userQuestion
       });
-      scrollToBottom();
+      scrollToBottom(true); // 强制滚动
 
       // 准备助手消息
       const assistantMessage: Message = {
@@ -792,6 +827,8 @@ export default defineComponent({
           console.log('流式响应完成');
           // 隐藏进度条
           showProgress.value = false;
+          // 完成时强制滚动到底部
+          scrollToBottom(true);
           break;
       }
     };
@@ -844,6 +881,7 @@ export default defineComponent({
       handleDeleteSession,
       handlePageChange,
       handleClearSession,
+      handleConversationScroll,
       renderMarkdown
     };
   }

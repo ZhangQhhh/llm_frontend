@@ -43,31 +43,31 @@
                 <el-icon><User /></el-icon>
                 <span>{{ username }}</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin || isBjzxAdmin" command="admin">
+              <el-dropdown-item v-if="canAccessAdminCenter" command="admin">
                 <el-icon><Setting /></el-icon>
                 <span>管理中心</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isSuperAdmin" command="super-admin">
+              <el-dropdown-item v-if="canAccessSuperAdminCenter" command="super-admin">
                 <el-icon><Setting /></el-icon>
                 <span>超管中心</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin" command="user-dashboard">
+              <el-dropdown-item v-if="canAccessUserDashboard" command="user-dashboard">
                 <el-icon><DataBoard /></el-icon>
                 <span>用户仪表盘</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isSuperAdmin" command="qa-logs">
+              <el-dropdown-item v-if="canAccessQaLogs" command="qa-logs">
                 <el-icon><Document /></el-icon>
                 <span>问答日志</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isSuperAdmin" command="knowledge-base">
+              <el-dropdown-item v-if="canAccessKnowledgeBase" command="knowledge-base">
                 <el-icon><FolderOpened /></el-icon>
                 <span>知识库管理</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin" command="feedback">
+              <el-dropdown-item v-if="canAccessFeedback" command="feedback">
                 <el-icon><ChatLineSquare /></el-icon>
                 <span>反馈管理</span>
               </el-dropdown-item>
-              <el-dropdown-item command="video-center">
+              <el-dropdown-item v-if="canAccessVideoCenter" command="video-center">
                 <el-icon><VideoCamera /></el-icon>
                 <span>资料中心</span>
               </el-dropdown-item>
@@ -122,7 +122,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import { 
@@ -171,6 +171,55 @@ export default defineComponent({
     const isAdmin = computed(() => store.getters.isAdmin)
     const isSuperAdmin = computed(() => store.getters.isSuperAdmin)
     const isBjzxAdmin = computed(() => store.getters.isBjzxAdmin)
+    const permissionsLoaded = computed(() => store.getters.permissionsLoaded)
+
+    const hasPagePermission = (pageCode: string) => {
+      if (!permissionsLoaded.value) return false
+      const checker = store.getters.hasPagePermission
+      return typeof checker === 'function' ? checker(pageCode) : false
+    }
+
+    const hasAnyPagePermission = (pageCodes: string[]) => {
+      return pageCodes.some((code) => hasPagePermission(code))
+    }
+
+    const canAccessAdminCenter = computed(() => {
+      return isAdmin.value || isBjzxAdmin.value || hasPagePermission('PAGE_006')
+    })
+
+    const canAccessSuperAdminCenter = computed(() => {
+      return isSuperAdmin.value || hasPagePermission('PAGE_007')
+    })
+
+    const canAccessUserDashboard = computed(() => {
+      return isAdmin.value || hasPagePermission('PAGE_008')
+    })
+
+    const canAccessFeedback = computed(() => {
+      return isAdmin.value || hasAnyPagePermission(['PAGE_018', 'PAGE_019'])
+    })
+
+    const canAccessQaLogs = computed(() => {
+      return isSuperAdmin.value || hasPagePermission('PAGE_021')
+    })
+
+    const canAccessKnowledgeBase = computed(() => {
+      return isSuperAdmin.value || hasPagePermission('PAGE_022')
+    })
+
+    const canAccessVideoCenter = computed(() => {
+      return isAdmin.value || isSuperAdmin.value || hasPagePermission('PAGE_023')
+    })
+
+    const ensurePermissions = () => {
+      if (isLoggedIn.value && !permissionsLoaded.value) {
+        store.dispatch('getPermissions').catch(() => null)
+      }
+    }
+
+    watch(isLoggedIn, (val) => {
+      if (val) ensurePermissions()
+    }, { immediate: true })
 
     // 角色标签类型
     const roleTagType = computed(() => {
@@ -238,6 +287,13 @@ export default defineComponent({
       isAdmin,
       isSuperAdmin,
       isBjzxAdmin,
+      canAccessAdminCenter,
+      canAccessSuperAdminCenter,
+      canAccessUserDashboard,
+      canAccessFeedback,
+      canAccessQaLogs,
+      canAccessKnowledgeBase,
+      canAccessVideoCenter,
       roleTagType,
       roleText,
       navigateTo,

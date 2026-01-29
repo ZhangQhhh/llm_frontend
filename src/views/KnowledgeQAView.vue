@@ -1367,14 +1367,25 @@ export default defineComponent({
       }
     };
 
-    // 自动滚动到页面底部
-    const autoScrollToBottom = () => {
-      if (autoScrollEnabled.value && answerBodyRef.value) {
-        window.scrollTo({
-          top: document.documentElement.scrollHeight,
-          behavior: 'auto'
-        });
+    // 滚动节流控制
+    let lastScrollTime = 0;
+    const SCROLL_THROTTLE_MS = 150; // 节流间隔（毫秒）
+    
+    // 自动滚动到页面底部（带节流和平滑滚动）
+    const autoScrollToBottom = (force = false) => {
+      if (!autoScrollEnabled.value && !force) return;
+      
+      const now = Date.now();
+      // 节流：限制滚动频率
+      if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
+        return;
       }
+      lastScrollTime = now;
+      
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth'
+      });
     };
 
     // 监听用户滚动，如果用户向上滚动则禁用自动滚动
@@ -1388,7 +1399,7 @@ export default defineComponent({
       lastScrollTop = currentScrollTop;
     };
 
-    // 监听 answer 和 thinking 变化，自动滚动
+    // 监听 answer 和 thinking 变化，自动滚动（已内置节流）
     watch([answer, thinking], () => {
       if (loading.value) {
         autoScrollToBottom();

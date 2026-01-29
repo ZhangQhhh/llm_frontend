@@ -53,6 +53,16 @@ async function checkPagePermission(pageCode: string): Promise<boolean> {
   }
 }
 
+async function ensurePermissionsLoaded(): Promise<void> {
+  const permissionsLoaded = store.getters.permissionsLoaded
+  if (permissionsLoaded) return
+  try {
+    await store.dispatch('getPermissions')
+  } catch {
+    // ignore, fallback to role checks
+  }
+}
+
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
@@ -341,8 +351,7 @@ router.beforeEach(async (to, from, next) => {
   // 如果有 token 且需要权限检查，确保用户信息已加载
   if (token && (to.meta.requiresAdmin || to.meta.requiresSuperAdmin || to.meta.requiresAdminRole)) {
     const isLoggedIn = (store.state as any).user.is_login
-    
-    // 如果用户信息还没加载，先加载用户信息
+
     if (!isLoggedIn) {
       try {
         await new Promise<void>((resolve, reject) => {
@@ -352,49 +361,76 @@ router.beforeEach(async (to, from, next) => {
           })
         })
       } catch {
-        // 获取用户信息失败，可能 token 已过期
         ElMessage.warning('登录已过期，请重新登录')
         next({ name: 'login', query: { redirect: to.fullPath } })
         return
       }
     }
   }
-  
-  // 重新获取权限状态（用户信息已加载后）
+
+  // Permission checks after user info is loaded
   const isLoggedIn = (store.state as any).user.is_login
   const isAdmin = store.getters.isAdmin
   const isSuperAdmin = store.getters.isSuperAdmin
   const isBjzxAdmin = store.getters.isBjzxAdmin
-  
-  // 检查是否需要管理员权限（管理员或边检智学管理员都可以访问）
-  if (to.meta.requiresAdmin && !isAdmin && !isBjzxAdmin) {
-    ElMessage.error('无权访问，需要管理员权限')
+  const isPrivileged = isAdmin || isSuperAdmin || isBjzxAdmin
+  let hasPagePermission = false
+  if (token && to.meta.pageCode && !isPrivileged) {
+    await ensurePermissionsLoaded()
+    if (typeof store.getters.hasPagePermission === 'function') {
+      hasPagePermission = store.getters.hasPagePermission(to.meta.pageCode)
+    }
+  }
+
+  // Admin system remains role-based; group permissions only supplement regular users
+  if (to.meta.requiresSuperAdmin && !isSuperAdmin) {
+    ElMessage.error('\u65e0\u6743\u8bbf\u95ee\uff0c\u9700\u8981\u8d85\u7ea7\u7ba1\u7406\u5458\u6743\u9650')
     next({ name: 'home' })
     return
   }
 
   if (to.meta.requiresAdminRole && !isAdmin) {
-    ElMessage.error('无权访问，需要管理员权限')
+    ElMessage.error('\u65e0\u6743\u8bbf\u95ee\uff0c\u9700\u8981\u7ba1\u7406\u5458\u6743\u9650')
     next({ name: 'home' })
     return
   }
 
-  if (to.meta.requiresSuperAdmin && !isSuperAdmin) {
-    ElMessage.error('无权访问，需要超级管理员权限')
-    next({ name: 'home' })
-    return
-  }
-
-  if (token && to.meta.pageCode && !to.meta.publicAccess) {
-    const allowed = await checkPagePermission(to.meta.pageCode)
-    if (!allowed) {
-      ElMessage.error('无权访问该页面')
-      next({ name: 'home' })
-      return
+  // Regular users with page permission can access requiresAdmin pages
+  if (to.meta.requiresAdmin && !isAdmin && !isBjzxAdmin) {
+    if (store.getters.permissionsLoaded) {
+      if (!hasPagePermission) {
+        ElMessage.error('\u65e0\u6743\u8bbf\u95ee\uff0c\u9700\u8981\u7ba1\u7406\u5458\u6743\u9650')
+        next({ name: 'home' })
+        return
+      }
+    } else {
+      const allowed = await checkPagePermission(to.meta.pageCode || '')
+      if (!allowed) {
+        ElMessage.error('\u65e0\u6743\u8bbf\u95ee\uff0c\u9700\u8981\u7ba1\u7406\u5458\u6743\u9650')
+        next({ name: 'home' })
+        return
+      }
     }
   }
 
-  // 已登录用户访问登录页，跳转到首页
+  // Page permission checks only apply to non-admin users
+  if (token && to.meta.pageCode && !to.meta.publicAccess && !isPrivileged) {
+    if (store.getters.permissionsLoaded) {
+      if (!hasPagePermission) {
+        ElMessage.error('\u65e0\u6743\u8bbf\u95ee\u8be5\u9875\u9762')
+        next({ name: 'home' })
+        return
+      }
+    } else {
+      const allowed = await checkPagePermission(to.meta.pageCode)
+      if (!allowed) {
+        ElMessage.error('\u65e0\u6743\u8bbf\u95ee\u8be5\u9875\u9762')
+        next({ name: 'home' })
+        return
+      }
+    }
+  }
+
   if (to.name === 'login' && isLoggedIn) {
     next({ name: 'home' })
     return
