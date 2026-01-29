@@ -50,7 +50,7 @@ export const API_ENDPOINTS = {
   KNOWLEDGE: {
     // 单轮对话（无会话）- 使用完整URL（用于fetch流式请求）
     CHAT: `${LLM_BASE_URL}/knowledge_chat`,
-    CHAT_12367:`${LLM_BASE_URL}/knowledge_chat_12367`,
+    CHAT_12367: `${LLM_BASE_URL}/knowledge_chat_12367`,
     CONVERSATION_CHAT: `${LLM_BASE_URL}/knowledge_chat_conversation`,
     STREAM_TEST: STREAM_TEST_URL || '',
     // MCQ策略判断 - 使用完整URL
@@ -83,7 +83,7 @@ export const API_ENDPOINTS = {
     RESET_PASSWORD: `/auth/reset_password`,
     CHANGE_NAME: `/auth/change_username`,
     USER_INFO: `/auth/user-info`,
-    FORGET_PASSWORD:'/auth/forget'
+    FORGET_PASSWORD: '/auth/forget'
   },
   // 题库管理API
   QUESTIONS: {
@@ -127,9 +127,18 @@ export const API_ENDPOINTS = {
   TASKS: {
     STATUS: '/tasks/status',
   },
-  LLM_SUMMARY:{
-    DOX_SUMMARY:`/entry-exit/generate-full-report`,
-    MAX_SUMMARY:`/entryExit/summary-entrance-comprehensive`
+  LLM_SUMMARY: {
+    DOX_SUMMARY: `/entry-exit/generate-full-report`,
+    MAX_SUMMARY: `/entryExit/summary-entrance-comprehensive`,
+    TOTAL_FORECAST: `/entryExit/forecast-total`
+  },
+  // 文档管理接口
+  DOCUMENTS: {
+    UPLOAD: `/documents/upload`,
+    LIST: `/documents`,
+    PREVIEW: (filename: string) => `/documents/${encodeURIComponent(filename)}/preview`,
+    DOWNLOAD: (filename: string) => `/documents/${encodeURIComponent(filename)}/download`,
+    DELETE: (filename: string) => `/documents/${encodeURIComponent(filename)}`
   },
   // 问答日志相关API（使用llmHttp，baseURL已包含/api前缀）
   QA_LOGS: {
@@ -172,24 +181,24 @@ export const API_ENDPOINTS = {
 
 // ===== MCQ 模块端点（合并自 mcq.ts） =====
 export const MCQ_ENDPOINTS = {
-    UPLOAD: '/upload',
-    EXPLAIN: '/explain',
-    TASK: { STATUS: '/tasks/status' },
-    BANK: {
-        LIST: '/bank/list',
-        UPSERT: '/bank/bulk_upsert',
-        UPDATE: '/bank/bulk_update',
-        REJECT: '/bank/bulk_reject',
-        EXPORT_DOCX: '/bank/export_docx',
-        GENERATE_PAPER: '/bank/generate_paper',
-        SOURCES: '/bank/sources',
-    },
+  UPLOAD: '/upload',
+  EXPLAIN: '/explain',
+  TASK: { STATUS: '/tasks/status' },
+  BANK: {
+    LIST: '/bank/list',
+    UPSERT: '/bank/bulk_upsert',
+    UPDATE: '/bank/bulk_update',
+    REJECT: '/bank/bulk_reject',
+    EXPORT_DOCX: '/bank/export_docx',
+    GENERATE_PAPER: '/bank/generate_paper',
+    SOURCES: '/bank/sources',
+  },
 };
 
 
 export const getMcqUrl = (path: string): string => {
-if (/^https?:\/\//i.test(path)) return path;
-return `${MCQ_BASE_URL}${path}`;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${MCQ_BASE_URL}${path}`;
 };
 
 // 本地存储键名
