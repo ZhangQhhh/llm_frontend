@@ -108,6 +108,14 @@
               </el-tag>
             </div>
             <div class="header-right">
+              <el-input
+                v-model="searchKeyword"
+                placeholder="输入关键词搜索"
+                clearable
+                size="small"
+                style="width: 220px; margin-right: 15px"
+                :prefix-icon="Search"
+              />
               <el-radio-group v-model="filterType" size="small" style="margin-right: 15px">
                 <el-radio-button value="all">全部</el-radio-button>
                 <el-radio-button value="video">
@@ -136,7 +144,7 @@
 
         <div v-else class="resource-grid">
           <el-card
-            v-for="resource in filteredResources"
+            v-for="resource in paginatedResources"
             :key="resource.id"
             class="resource-item"
             shadow="hover"
@@ -202,6 +210,19 @@
               </div>
             </div>
           </el-card>
+        </div>
+
+        <!-- 分页 -->
+        <div class="pagination-container" v-if="filteredResources.length > 0">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[12, 24, 36, 48]"
+            :total="filteredResources.length"
+            layout="total, sizes, prev, pager, next, jumper"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
         </div>
       </el-card>
     </div>
@@ -330,7 +351,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -349,7 +370,8 @@ import {
   Folder,
   Document,
   Tickets,
-  View
+  View,
+  Search
 } from '@element-plus/icons-vue'
 import llmHttp from '@/config/api/llmHttp'
 
@@ -363,14 +385,55 @@ const isAdmin = computed(() => store.getters.isAdmin)
 const resources = ref<any[]>([])
 const loading = ref(false)
 const filterType = ref('all')  // 筛选类型: all, video, pdf, ppt
+const searchKeyword = ref('')  // 搜索关键词
+const currentPage = ref(1)  // 当前页码
+const pageSize = ref(12)  // 每页显示数量
 
 // 计算属性 - 筛选后的资料列表
 const filteredResources = computed(() => {
-  if (filterType.value === 'all') {
-    return resources.value
+  let result = resources.value
+  
+  // 按文件类型筛选
+  if (filterType.value !== 'all') {
+    result = result.filter(r => r.file_type === filterType.value)
   }
-  return resources.value.filter(r => r.file_type === filterType.value)
+  
+  // 按关键词搜索（上传人、描述、文件名/标题）
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    result = result.filter(r => {
+      const uploader = (r.uploader || '').toLowerCase()
+      const description = (r.description || '').toLowerCase()
+      const title = (r.title || '').toLowerCase()
+      const filename = (r.original_filename || r.filename || '').toLowerCase()
+      return uploader.includes(keyword) || description.includes(keyword) || title.includes(keyword) || filename.includes(keyword)
+    })
+  }
+  
+  return result
 })
+
+// 计算属性 - 分页后的资料列表
+const paginatedResources = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredResources.value.slice(start, end)
+})
+
+// 监听筛选条件变化，重置页码
+watch([filterType, searchKeyword], () => {
+  currentPage.value = 1
+})
+
+// 分页变化处理
+function handlePageChange(page: number) {
+  currentPage.value = page
+}
+
+function handleSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
+}
 
 // 上传相关
 const uploadRef = ref()
@@ -969,6 +1032,14 @@ onMounted(() => {
 .ppt-loading p {
   margin-top: 16px;
   font-size: 14px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+  margin-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 
 @media (max-width: 768px) {

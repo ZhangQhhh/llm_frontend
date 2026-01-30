@@ -5,7 +5,7 @@ const MCQ_API_BASE_URL = process.env.VUE_APP_MCQ_BASE_URL;
 
 const mcqHttp: AxiosInstance = axios.create({
   baseURL: MCQ_API_BASE_URL,
-  timeout: 60000,
+  timeout: 300000, // 5分钟，格式化大文档需要更长时间
   headers: { 'Content-Type': 'application/json' },
 });
 

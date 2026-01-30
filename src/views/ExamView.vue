@@ -35,7 +35,7 @@
           开始作答
         </el-button>
         
-        <el-button type="success" @click="randomPracticeVisible = true" :disabled="examStarted" size="default">
+        <el-button type="success" @click="openRandomPractice" :disabled="examStarted" size="default">
           <el-icon><Reading /></el-icon>
           随机练习
         </el-button>
@@ -850,8 +850,36 @@
               <!-- 占位 -->
             </div>
           </div>
+          <div class="config-row-dialog" style="margin-top: 12px;">
+            <div class="config-item-dialog" style="flex: 1;">
+              <label>考点筛选</label>
+              <el-select
+                v-model="selectedPracticeKnowledgePoints"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                :max-collapse-tags="2"
+                placeholder="不选则全部题目"
+                clearable
+                filterable
+                style="width: 100%;"
+                size="default"
+                :loading="loadingPracticeKnowledgePoints"
+              >
+                <el-option
+                  v-for="kp in availablePracticeKnowledgePoints"
+                  :key="kp"
+                  :label="'《' + kp + '》'"
+                  :value="kp"
+                />
+              </el-select>
+            </div>
+          </div>
           <div class="config-summary-dialog">
             <span>共 <b>{{ practiceTotalCount }}</b> 题，预计 <b>{{ practiceConfig.duration }}</b> 分钟</span>
+            <span v-if="selectedPracticeKnowledgePoints.length > 0" style="margin-left: 12px; color: #67c23a;">
+              （已选 {{ selectedPracticeKnowledgePoints.length }} 个考点）
+            </span>
           </div>
         </div>
         <div class="practice-tips-dialog">
@@ -1208,6 +1236,76 @@ export default defineComponent({
     const practiceTotalCount = computed(() => {
       return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount + practiceConfig.saqCount
     })
+
+    // 知识点筛选相关
+    const selectedPracticeKnowledgePoints = ref<string[]>([])
+    const availablePracticeKnowledgePoints = ref<string[]>([])
+    const loadingPracticeKnowledgePoints = ref(false)
+
+    // 标准化知识点字符串（用于比较和去重）
+    const normalizeKnowledgePoint = (kp: string): string => {
+      if (!kp) return ''
+      return kp
+        .replace(/[（(]/g, '(')
+        .replace(/[）)]/g, ')')
+        .replace(/\s+/g, '')
+        .toLowerCase()
+    }
+
+    // 检查两个知识点是否相同
+    const isSameKnowledgePoint = (kp1: string, kp2: string): boolean => {
+      return normalizeKnowledgePoint(kp1) === normalizeKnowledgePoint(kp2)
+    }
+
+    // 从题目解析中提取知识点列表
+    const extractKnowledgePointsFromAnalysis = (analysis: string): string[] => {
+      if (!analysis) return []
+      const kpMatch = analysis.match(/知识点[：:]\s*(.+?)\s*$/s)
+      if (!kpMatch) return []
+      const kpText = kpMatch[1]
+      const bookPattern = /《([^》]+)》/g
+      const points: string[] = []
+      let match
+      while ((match = bookPattern.exec(kpText)) !== null) {
+        const kp = match[1].trim()
+        if (kp && !points.some(p => isSameKnowledgePoint(p, kp))) {
+          points.push(kp)
+        }
+      }
+      return points
+    }
+
+    // 加载可用的知识点列表（使用标准化比较去重）
+    const loadPracticeKnowledgePoints = async () => {
+      loadingPracticeKnowledgePoints.value = true
+      try {
+        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0`)
+        if (bankData.ok) {
+          const approvedQuestions = (bankData.items || []).filter((q: any) => q.status === 'approved')
+          const kpList: string[] = []
+          approvedQuestions.forEach((q: any) => {
+            const kps = extractKnowledgePointsFromAnalysis(q.explain || '')
+            kps.forEach(kp => {
+              // 使用标准化比较去重
+              if (!kpList.some(existing => isSameKnowledgePoint(existing, kp))) {
+                kpList.push(kp)
+              }
+            })
+          })
+          availablePracticeKnowledgePoints.value = kpList.sort()
+        }
+      } catch (e) {
+        console.warn('加载知识点列表失败', e)
+      } finally {
+        loadingPracticeKnowledgePoints.value = false
+      }
+    }
+
+    // 打开随机练习对话框
+    const openRandomPractice = () => {
+      randomPracticeVisible.value = true
+      loadPracticeKnowledgePoints()
+    }
 
     // 答题相关
     const answersState = ref<Record<string, any>>({})
@@ -2306,7 +2404,22 @@ export default defineComponent({
         }
 
         // 2. 按题型分类（只取已通过的题目）
-        const approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
+        let approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
+        
+        // 2.1 按知识点筛选（如果选择了知识点）
+        if (selectedPracticeKnowledgePoints.value.length > 0) {
+          approvedQuestions = approvedQuestions.filter((q: any) => {
+            const qKps = extractKnowledgePointsFromAnalysis(q.explain || '')
+            return qKps.some(qKp => 
+              selectedPracticeKnowledgePoints.value.some(selKp => isSameKnowledgePoint(qKp, selKp))
+            )
+          })
+          if (approvedQuestions.length === 0) {
+            ElMessage.warning('所选知识点下没有可用题目')
+            return
+          }
+        }
+        
         // 简答题
         const saqQuestions = approvedQuestions.filter((q: any) => q.qtype === 'saq')
         // 选择题（非SAQ）
@@ -2369,7 +2482,7 @@ export default defineComponent({
             stem: q.stem,
             options: q.options,
             answer: q.answer,
-            explain: q.explain || '',
+            explain_original: q.explain || '',
             qtype: qtype
           }
           // 包含图片数据
@@ -3257,6 +3370,12 @@ export default defineComponent({
       startRandomPractice,
       randomPracticeVisible,
       startRandomPracticeFromDialog,
+      // 知识点筛选相关
+      selectedPracticeKnowledgePoints,
+      availablePracticeKnowledgePoints,
+      loadingPracticeKnowledgePoints,
+      loadPracticeKnowledgePoints,
+      openRandomPractice,
       // 错题本相关
       wrongBook,
       wrongBookTotal,

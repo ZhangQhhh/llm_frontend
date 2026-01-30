@@ -107,7 +107,7 @@
                     ref="uploadRef"
                     :auto-upload="false"
                     :limit="1"
-                    accept=".docx,.txt"
+                    accept=".docx,.doc,.wps,.txt"
                     :on-change="handleFileChange"
                     style="display: inline-block"
                   >
@@ -211,6 +211,14 @@
                       <el-option label="已驳回" value="rejected" />
                       <el-option label="异常" value="abnormal" />
                     </el-select>
+                    <el-input
+                      v-model="searchQuery"
+                      placeholder="搜索题干/选项内容"
+                      clearable
+                      size="default"
+                      style="width: 200px"
+                      :prefix-icon="Search"
+                    />
                     <el-button @click="loadQuestions" :loading="loadingQuestions" :icon="Refresh" size="default">刷新</el-button>
                   </div>
                   <div class="filter-right">
@@ -311,7 +319,7 @@
                     取消
                   </el-button>
 
-                  <!-- 重生成并保存：仅在题目状态为“已驳回”（rejected）时显示 -->
+                  <!-- 重生成并保存：仅在题目状态为"已驳回"（rejected）时显示 -->
                   <el-button
                     v-if="q.status === 'rejected'"
                     size="small"
@@ -322,12 +330,11 @@
                     重生成并保存
                   </el-button>
 
-                  <!-- 通过 / 驳回：保持不变 -->
+                  <!-- 通过 / 驳回 -->
                   <el-button
                     size="small"
                     type="success"
-                    @click="approveQuestion(q.qid)"
-                    :disabled="!q.analysis"
+                    @click="approveQuestion(q.qid, q.analysis)"
                   >
                     通过
                   </el-button>
@@ -525,6 +532,38 @@
                         style="display: none"
                         @change="onAnalysisImageSelected"
                       />
+                    </el-form-item>
+
+                    <!-- 5. 知识点/考点 -->
+                    <el-form-item label="考点">
+                      <div style="display: flex; gap: 8px; width: 100%;">
+                        <el-select
+                          v-model="editSelectedKnowledgePoints"
+                          multiple
+                          filterable
+                          allow-create
+                          default-first-option
+                          collapse-tags
+                          collapse-tags-tooltip
+                          :max-collapse-tags="3"
+                          placeholder="选择或输入考点（可多选）"
+                          style="flex: 1;"
+                        >
+                          <el-option
+                            v-for="kp in knowledgePointOptions"
+                            :key="kp"
+                            :label="'《' + kp + '》'"
+                            :value="kp"
+                          />
+                        </el-select>
+                        <el-button type="primary" plain size="small" @click="kpManageDialogVisible = true">
+                          管理考点
+                        </el-button>
+                      </div>
+                      <div class="knowledge-point-hint">
+                        <el-icon><InfoFilled /></el-icon>
+                        <span>可从预设列表选择，也可输入新的考点名称后按回车添加</span>
+                      </div>
                     </el-form-item>
                   </el-form>
                 </div>
@@ -853,6 +892,40 @@
                   </div>
                 </el-form-item>
                 
+                <!-- 知识点筛选（放在生成模式前，对随机和手动都生效） -->
+                <el-form-item label="考点筛选" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <el-select
+                      v-model="selectedKnowledgePoints"
+                      multiple
+                      collapse-tags
+                      collapse-tags-tooltip
+                      :max-collapse-tags="3"
+                      placeholder="选择知识点（可多选，不选则为全部）"
+                      clearable
+                      filterable
+                      style="width: 500px;"
+                      size="default"
+                    >
+                      <el-option
+                        v-for="kp in availableKnowledgePoints"
+                        :key="kp"
+                        :label="'《' + kp + '》'"
+                        :value="kp"
+                      />
+                    </el-select>
+                    <span v-if="approvedQuestions.length === 0" style="color: #e6a23c; font-size: 13px;">
+                      暂无已通过题目，请先通过题目审核
+                    </span>
+                    <span v-else-if="selectedKnowledgePoints.length > 0" style="color: #67c23a; font-size: 13px;">
+                      已筛选 {{ filteredPaperQuestions.length }} 道相关题目
+                    </span>
+                    <span v-else style="color: #909399; font-size: 13px;">
+                      共 {{ approvedQuestions.length }} 道已通过题目
+                    </span>
+                  </div>
+                </el-form-item>
+                
                 <!-- 生成模式选择 -->
                 <el-form-item label="生成模式" style="margin-bottom: 12px;">
                   <el-radio-group v-model="paperGenerateMode">
@@ -1046,7 +1119,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-weight: 600;">已生成试卷</span>
                   <div>
-                    <input ref="paperUploadRef" type="file" accept=".docx,.txt" style="display:none" @change="onPickPaperFile" />
+                    <input ref="paperUploadRef" type="file" accept=".docx,.doc,.wps,.txt" style="display:none" @change="onPickPaperFile" />
                     <el-button size="small" type="success" @click="triggerPickPaperFile" :icon="Upload">上传试卷</el-button>
                     <span style="margin-left: 10px; color: #909399;">共 {{ paperList.length }} 份</span>
                   </div>
@@ -1723,6 +1796,73 @@
         </div>
       </el-dialog>
 
+      <!-- 考点管理对话框 -->
+      <el-dialog v-model="kpManageDialogVisible" title="管理考点列表" width="600px">
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <el-input 
+              v-model="newKpName" 
+              placeholder="输入新考点名称" 
+              @keyup.enter="addKnowledgePoint"
+              style="flex: 1;"
+            />
+            <el-button type="primary" @click="addKnowledgePoint">添加</el-button>
+          </div>
+          <div style="color: #909399; font-size: 12px;">
+            共 {{ knowledgePointOptions.length }} 个考点（数据保存在浏览器本地）
+          </div>
+        </div>
+        
+        <div style="max-height: 400px; overflow-y: auto;">
+          <div 
+            v-for="(kp, idx) in knowledgePointOptions" 
+            :key="idx"
+            class="kp-manage-item"
+          >
+            <template v-if="editingKpIndex === idx">
+              <el-input 
+                v-model="editingKpName" 
+                size="small" 
+                style="flex: 1;"
+                @keyup.enter="saveEditKp"
+              />
+              <el-button size="small" type="primary" @click="saveEditKp">保存</el-button>
+              <el-button size="small" @click="cancelEditKp">取消</el-button>
+            </template>
+            <template v-else>
+              <span class="kp-name">《{{ kp }}》</span>
+              <div class="kp-actions">
+                <el-button size="small" type="primary" link @click="startEditKp(idx)">编辑</el-button>
+                <el-popconfirm 
+                  title="确定删除此考点？" 
+                  confirm-button-text="删除" 
+                  cancel-button-text="取消"
+                  @confirm="deleteKnowledgePoint(idx)"
+                >
+                  <template #reference>
+                    <el-button size="small" type="danger" link>删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </div>
+        </div>
+        
+        <template #footer>
+          <el-button @click="kpManageDialogVisible = false">关闭</el-button>
+          <el-popconfirm 
+            title="确定重置为默认考点列表？" 
+            confirm-button-text="确定" 
+            cancel-button-text="取消"
+            @confirm="resetKnowledgePoints"
+          >
+            <template #reference>
+              <el-button type="warning">重置为默认</el-button>
+            </template>
+          </el-popconfirm>
+        </template>
+      </el-dialog>
+
       <!-- 部门用户预览对话框 -->
       <el-dialog v-model="deptUsersDialogVisible" title="目标部门人员名单" width="600px">
         <div v-if="loadingDeptUsers" style="text-align: center; padding: 20px;">
@@ -1752,7 +1892,7 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, Warning } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, Warning, Delete } from '@element-plus/icons-vue'
 import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
@@ -1859,6 +1999,7 @@ export default defineComponent({
     const pollingInterval = ref<number | null>(null)
     const questions = ref<Question[]>([])
     const statusFilter = ref<'all'|'none'|'draft'|'approved'|'rejected'|'abnormal'|'processing'>('all')
+    const searchQuery = ref('')
     const loadingQuestions = ref(false)
     const showingAnalysis = reactive<Record<string, boolean>>({})
     const approvingAll = ref(false)
@@ -2060,7 +2201,7 @@ export default defineComponent({
     const rowRegenLoading = reactive<Record<string, boolean>>({})
     const deletingQuestion = reactive<Record<string, boolean>>({})
     const editingId = ref<string | null>(null)
-    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{}, stem_images: [], option_images: {}, analysis_images: [] })
+    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{}, stem_images: [], option_images: {}, analysis_images: [], knowledge_point: '' })
     const counterMsg = ref('')
 
     // 批量选择相关
@@ -2087,8 +2228,21 @@ export default defineComponent({
 
     const filteredQuestions = computed(() => {
       try {
-        if (statusFilter.value === 'all') return questions.value
-        return questions.value.filter(q => q.status === statusFilter.value)
+        let result = questions.value
+        if (statusFilter.value !== 'all') {
+          result = result.filter(q => q.status === statusFilter.value)
+        }
+        const query = searchQuery.value.trim().toLowerCase()
+        if (query) {
+          result = result.filter(q => {
+            if (q.stem && q.stem.toLowerCase().includes(query)) return true
+            if (q.options && Array.isArray(q.options)) {
+              return q.options.some((opt: any) => opt.text && opt.text.toLowerCase().includes(query))
+            }
+            return false
+          })
+        }
+        return result
       } catch { return questions.value || [] }
     })
 
@@ -2121,6 +2275,7 @@ export default defineComponent({
     const paperQuestionSearch = ref('')
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
+    const selectedKnowledgePoints = ref<string[]>([])  // 知识点筛选
 
     // 试卷生成模式
     const paperGenerateMode = ref<'manual' | 'random'>('manual')
@@ -2208,6 +2363,126 @@ export default defineComponent({
     ]
     const departmentOptions = ref(DEPARTMENT_OPTIONS)
 
+    // 知识点/考点列表（从服务器加载，所有电脑共享）
+    const knowledgePointOptions = ref<string[]>([])
+    // 编辑时选中的知识点数组
+    const editSelectedKnowledgePoints = ref<string[]>([])
+    const loadingKnowledgePoints = ref(false)
+
+    // 考点管理相关
+    const kpManageDialogVisible = ref(false)
+    const newKpName = ref('')
+    const editingKpIndex = ref<number | null>(null)
+    const editingKpName = ref('')
+
+    // 从服务器加载考点列表
+    const loadKnowledgePointOptions = async () => {
+      loadingKnowledgePoints.value = true
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points`)
+        const data = await resp.json()
+        if (data?.ok && Array.isArray(data.points)) {
+          knowledgePointOptions.value = data.points
+        }
+      } catch (e) {
+        console.warn('加载考点列表失败', e)
+      } finally {
+        loadingKnowledgePoints.value = false
+      }
+    }
+
+    // 保存考点列表到服务器
+    const saveKnowledgePointOptions = async () => {
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ points: knowledgePointOptions.value })
+        })
+        const data = await resp.json()
+        if (data?.ok && Array.isArray(data.points)) {
+          knowledgePointOptions.value = data.points
+        }
+      } catch (e) {
+        console.warn('保存考点列表失败', e)
+      }
+    }
+
+    // 添加新考点
+    const addKnowledgePoint = async () => {
+      const name = newKpName.value.trim()
+      if (!name) {
+        ElMessage.warning('请输入考点名称')
+        return
+      }
+      if (knowledgePointOptions.value.includes(name)) {
+        ElMessage.warning('该考点已存在')
+        return
+      }
+      knowledgePointOptions.value.push(name)
+      await saveKnowledgePointOptions()
+      newKpName.value = ''
+      ElMessage.success('添加成功')
+    }
+
+    // 开始编辑考点
+    const startEditKp = (index: number) => {
+      editingKpIndex.value = index
+      editingKpName.value = knowledgePointOptions.value[index]
+    }
+
+    // 保存编辑的考点
+    const saveEditKp = async () => {
+      if (editingKpIndex.value === null) return
+      const name = editingKpName.value.trim()
+      if (!name) {
+        ElMessage.warning('考点名称不能为空')
+        return
+      }
+      // 检查是否与其他考点重名
+      const existingIndex = knowledgePointOptions.value.findIndex((kp, i) => kp === name && i !== editingKpIndex.value)
+      if (existingIndex >= 0) {
+        ElMessage.warning('该考点名称已存在')
+        return
+      }
+      knowledgePointOptions.value[editingKpIndex.value] = name
+      await saveKnowledgePointOptions()
+      editingKpIndex.value = null
+      editingKpName.value = ''
+      ElMessage.success('修改成功')
+    }
+
+    // 取消编辑
+    const cancelEditKp = () => {
+      editingKpIndex.value = null
+      editingKpName.value = ''
+    }
+
+    // 删除考点
+    const deleteKnowledgePoint = async (index: number) => {
+      knowledgePointOptions.value.splice(index, 1)
+      await saveKnowledgePointOptions()
+      ElMessage.success('删除成功')
+    }
+
+    // 重置为默认考点列表
+    const resetKnowledgePoints = async () => {
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points/reset`, {
+          method: 'POST'
+        })
+        const data = await resp.json()
+        if (data?.ok && Array.isArray(data.points)) {
+          knowledgePointOptions.value = data.points
+          ElMessage.success('已重置为默认列表')
+        } else {
+          throw new Error(data?.msg || '重置失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('重置失败: ' + (e?.message || e))
+      }
+    }
+
     // 部门用户预览相关
     const deptUsersDialogVisible = ref(false)
     const loadingDeptUsers = ref(false)
@@ -2274,6 +2549,68 @@ export default defineComponent({
       return questions.value.filter(q => q.status === 'approved')
     })
 
+    // 标准化知识点字符串（用于比较和去重）
+    const normalizeKnowledgePoint = (kp: string): string => {
+      if (!kp) return ''
+      return kp
+        .replace(/[（(]/g, '(')   // 全角/半角左括号统一为半角
+        .replace(/[）)]/g, ')')   // 全角/半角右括号统一为半角
+        .replace(/\s+/g, '')       // 移除所有空格
+        .toLowerCase()             // 转小写
+    }
+
+    // 检查两个知识点是否相同（忽略括号和空格差异）
+    const isSameKnowledgePoint = (kp1: string, kp2: string): boolean => {
+      return normalizeKnowledgePoint(kp1) === normalizeKnowledgePoint(kp2)
+    }
+
+    // 从题目解析中提取知识点列表
+    const extractKnowledgePointsFromAnalysis = (analysis: string): string[] => {
+      if (!analysis) return []
+      const kpMatch = analysis.match(/知识点[：:]\s*(.+?)\s*$/s)
+      if (!kpMatch) return []
+      const kpText = kpMatch[1]
+      // 提取《xxx》格式的知识点
+      const bookPattern = /《([^》]+)》/g
+      const points: string[] = []
+      let match
+      while ((match = bookPattern.exec(kpText)) !== null) {
+        const kp = match[1].trim()
+        // 使用标准化比较进行去重
+        if (kp && !points.some(p => isSameKnowledgePoint(p, kp))) {
+          points.push(kp)
+        }
+      }
+      return points
+    }
+
+    // 获取所有已通过题目的知识点列表（使用标准化比较去重）
+    const availableKnowledgePoints = computed(() => {
+      const kpList: string[] = []
+      approvedQuestions.value.forEach(q => {
+        const kps = extractKnowledgePointsFromAnalysis(q.analysis || '')
+        kps.forEach(kp => {
+          // 使用标准化比较去重
+          if (!kpList.some(existing => isSameKnowledgePoint(existing, kp))) {
+            kpList.push(kp)
+          }
+        })
+      })
+      return kpList.sort()
+    })
+
+    // 合并预设考点和题目中检测到的考点（去重，使用标准化比较）
+    const mergedKnowledgePointOptions = computed(() => {
+      const result: string[] = [...knowledgePointOptions.value]
+      // 添加题目中检测到但预设中没有的考点
+      availableKnowledgePoints.value.forEach(kp => {
+        if (!result.some(preset => isSameKnowledgePoint(preset, kp))) {
+          result.push(kp)
+        }
+      })
+      return result.sort()
+    })
+
     // 根据筛选和搜索过滤后的题目
     const filteredPaperQuestions = computed(() => {
       let result = approvedQuestions.value
@@ -2285,6 +2622,17 @@ export default defineComponent({
         result = result.filter(q => q.qtype !== 'saq' && isMultiChoice(q))
       } else if (paperQuestionFilter.value === 'saq') {
         result = result.filter(q => q.qtype === 'saq')
+      }
+
+      // 按知识点筛选（使用标准化比较，忽略括号和空格差异）
+      if (selectedKnowledgePoints.value.length > 0) {
+        result = result.filter(q => {
+          const qKps = extractKnowledgePointsFromAnalysis(q.analysis || '')
+          // 题目的知识点与选中的知识点有交集（使用标准化比较）
+          return qKps.some(qKp => 
+            selectedKnowledgePoints.value.some(selKp => isSameKnowledgePoint(qKp, selKp))
+          )
+        })
       }
 
       // 按关键词搜索
@@ -2958,10 +3306,24 @@ export default defineComponent({
       previewImageVisible.value = true
     }
 
-    const approveQuestion = async (qid: string) => {
+    const approveQuestion = async (qid: string, analysis?: string) => {
       try {
         const question = (questions.value || []).find(q => q.qid === qid)
         if (!question) return
+        
+        // 如果没有解析，弹窗提醒
+        if (!analysis) {
+          await ElMessageBox.confirm(
+            '该题目尚无解析，确定要通过吗？',
+            '提示',
+            {
+              confirmButtonText: '确定通过',
+              cancelButtonText: '取消',
+              type: 'warning'
+            }
+          )
+        }
+        
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
           headers: getAuthHeaders(),
@@ -2970,7 +3332,9 @@ export default defineComponent({
         const data = await resp.json()
         if (data?.ok) { ElMessage.success('已通过'); loadQuestions() }
         else throw new Error(data?.msg || '操作失败')
-      } catch (error: any) { ElMessage.error('操作失败：' + (error?.message || error)) }
+      } catch (error: any) { 
+        if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) 
+      }
     }
 
     const rejectQuestion = async (qid: string) => {
@@ -3402,6 +3766,62 @@ export default defineComponent({
       return cleaned.trim()
     }
 
+    // 从解析文本中提取知识点
+    const extractKnowledgePoint = (analysis: string): { explain: string; kp: string } => {
+      if (!analysis) return { explain: '', kp: '' }
+      // 匹配 "知识点：《XXX》、《YYY》" 或 "知识点：《XXX》" 格式
+      const kpMatch = analysis.match(/\n*知识点[：:]\s*(.+?)\s*$/s)
+      if (kpMatch) {
+        const kp = kpMatch[1].trim()
+        const explain = analysis.slice(0, kpMatch.index).trim()
+        return { explain, kp }
+      }
+      return { explain: analysis, kp: '' }
+    }
+
+    // 智能格式化知识点：自动添加《》和、
+    const formatKnowledgePoint = (kp: string): string => {
+      if (!kp || !kp.trim()) return ''
+      
+      // 如果已经是标准格式（全部都有《》），直接返回
+      const standardPattern = /^《[^》]+》(、《[^》]+》)*$/
+      if (standardPattern.test(kp.trim())) {
+        return kp.trim()
+      }
+      
+      // 先提取已有的《》内容和其他文本
+      // 将输入按多种分隔符拆分：、，,；;空格
+      let text = kp.trim()
+      
+      // 提取所有《xxx》格式的内容
+      const existingBooks: string[] = []
+      text = text.replace(/《([^》]+)》/g, (_, content) => {
+        existingBooks.push(content.trim())
+        return '\x00'  // 占位符
+      })
+      
+      // 将剩余文本按分隔符拆分
+      const separators = /[、，,；;\s]+/
+      const parts = text.split(separators).filter(p => p && p !== '\x00')
+      
+      // 合并所有知识点名称
+      const allItems = [...existingBooks, ...parts].filter(item => item.trim())
+      
+      if (allItems.length === 0) return ''
+      
+      // 格式化为标准格式
+      return allItems.map(item => `《${item.trim()}》`).join('、')
+    }
+
+    // 将知识点拼接回解析文本
+    const combineKnowledgePoint = (explain: string, kp: string): string => {
+      if (!kp || !kp.trim()) return explain
+      // 自动格式化知识点
+      const formattedKp = formatKnowledgePoint(kp)
+      if (!formattedKp) return explain
+      return `${explain}\n\n知识点：${formattedKp}`
+    }
+
     // 按需加载题目图片
     const loadQuestionImages = async (qid: string): Promise<any> => {
       try {
@@ -3424,9 +3844,14 @@ export default defineComponent({
       editingId.value = row.qid
       editBuf.stem = row.stem || ''
       editBuf.answer = row.answer || ''
-      // 清理 markdown 符号，方便编辑
-      editBuf.explain = cleanMarkdownForEdit(row.analysis || '')
-
+      // 清理 markdown 符号，方便编辑，并提取知识点
+      const cleanedAnalysis = cleanMarkdownForEdit(row.analysis || '')
+      const { explain: extractedExplain, kp } = extractKnowledgePoint(cleanedAnalysis)
+      editBuf.explain = extractedExplain
+      editBuf.knowledge_point = kp
+      // 将知识点文本解析为数组供多选组件使用
+      editSelectedKnowledgePoints.value = extractKnowledgePointsFromAnalysis(row.analysis || '')
+      
       const map: Record<string, string> = {}
       ;(row.options || []).forEach((o: any) => {
         map[o.label] = o.text
@@ -3469,12 +3894,18 @@ export default defineComponent({
       if (!isEditing(row.qid)) return
       try {
         // 1) 把当前编辑缓冲区打包发给后端（注意带上 answer 和图片）
+        // 从多选组件获取知识点，转换为标准格式
+        const kpText = editSelectedKnowledgePoints.value.length > 0 
+          ? editSelectedKnowledgePoints.value.map(kp => `《${kp}》`).join('、')
+          : ''
+        // 将知识点拼接回解析文本
+        const finalExplain = combineKnowledgePoint(editBuf.explain, kpText)
         const itemData: any = {
           id: row.qid,
           stem: editBuf.stem,
           options: { ...editBuf.options },
           answer: (editBuf.answer || '').toUpperCase(),
-          explain: editBuf.explain,
+          explain: finalExplain,
         }
         
         // 添加图片数据
@@ -4806,6 +5237,7 @@ export default defineComponent({
         loadPaperList()
         loadPublishedExams()
         checkPendingTask()
+        loadKnowledgePointOptions()
       }
       if (showAdminTabs.value) {
         loadUsers()
@@ -4842,10 +5274,11 @@ export default defineComponent({
       loadDeletedQuestions, restoreQuestion, batchRestore,
       permanentDelete, batchPermanentDelete, clearRecycleBin,
       // 试卷生成相关
-      questions, filteredQuestions, statusFilter, loadingQuestions, showingAnalysis, approvingAll,
+      questions, filteredQuestions, statusFilter, searchQuery, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage,
       singleScore, multiScore, indeterminateScore, saqScore,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
+      selectedKnowledgePoints, availableKnowledgePoints, mergedKnowledgePointOptions,
       approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
       paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility,
       exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
@@ -4868,6 +5301,10 @@ export default defineComponent({
       publishExam, loadPublishedExams, cancelExam, deleteExam, getExamStatusType, getExamStatusText, Bell, Plus,
       // 部门相关（使用预设选项）
       departmentOptions,
+      // 知识点/考点预设选项
+      knowledgePointOptions, editSelectedKnowledgePoints,
+      kpManageDialogVisible, newKpName, editingKpIndex, editingKpName,
+      addKnowledgePoint, startEditKp, saveEditKp, cancelEditKp, deleteKnowledgePoint, resetKnowledgePoints,
       // 部门用户预览相关
       deptUsersDialogVisible, loadingDeptUsers, deptUsersList, previewDeptUsers,
       // 简答题评分
@@ -4875,7 +5312,7 @@ export default defineComponent({
       // 成绩统计相关
       gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats,
       // 易错知识点统计
-      topKpErrors, getKpBarWidth, getKpBarColor, Warning
+      topKpErrors, getKpBarWidth, getKpBarColor, Warning, Delete
     }
   }
 })
@@ -5217,6 +5654,43 @@ export default defineComponent({
 .opt-hint {
   font-size: 12px;
   color: #9ca3af;
+}
+
+.knowledge-point-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.knowledge-point-hint .el-icon {
+  font-size: 14px;
+}
+
+/* 考点管理对话框样式 */
+.kp-manage-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 12px;
+}
+.kp-manage-item:last-child {
+  border-bottom: none;
+}
+.kp-manage-item:hover {
+  background: #f9fafb;
+}
+.kp-manage-item .kp-name {
+  flex: 1;
+  font-size: 14px;
+  color: #303133;
+}
+.kp-manage-item .kp-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .mcq-tab-content {
