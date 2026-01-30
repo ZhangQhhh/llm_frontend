@@ -374,12 +374,12 @@
                     size="small"
                     style="width: 160px;"
                   >
-                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
+                    <!-- <el-option label="Qwen-Plus (云端)" value="qwen-plus" /> -->
                     <el-option label="Qwen (通用)" valwue="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
-                    <el-option label="DeepSeekv3_2" value="deepseek" />
-                    <el-option label="DeepSeek 云端" value="deepseek-cloud" />
-                    <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" />
+                    <el-option label="DeepSeekv3.1" value="deepseek" />
+                    <!-- <el-option label="DeepSeek 云端" value="deepseek-cloud" /> -->
+                    <!-- <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" /> -->
                   </el-select>
                 </div>
                 <div class="config-item">
