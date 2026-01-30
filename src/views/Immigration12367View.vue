@@ -41,7 +41,7 @@
                     <template #prefix><el-icon><Cpu /></el-icon></template>
                     <el-option label="Qwen (通用)" value="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
-                    <el-option label="DeepSeek-R1" value="deepseek" />
+                    <el-option label="DeepSeekV3.1" value="deepseek" />
                     <!-- <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" /> -->
                   </el-select>
                   
@@ -120,7 +120,7 @@
                             <div class="spinner-small"></div>
                             <span>正在深度分析中...</span>
                           </div>
-                          <div v-else class="thinking-text">{{ thinking }}</div>
+                          <div v-else class="thinking-text markdown-body" v-html="renderMarkdown(thinking)"></div>
                         </div>
                       </el-collapse-item>
                     </el-collapse>
@@ -1089,8 +1089,22 @@ export default defineComponent({
   font-size: 14px;
   color: #475569;
   white-space: pre-wrap;
-  line-height: 1.8;
+  line-height: 1.5;
   min-height: 20px;
+}
+
+.thinking-text.markdown-body {
+  font-size: 14px;
+  color: #475569;
+}
+
+.thinking-text.markdown-body :deep(p) {
+  margin-bottom: 0.35rem;
+}
+
+.thinking-text.markdown-body :deep(ul),
+.thinking-text.markdown-body :deep(ol) {
+  margin: 0 0 0.35rem 1.1rem;
 }
 
 .custom-scrollbar {

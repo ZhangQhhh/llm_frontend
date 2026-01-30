@@ -1,568 +1,813 @@
 <template>
-  <div class="data-analysis-page">
-    <el-container class="main-container">
-      <el-main>
-        <div class="content-wrapper">
-          <!-- 模拟数据模式提示 -->
-          <el-alert
-            v-if="isMockMode"
-            title="模拟数据模式"
-            type="warning"
-            :closable="false"
-            show-icon
-            class="mock-alert"
-          >
-            <template #default>
-              当前处于模拟数据模式，分析结果为模拟数据。移除 URL 中的 <code>?mock=1</code> 参数可切换回正常模式。
-            </template>
-          </el-alert>
+  <div class="research-report-container">
+    <!-- 背景装饰 -->
+    <div class="bg-decoration">
+      <div class="gradient-orb orb-1"></div>
+      <div class="gradient-orb orb-2"></div>
+      <div class="gradient-orb orb-3"></div>
+    </div>
 
-          <!-- 主标题卡片 -->
-          <el-card class="header-card glass-effect" shadow="hover">
-            <div class="header-content">
-              <el-icon :size="60" color="#409eff">
-                <DataAnalysis />
-              </el-icon>
-              <div class="header-text">
-                <h1>数研报告</h1>
-                <p>基于 Excel 数据进行深度分析和对比</p>
+    <div class="main-content">
+      <!-- 顶部标题区 -->
+      <header class="page-header animate-slide-down">
+        <div class="header-content">
+          <div class="title-section">
+            <div class="icon-wrapper">
+              <el-icon :size="40"><TrendCharts /></el-icon>
+            </div>
+            <div class="title-text">
+              <h1>数研报告中心</h1>
+              <p>Digital Research & Predictive Analytics Platform</p>
+            </div>
+          </div>
+          <el-tag effect="plain" size="large" round class="version-tag">
+            <el-icon class="mr-1"><Medal /></el-icon> Pro Edition
+          </el-tag>
+        </div>
+      </header>
+
+      <!-- 主工作区 -->
+      <div class="workspace">
+        
+        <!-- 左侧：预测大屏 -->
+        <section class="forecast-section animate-slide-left">
+          <div class="section-card forecast-card">
+            <div class="card-header">
+              <h2><el-icon><DataLine /></el-icon> 智能预测大屏</h2>
+              <div class="header-controls">
+                <el-input-number 
+                  v-model="forecastMonths" 
+                  :min="1" 
+                  :max="24" 
+                  size="small"
+                  class="month-selector"
+                />
+                <span class="unit-label">个月</span>
+                <el-button 
+                  type="primary" 
+                  :loading="predicting"
+                  @click="handleForecast"
+                  round
+                  class="predict-btn"
+                >
+                  <el-icon v-if="!predicting"><MagicStick /></el-icon>
+                  {{ predicting ? '预测中...' : '开始预测' }}
+                </el-button>
               </div>
             </div>
-          </el-card>
 
-          <!-- 文件上传卡片 -->
-          <el-card class="upload-card glass-effect" shadow="hover">
-            <div class="card-title">
-              <el-icon><UploadFilled /></el-icon>
-              <span>上传数据文件</span>
+            <div class="chart-container" v-loading="predicting" element-loading-text="AI 正在计算未来趋势...">
+              <div ref="chartRef" class="echarts-box"></div>
+              <div v-if="!hasForecastData && !predicting" class="empty-state">
+                <el-icon :size="80" color="#d0d0d0"><TrendCharts /></el-icon>
+                <p>点击上方按钮开始智能预测</p>
+              </div>
             </div>
 
-            <el-form ref="formRef" :model="form" label-width="140px" class="upload-form">
-              <!-- 往年数据上传 -->
-              <el-form-item label="往年数据">
-                <div class="upload-section">
-                  <el-upload
-                    ref="previousUploadRef"
-                    class="upload-area"
-                    drag
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    :on-change="handlePreviousFileChange"
-                    accept=".xlsx,.xls"
-                  >
-                    <div class="upload-content">
-                      <el-icon class="upload-icon" :size="50">
-                        <FolderOpened />
-                      </el-icon>
-                      <div class="upload-text">
-                        <p class="primary-text">点击或拖拽上传往年数据</p>
-                        <p class="secondary-text">仅支持 .xlsx 格式</p>
-                      </div>
-                    </div>
-                  </el-upload>
-
-                  <!-- 文件信息显示 -->
-                  <transition name="el-zoom-in-top">
-                    <div v-if="form.previousFile" class="file-info">
-                      <el-tag type="success" size="large" closable @close="clearPreviousFile">
-                        <el-icon><DocumentChecked /></el-icon>
-                        {{ form.previousFile.name }}
-                        <span class="file-size">{{ formatFileSize(form.previousFile.size) }}</span>
-                      </el-tag>
-                    </div>
-                  </transition>
-                </div>
-              </el-form-item>
-
-              <!-- 今年数据上传 -->
-              <el-form-item label="今年数据">
-                <div class="upload-section">
-                  <el-upload
-                    ref="currentUploadRef"
-                    class="upload-area"
-                    drag
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    :on-change="handleCurrentFileChange"
-                    accept=".xlsx,.xls"
-                  >
-                    <div class="upload-content">
-                      <el-icon class="upload-icon" :size="50">
-                        <FolderOpened />
-                      </el-icon>
-                      <div class="upload-text">
-                        <p class="primary-text">点击或拖拽上传今年数据</p>
-                        <p class="secondary-text">仅支持 .xlsx 格式</p>
-                      </div>
-                    </div>
-                  </el-upload>
-
-                  <!-- 文件信息显示 -->
-                  <transition name="el-zoom-in-top">
-                    <div v-if="form.currentFile" class="file-info">
-                      <el-tag type="success" size="large" closable @close="clearCurrentFile">
-                        <el-icon><DocumentChecked /></el-icon>
-                        {{ form.currentFile.name }}
-                        <span class="file-size">{{ formatFileSize(form.currentFile.size) }}</span>
-                      </el-tag>
-                    </div>
-                  </transition>
-                </div>
-              </el-form-item>
-
-              <!-- 往年流量数据上传 -->
-              <el-form-item label="往年流量数据">
-                <div class="upload-section">
-                  <el-upload
-                    ref="previousTrafficUploadRef"
-                    class="upload-area"
-                    drag
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    :on-change="handlePreviousTrafficFileChange"
-                    accept=".xlsx,.xls"
-                  >
-                    <div class="upload-content">
-                      <el-icon class="upload-icon" :size="50">
-                        <FolderOpened />
-                      </el-icon>
-                      <div class="upload-text">
-                        <p class="primary-text">点击或拖拽上传往年流量数据</p>
-                        <p class="secondary-text">仅支持 .xlsx 格式</p>
-                      </div>
-                    </div>
-                  </el-upload>
-
-                  <!-- 文件信息显示 -->
-                  <transition name="el-zoom-in-top">
-                    <div v-if="form.previousTrafficFile" class="file-info">
-                      <el-tag type="success" size="large" closable @close="clearPreviousTrafficFile">
-                        <el-icon><DocumentChecked /></el-icon>
-                        {{ form.previousTrafficFile.name }}
-                        <span class="file-size">{{ formatFileSize(form.previousTrafficFile.size) }}</span>
-                      </el-tag>
-                    </div>
-                  </transition>
-                </div>
-              </el-form-item>
-
-              <!-- 今年流量数据上传 -->
-              <el-form-item label="今年流量数据">
-                <div class="upload-section">
-                  <el-upload
-                    ref="currentTrafficUploadRef"
-                    class="upload-area"
-                    drag
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    :on-change="handleCurrentTrafficFileChange"
-                    accept=".xlsx,.xls"
-                  >
-                    <div class="upload-content">
-                      <el-icon class="upload-icon" :size="50">
-                        <FolderOpened />
-                      </el-icon>
-                      <div class="upload-text">
-                        <p class="primary-text">点击或拖拽上传今年流量数据</p>
-                        <p class="secondary-text">仅支持 .xlsx 格式</p>
-                      </div>
-                    </div>
-                  </el-upload>
-
-                  <!-- 文件信息显示 -->
-                  <transition name="el-zoom-in-top">
-                    <div v-if="form.currentTrafficFile" class="file-info">
-                      <el-tag type="success" size="large" closable @close="clearCurrentTrafficFile">
-                        <el-icon><DocumentChecked /></el-icon>
-                        {{ form.currentTrafficFile.name }}
-                        <span class="file-size">{{ formatFileSize(form.currentTrafficFile.size) }}</span>
-                      </el-tag>
-                    </div>
-                  </transition>
-                </div>
-              </el-form-item>
-
-              <!-- 操作按钮 -->
-              <el-form-item>
-                <div class="action-buttons">
-                  <el-button
-                    type="primary"
-                    size="large"
-                    :loading="loading"
-                    :disabled="!canGenerate"
-                    @click="handleGenerate"
-                    round
-                    class="generate-btn"
-                  >
-                    <el-icon v-if="!loading" class="btn-icon"><DataAnalysis /></el-icon>
-                    {{ loading ? '分析中...' : '开始分析' }}
-                  </el-button>
-                  <el-button
-                    type="success"
-                    size="large"
-                    @click="downloadTemplate"
-                    round
-                  >
-                    <el-icon><Download /></el-icon>
-                    示例文件下载
-                  </el-button>
-                  <el-button
-                    size="large"
-                    :disabled="loading"
-                    @click="handleReset"
-                    round
-                  >
-                    <el-icon><RefreshLeft /></el-icon>
-                    重置
-                  </el-button>
-                </div>
-              </el-form-item>
-            </el-form>
-
-            <!-- 生成进度 -->
+            <!-- 统计卡片 -->
             <transition name="el-zoom-in-top">
-              <div v-if="loading" class="progress-section">
-                <el-progress
-                  :percentage="100"
-                  :indeterminate="true"
-                  :stroke-width="8"
-                  striped
-                  striped-flow
-                />
-                <p class="progress-text">
-                  <el-icon class="is-loading"><Loading /></el-icon>
-                  正在分析数据，请稍候...
-                </p>
+              <div v-if="hasForecastData" class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-icon peak"><el-icon><Top /></el-icon></div>
+                  <div class="stat-info">
+                    <span class="label">预测峰值</span>
+                    <span class="value">{{ stats.max }}</span>
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon low"><el-icon><Bottom /></el-icon></div>
+                  <div class="stat-info">
+                    <span class="label">预测低谷</span>
+                    <span class="value">{{ stats.min }}</span>
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon avg"><el-icon><DataBoard /></el-icon></div>
+                  <div class="stat-info">
+                    <span class="label">平均流量</span>
+                    <span class="value">{{ stats.avg }}</span>
+                  </div>
+                </div>
+                <div class="stat-card highlight">
+                  <div class="stat-icon growth"><el-icon><TrendCharts /></el-icon></div>
+                  <div class="stat-info">
+                    <span class="label">增长趋势</span>
+                    <span class="value growth-value">+{{ stats.growth }}%</span>
+                  </div>
+                </div>
               </div>
             </transition>
-          </el-card>
+          </div>
+        </section>
 
-          <!-- 使用说明卡片 -->
-          <el-card class="info-card" shadow="hover">
-            <el-collapse v-model="activeCollapse">
-              <el-collapse-item name="1">
-                <template #title>
-                  <div class="collapse-title">
-                    <el-icon><QuestionFilled /></el-icon>
-                    <span>使用说明</span>
+        <!-- 右侧：功能区 -->
+        <aside class="sidebar animate-slide-right">
+          
+          <!-- Tab 切换 -->
+          <el-tabs v-model="activeTab" class="function-tabs">
+            
+            <!-- Tab 1: 报告生成 -->
+            <el-tab-pane label="报告生成" name="generate">
+              <div class="section-card generate-card">
+                <div class="card-header">
+                  <h2><el-icon><Document /></el-icon> 生成出入境综合报告</h2>
+                </div>
+
+                <div class="upload-area">
+                  
+                  <!-- 月份选择 -->
+                  <div class="month-selector-group">
+                    <div class="selector-item">
+                      <label>基准期月份</label>
+                      <el-date-picker
+                        v-model="baseMonth"
+                        type="month"
+                        placeholder="选择基准期月份"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        size="default"
+                        style="width: 100%"
+                      />
+                    </div>
+                    <div class="selector-item">
+                      <label>对比期月份</label>
+                      <el-date-picker
+                        v-model="compareMonth"
+                        type="month"
+                        placeholder="选择对比期月份"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        size="default"
+                        style="width: 100%"
+                      />
+                    </div>
                   </div>
-                </template>
-                <div class="info-content">
-                  <el-steps :active="currentStep" finish-status="success" align-center>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><Upload /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">上传往年数据</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">选择往年的 Excel 数据文件</span>
-                      </template>
-                    </el-step>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><Upload /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">上传今年数据</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">选择今年的 Excel 数据文件</span>
-                      </template>
-                    </el-step>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><Upload /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">上传往年流量数据</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">选择往年的流量数据文件</span>
-                      </template>
-                    </el-step>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><Upload /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">上传今年流量数据</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">选择今年的流量数据文件</span>
-                      </template>
-                    </el-step>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><DataAnalysis /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">数据分析</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">点击按钮开始数据分析</span>
-                      </template>
-                    </el-step>
-                    <el-step>
-                      <template #icon>
-                        <el-icon :size="24"><Download /></el-icon>
-                      </template>
-                      <template #title>
-                        <span class="step-title">查看结果</span>
-                      </template>
-                      <template #description>
-                        <span class="step-desc">分析完成后显示结果</span>
-                      </template>
-                    </el-step>
-                  </el-steps>
 
-                  <el-divider />
+                  <!-- 人员数据 -->
+                  <div class="upload-group">
+                    <div class="group-title">
+                      <el-icon><User /></el-icon>
+                      <span>人员月度数据</span>
+                    </div>
+                    <div class="file-grid">
+                      <div 
+                        class="file-box" 
+                        :class="{ active: files.basePeriod }"
+                        @click="triggerUpload('basePeriod')"
+                      >
+                        <input type="file" ref="fileInput_basePeriod" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'basePeriod')" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">基准期</span>
+                        <span v-if="files.basePeriod" class="file-name">{{ files.basePeriod.name }}</span>
+                      </div>
+                      <div 
+                        class="file-box" 
+                        :class="{ active: files.comparePeriod }"
+                        @click="triggerUpload('comparePeriod')"
+                      >
+                        <input type="file" ref="fileInput_comparePeriod" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'comparePeriod')" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">对比期</span>
+                        <span v-if="files.comparePeriod" class="file-name">{{ files.comparePeriod.name }}</span>
+                      </div>
+                    </div>
+                  </div>
 
-                  <div class="tips-section">
-                    <h4>
-                      <el-icon><InfoFilled /></el-icon>
-                      注意事项
-                    </h4>
-                    <ul class="tips-list">
-                      <li>请确保上传的 Excel 文件格式正确，包含完整的数据字段</li>
-                      <li>需要上传四个文件：往年数据、今年数据、往年流量数据、今年流量数据</li>
-                      <li>往年数据和今年数据的表格结构应保持一致，流量数据同理</li>
-                      <li>文件大小建议不超过 20MB，以确保处理速度</li>
-                      <li>分析结果将自动下载为 Word 文档</li>
-                    </ul>
+                  <!-- 航班数据 -->
+                  <div class="upload-group">
+                    <div class="group-title">
+                      <el-icon><Ship /></el-icon>
+                      <span>航班年度数据</span>
+                    </div>
+                    <div class="file-grid">
+                      <div 
+                        class="file-box" 
+                        :class="{ active: files.prevTraffic }"
+                        @click="triggerUpload('prevTraffic')"
+                      >
+                        <input type="file" ref="fileInput_prevTraffic" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'prevTraffic')" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">基准年</span>
+                        <span v-if="files.prevTraffic" class="file-name">{{ files.prevTraffic.name }}</span>
+                      </div>
+                      <div 
+                        class="file-box" 
+                        :class="{ active: files.currTraffic }"
+                        @click="triggerUpload('currTraffic')"
+                      >
+                        <input type="file" ref="fileInput_currTraffic" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'currTraffic')" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">对比年</span>
+                        <span v-if="files.currTraffic" class="file-name">{{ files.currTraffic.name }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 操作按钮 -->
+                  <div class="action-buttons">
+                    <el-button 
+                      type="primary" 
+                      size="large" 
+                      :loading="generating"
+                      :disabled="!canGenerate"
+                      @click="handleGenerate"
+                      class="gen-btn"
+                      round
+                    >
+                      <el-icon v-if="!generating"><Promotion /></el-icon>
+                      {{ generating ? '生成中...' : '生成报告' }}
+                    </el-button>
+                    <el-button size="large" @click="resetForm" round>
+                      <el-icon><RefreshLeft /></el-icon>
+                      重置
+                    </el-button>
+                  </div>
+
+                  <!-- 进度条 -->
+                  <transition name="el-fade-in">
+                    <div v-if="generating" class="progress-wrapper">
+                      <div class="progress-label">
+                        <span>{{ progressStep }}</span>
+                        <span>{{ progressPercent }}%</span>
+                      </div>
+                      <el-progress 
+                        :percentage="progressPercent" 
+                        :status="progressStatus"
+                        :stroke-width="8"
+                        striped
+                        striped-flow
+                      />
+                    </div>
+                  </transition>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- Tab 2: 文档上传 -->
+            <el-tab-pane label="文档上传" name="upload">
+              <div class="section-card upload-card">
+                <div class="card-header">
+                  <h2><el-icon><Upload /></el-icon> 上传修改后的报告</h2>
+                </div>
+
+                <div class="upload-doc-area">
+                  <el-upload
+                    ref="uploadRef"
+                    class="doc-uploader"
+                    drag
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    :on-change="handleDocFileChange"
+                    accept=".doc,.docx"
+                  >
+                    <el-icon class="upload-icon"><UploadFilled /></el-icon>
+                    <div class="upload-text">
+                      <p class="primary">点击或拖拽上传 Word 文档</p>
+                      <p class="secondary">支持 .doc / .docx 格式</p>
+                    </div>
+                  </el-upload>
+
+                  <transition name="el-zoom-in-top">
+                    <div v-if="uploadDocFile" class="selected-file">
+                      <el-icon class="file-icon"><Document /></el-icon>
+                      <div class="file-info">
+                        <span class="name">{{ uploadDocFile.name }}</span>
+                        <span class="size">{{ formatFileSize(uploadDocFile.size) }}</span>
+                      </div>
+                      <el-button 
+                        text 
+                        type="danger"
+                        @click="clearUploadDoc"
+                      >
+                        <el-icon><Close /></el-icon>
+                      </el-button>
+                    </div>
+                  </transition>
+
+                  <div class="upload-options">
+                    <el-checkbox v-model="overwriteDoc">覆盖同名文件</el-checkbox>
+                    <el-tooltip content="勾选后，如果存在同名文件将被覆盖；不勾选则自动添加时间戳" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+
+                  <el-button 
+                    type="primary" 
+                    size="large"
+                    :loading="uploading"
+                    :disabled="!uploadDocFile"
+                    @click="handleUploadDoc"
+                    class="upload-btn"
+                    round
+                  >
+                    <el-icon v-if="!uploading"><Upload /></el-icon>
+                    {{ uploading ? '上传中...' : '确认上传' }}
+                  </el-button>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- Tab 3: 文档管理 -->
+            <el-tab-pane label="文档管理" name="docs">
+              <div class="section-card docs-card">
+                <div class="card-header">
+                  <h2><el-icon><Folder /></el-icon> 已保存的文档</h2>
+                  <el-button 
+                    text 
+                    @click="loadDocuments"
+                    :loading="loadingDocs"
+                    size="small"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                  </el-button>
+                </div>
+
+                <div class="docs-list" v-loading="loadingDocs">
+                  <div v-if="documents.length === 0" class="empty-docs">
+                    <el-icon :size="50" color="#ccc"><DocumentCopy /></el-icon>
+                    <p>暂无文档</p>
+                  </div>
+                  <div 
+                    v-else 
+                    v-for="doc in documents" 
+                    :key="doc.name"
+                    class="doc-item"
+                  >
+                    <div class="doc-info">
+                      <el-icon class="doc-icon"><Document /></el-icon>
+                      <div class="doc-details">
+                        <span class="doc-name" :title="doc.name">{{ doc.name }}</span>
+                        <span class="doc-meta">{{ formatFileSize(doc.size) }} · {{ formatDate(doc.updatedAt) }}</span>
+                      </div>
+                    </div>
+                    <div class="doc-actions">
+                      <el-button 
+                        text 
+                        size="small"
+                        @click="previewDocument(doc)"
+                      >
+                        <el-icon><View /></el-icon>
+                      </el-button>
+                      <el-button 
+                        text 
+                        size="small"
+                        @click="downloadDocument(doc)"
+                      >
+                        <el-icon><Download /></el-icon>
+                      </el-button>
+                      <el-button 
+                        text 
+                        type="danger"
+                        size="small"
+                        @click="deleteDocument(doc)"
+                      >
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
+                    </div>
                   </div>
                 </div>
-              </el-collapse-item>
-            </el-collapse>
-          </el-card>
-        </div>
-      </el-main>
-    </el-container>
+              </div>
+            </el-tab-pane>
+
+          </el-tabs>
+
+        </aside>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { useRouter } from 'vue-router';
-import {
-  DataAnalysis,
-  UploadFilled,
-  FolderOpened,
-  DocumentChecked,
-  RefreshLeft,
-  Loading,
-  QuestionFilled,
-  Upload,
-  Download,
-  InfoFilled
-} from '@element-plus/icons-vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ElMessage, ElNotification, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
-import http from '@/config/api/http';
-import { API_ENDPOINTS } from '@/config/api/api';
-import { isMockEnabled } from '@/mocks/mockService';
-import { mockGenerateReportResponse } from '@/mocks/dataAnalysisMocks';
+import { 
+  TrendCharts, DataLine, Document, FolderAdd, Ship, 
+  MagicStick, Top, Bottom, DataBoard, User, Folder,
+  Refresh, DocumentCopy, View, Download, Delete,
+  Promotion, RefreshLeft, Medal, Upload, UploadFilled,
+  Close, QuestionFilled
+} from '@element-plus/icons-vue';
+import * as echarts from 'echarts';
+import { davHttp } from '@/config/api/http';
+import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
 
-interface FormData {
-  previousFile: File | null;
-  currentFile: File | null;
-  previousTrafficFile: File | null;
-  currentTrafficFile: File | null;
+// --- State ---
+const activeTab = ref('generate');
+const forecastMonths = ref(6);
+const predicting = ref(false);
+const hasForecastData = ref(false);
+const chartRef = ref<HTMLElement | null>(null);
+let chartInstance: echarts.ECharts | null = null;
+
+// 月份选择
+const baseMonth = ref('');
+const compareMonth = ref('');
+
+const files = reactive({
+  basePeriod: null as File | null,
+  comparePeriod: null as File | null,
+  prevTraffic: null as File | null,
+  currTraffic: null as File | null
+});
+
+const generating = ref(false);
+const progressPercent = ref(0);
+const progressStep = ref('准备中...');
+const progressStatus = ref('');
+
+const fileInput_basePeriod = ref();
+const fileInput_comparePeriod = ref();
+const fileInput_prevTraffic = ref();
+const fileInput_currTraffic = ref();
+
+const stats = reactive({
+  max: '0',
+  min: '0',
+  avg: '0',
+  growth: '0'
+});
+
+// 文档上传
+const uploadDocFile = ref<File | null>(null);
+const overwriteDoc = ref(false);
+const uploading = ref(false);
+const uploadRef = ref();
+
+// 文档管理
+interface DocumentItem {
+  name: string;
+  size: number;
+  createdAt: string;
+  updatedAt: string;
+  previewUrl: string;
+  downloadUrl: string;
 }
 
-const form = ref<FormData>({
-  previousFile: null,
-  currentFile: null,
-  previousTrafficFile: null,
-  currentTrafficFile: null
-});
+const documents = ref<DocumentItem[]>([]);
+const loadingDocs = ref(false);
 
-const loading = ref(false);
-const isMockMode = ref(isMockEnabled());
-const previousUploadRef = ref();
-const currentUploadRef = ref();
-const previousTrafficUploadRef = ref();
-const currentTrafficUploadRef = ref();
-const activeCollapse = ref(['1']);
-const router = useRouter();
-
-// 计算当前步骤
-const currentStep = computed(() => {
-  if (!form.value.previousFile) return 0;
-  if (!form.value.currentFile) return 1;
-  if (!form.value.previousTrafficFile) return 2;
-  if (!form.value.currentTrafficFile) return 3;
-  if (loading.value) return 4;
-  return 5;
-});
-
-// 是否可以生成报告
+// --- Computed ---
 const canGenerate = computed(() => {
-  return form.value.previousFile && form.value.currentFile && 
-         form.value.previousTrafficFile && form.value.currentTrafficFile && 
-         !loading.value;
+  return files.basePeriod && files.comparePeriod && 
+         files.prevTraffic && files.currTraffic &&
+         baseMonth.value && compareMonth.value;
 });
 
-// 检查文件格式
-const checkFileFormat = async (file: File): Promise<boolean> => {
-  const fileName = file.name.toLowerCase();
+// --- Lifecycle ---
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+  initChart();
+  loadDocuments();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+  if (chartInstance) {
+    chartInstance.dispose();
+  }
+});
+
+const handleResize = () => {
+  chartInstance?.resize();
+};
+
+const initChart = () => {
+  if (!chartRef.value) return;
+  chartInstance = echarts.init(chartRef.value);
+  const options = {
+    grid: { top: 40, right: 30, bottom: 40, left: 60 },
+    xAxis: { 
+      type: 'category', 
+      data: [],
+      axisLabel: { color: '#666', fontSize: 11 }
+    },
+    yAxis: { 
+      type: 'value',
+      axisLabel: { color: '#666', fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: 'rgba(0,0,0,0.06)' } }
+    },
+    series: []
+  };
+  chartInstance.setOption(options);
+};
+
+// --- Forecast ---
+const handleForecast = async () => {
+  if (predicting.value) return;
+  predicting.value = true;
+  hasForecastData.value = false;
   
-  // 只允许 .xlsx 格式
-  if (!fileName.endsWith('.xlsx')) {
-    if (fileName.endsWith('.xls')) {
-      // 如果是 .xls 格式，提示用户转换
-      try {
-        await ElMessageBox.confirm(
-          '检测到您上传的是 .xls 格式文件，本功能仅支持 .xlsx 格式。请前往 Excel 工具将文件转换为 .xlsx 格式后再继续。',
-          '文件格式不支持',
-          {
-            confirmButtonText: '前往 Excel 工具',
-            cancelButtonText: '取消',
-            type: 'warning',
-            center: true
-          }
-        );
-        // 用户点击确认，跳转到 Excel 工具
-        router.push('/excel-tool');
-      } catch {
-        // 用户点击取消，不做任何操作
-      }
-      return false;
+  try {
+    const res: any = await davHttp.get(API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST, {
+      params: { steps: forecastMonths.value }
+    });
+    
+    if (res.data && res.data.success && res.data.data) {
+      updateChart(res.data.data);
+      calculateStats(res.data.data);
+      hasForecastData.value = true;
+      ElMessage.success('预测完成');
     } else {
-      // 其他格式直接提示错误
-      ElMessage.error({
-        message: '仅支持 .xlsx 格式的 Excel 文件',
-        duration: 3000
-      });
-      return false;
+      ElMessage.warning('未能获取预测数据');
     }
+  } catch (e) {
+    console.error(e);
+    ElMessage.error('预测服务暂时不可用');
+  } finally {
+    predicting.value = false;
   }
-  
-  return true;
 };
 
-// 处理往年数据文件变化
-const handlePreviousFileChange = async (uploadFile: UploadFile) => {
-  const file = uploadFile.raw;
-  if (!file) return;
+const updateChart = (data: any[]) => {
+  if (!chartInstance) return;
   
-  // 验证文件格式
-  const isValid = await checkFileFormat(file);
-  if (!isValid) {
-    // 清除上传的文件
-    if (previousUploadRef.value) {
-      previousUploadRef.value.clearFiles();
-    }
+  const dates = data.map(item => item.month);
+  const values = data.map(item => item.value);
+  
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      borderColor: 'transparent',
+      textStyle: { color: '#fff' }
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: { color: '#666', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666', fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: 'rgba(0,0,0,0.06)' } }
+    },
+    series: [
+      {
+        data: values,
+        type: 'line',
+        smooth: true,
+        symbolSize: 8,
+        itemStyle: { 
+          color: '#14b8a6',
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        lineStyle: {
+          width: 3,
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: '#14b8a6' },
+            { offset: 1, color: '#06b6d4' }
+          ])
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(20, 184, 166, 0.3)' },
+            { offset: 1, color: 'rgba(20, 184, 166, 0.0)' }
+          ])
+        }
+      }
+    ]
+  };
+  
+  chartInstance.setOption(option);
+};
+
+const calculateStats = (data: any[]) => {
+  if (!data.length) return;
+  const values = data.map(d => d.value);
+  stats.max = Math.max(...values).toLocaleString();
+  stats.min = Math.min(...values).toLocaleString();
+  const sum = values.reduce((a, b) => a + b, 0);
+  stats.avg = Math.round(sum / values.length).toLocaleString();
+  
+  const first = values[0];
+  const last = values[values.length - 1];
+  if (first > 0) {
+    stats.growth = ((last - first) / first * 100).toFixed(1);
+  } else {
+    stats.growth = '0.0';
+  }
+};
+
+// --- File Upload ---
+const triggerUpload = (key: string) => {
+  switch(key) {
+    case 'basePeriod': fileInput_basePeriod.value.click(); break;
+    case 'comparePeriod': fileInput_comparePeriod.value.click(); break;
+    case 'prevTraffic': fileInput_prevTraffic.value.click(); break;
+    case 'currTraffic': fileInput_currTraffic.value.click(); break;
+  }
+};
+
+const handleFileChange = (event: Event, key: keyof typeof files) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    files[key] = target.files[0];
+    ElMessage.success(`已选择: ${target.files[0].name}`);
+  }
+};
+
+const resetForm = () => {
+  files.basePeriod = null;
+  files.comparePeriod = null;
+  files.prevTraffic = null;
+  files.currTraffic = null;
+  baseMonth.value = '';
+  compareMonth.value = '';
+  if(fileInput_basePeriod.value) fileInput_basePeriod.value.value = '';
+  if(fileInput_comparePeriod.value) fileInput_comparePeriod.value.value = '';
+  if(fileInput_prevTraffic.value) fileInput_prevTraffic.value.value = '';
+  if(fileInput_currTraffic.value) fileInput_currTraffic.value.value = '';
+  ElMessage.info('已重置');
+};
+
+// --- Generate Report ---
+const handleGenerate = async () => {
+  if (!canGenerate.value) {
+    ElMessage.warning('请上传所有必要文件并选择月份');
     return;
   }
   
-  form.value.previousFile = file;
-  ElMessage.success({
-    message: `已选择往年数据: ${file.name}`,
-    duration: 2000
-  });
+  generating.value = true;
+  progressPercent.value = 0;
+  progressStatus.value = '';
+  progressStep.value = '正在上传数据...';
+
+  const progressTimer = setInterval(() => {
+    if (progressPercent.value < 90) {
+      progressPercent.value += 5;
+      if (progressPercent.value > 30) progressStep.value = 'AI 正在分析...';
+      if (progressPercent.value > 60) progressStep.value = '正在生成 Word 报告...';
+    }
+  }, 800);
+
+  try {
+    const formData = new FormData();
+    formData.append('basePeriodFile', files.basePeriod!);
+    formData.append('comparePeriodFile', files.comparePeriod!);
+    formData.append('previousYearTrafficFile', files.prevTraffic!);
+    formData.append('currentYearTrafficFile', files.currTraffic!);
+    
+    // 提取月份数字并传递
+    const baseMonthNum = baseMonth.value.split('-')[1];
+    const compareMonthNum = compareMonth.value.split('-')[1];
+    formData.append('months', `${baseMonthNum},${compareMonthNum}`);
+
+    const response = await davHttp.post(
+        API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
+        formData,
+        {
+          responseType: 'blob',
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 600000
+        }
+    );
+
+    clearInterval(progressTimer);
+    progressPercent.value = 100;
+    progressStep.value = '完成！';
+    progressStatus.value = 'success';
+
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = '数研分析报告.docx';
+    if (contentDisposition) {
+       const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?(.+)/);
+       if (match) filename = decodeURIComponent(match[1].replace(/['"]/g, ''));
+    }
+    
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    ElNotification({
+      title: '生成成功',
+      message: '报告已自动下载',
+      type: 'success',
+    });
+
+    setTimeout(() => {
+      loadDocuments();
+    }, 1000);
+
+  } catch (error) {
+    clearInterval(progressTimer);
+    progressStatus.value = 'exception';
+    progressStep.value = '生成失败';
+    console.error(error);
+    ElMessage.error('报告生成失败，请检查网络或文件格式');
+  } finally {
+    setTimeout(() => {
+      generating.value = false;
+    }, 2000);
+  }
 };
 
-// 处理今年数据文件变化
-const handleCurrentFileChange = async (uploadFile: UploadFile) => {
+// --- Document Upload ---
+const handleDocFileChange = (uploadFile: UploadFile) => {
   const file = uploadFile.raw;
   if (!file) return;
-  
-  // 验证文件格式
-  const isValid = await checkFileFormat(file);
-  if (!isValid) {
-    // 清除上传的文件
-    if (currentUploadRef.value) {
-      currentUploadRef.value.clearFiles();
-    }
+  uploadDocFile.value = file;
+};
+
+const clearUploadDoc = () => {
+  uploadDocFile.value = null;
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles();
+  }
+};
+
+const handleUploadDoc = async () => {
+  if (!uploadDocFile.value) {
+    ElMessage.warning('请先选择文件');
     return;
   }
-  
-  form.value.currentFile = file;
-  ElMessage.success({
-    message: `已选择今年数据: ${file.name}`,
-    duration: 2000
-  });
-};
 
-// 清除往年文件
-const clearPreviousFile = () => {
-  form.value.previousFile = null;
-  if (previousUploadRef.value) {
-    previousUploadRef.value.clearFiles();
-  }
-  ElMessage.info('已清除往年数据文件');
-};
+  uploading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', uploadDocFile.value);
+    formData.append('overwrite', overwriteDoc.value.toString());
 
-// 清除今年文件
-const clearCurrentFile = () => {
-  form.value.currentFile = null;
-  if (currentUploadRef.value) {
-    currentUploadRef.value.clearFiles();
-  }
-  ElMessage.info('已清除今年数据文件');
-};
+    const res = await davHttp.post(API_ENDPOINTS.DOCUMENTS.UPLOAD, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
 
-// 处理往年流量数据文件变化
-const handlePreviousTrafficFileChange = async (uploadFile: UploadFile) => {
-  const file = uploadFile.raw;
-  if (!file) return;
-  
-  const isValid = await checkFileFormat(file);
-  if (!isValid) {
-    if (previousTrafficUploadRef.value) {
-      previousTrafficUploadRef.value.clearFiles();
+    if (res.data && res.data.success) {
+      ElMessage.success('上传成功');
+      clearUploadDoc();
+      loadDocuments();
+      activeTab.value = 'docs';
+    } else {
+      ElMessage.error('上传失败');
     }
-    return;
+  } catch (error) {
+    console.error('上传失败:', error);
+    ElMessage.error('上传失败，请重试');
+  } finally {
+    uploading.value = false;
   }
-  
-  form.value.previousTrafficFile = file;
-  ElMessage.success({
-    message: `已选择往年流量数据: ${file.name}`,
-    duration: 2000
-  });
 };
 
-// 处理今年流量数据文件变化
-const handleCurrentTrafficFileChange = async (uploadFile: UploadFile) => {
-  const file = uploadFile.raw;
-  if (!file) return;
-  
-  const isValid = await checkFileFormat(file);
-  if (!isValid) {
-    if (currentTrafficUploadRef.value) {
-      currentTrafficUploadRef.value.clearFiles();
+// --- Document Management ---
+const loadDocuments = async () => {
+  loadingDocs.value = true;
+  try {
+    const res = await davHttp.get(API_ENDPOINTS.DOCUMENTS.LIST);
+    if (res.data && res.data.success) {
+      documents.value = res.data.data || [];
     }
-    return;
+  } catch (error) {
+    console.error('加载文档列表失败:', error);
+  } finally {
+    loadingDocs.value = false;
   }
-  
-  form.value.currentTrafficFile = file;
-  ElMessage.success({
-    message: `已选择今年流量数据: ${file.name}`,
-    duration: 2000
-  });
 };
 
-// 清除往年流量文件
-const clearPreviousTrafficFile = () => {
-  form.value.previousTrafficFile = null;
-  if (previousTrafficUploadRef.value) {
-    previousTrafficUploadRef.value.clearFiles();
-  }
-  ElMessage.info('已清除往年流量数据文件');
+const previewDocument = (doc: DocumentItem) => {
+  const url = `${LLM_BASE_URL}${doc.previewUrl}`;
+  window.open(url, '_blank');
 };
 
-// 清除今年流量文件
-const clearCurrentTrafficFile = () => {
-  form.value.currentTrafficFile = null;
-  if (currentTrafficUploadRef.value) {
-    currentTrafficUploadRef.value.clearFiles();
-  }
-  ElMessage.info('已清除今年流量数据文件');
+const downloadDocument = (doc: DocumentItem) => {
+  const url = `${LLM_BASE_URL}${doc.downloadUrl}`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = doc.name;
+  link.click();
 };
 
-// 格式化文件大小
+const deleteDocument = async (doc: DocumentItem) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除文档 "${doc.name}" 吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+
+    await davHttp.delete(API_ENDPOINTS.DOCUMENTS.DELETE(doc.name));
+    ElMessage.success('删除成功');
+    loadDocuments();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败');
+    }
+  }
+};
+
+// --- Utils ---
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -571,516 +816,767 @@ const formatFileSize = (bytes: number): string => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };
 
-// 生成报告
-const handleGenerate = async () => {
-  if (!form.value.previousFile || !form.value.currentFile || 
-      !form.value.previousTrafficFile || !form.value.currentTrafficFile) {
-    ElMessage.warning('请先上传所有四个数据文件');
-    return;
-  }
-
-  loading.value = true;
-
-  try {
-    let response;
-    
-    // 模拟数据模式
-    if (isMockEnabled()) {
-      response = await mockGenerateReportResponse(
-        form.value.previousFile,
-        form.value.currentFile
-      );
-    } else {
-      const formData = new FormData();
-      formData.append('previousYearFile', form.value.previousFile);
-      formData.append('currentYearFile', form.value.currentFile);
-      formData.append('previousYearTrafficFile', form.value.previousTrafficFile);
-      formData.append('currentYearTrafficFile', form.value.currentTrafficFile);
-
-      response = await http.post(
-        API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
-        formData,
-        {
-          responseType: 'blob',
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          timeout: 900000 // 15分钟超时，分析需要较长时间
-        }
-      );
-    }
-
-    // 获取文件名
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = '数据分析报告.docx';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?(.+)/);
-      if (filenameMatch) {
-        filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''));
-      }
-    }
-
-    // 下载文件
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-
-    ElMessage.success({
-      message: isMockEnabled() ? '模拟数据分析完成！报告已自动下载' : '数据分析完成！报告已自动下载',
-      duration: 3000
-    });
-  } catch (error: any) {
-    console.error('数据分析失败:', error);
-    const errorMsg = error.response?.data?.message || error.message || '数据分析失败，请稍后重试';
-    ElMessage.error({
-      message: errorMsg,
-      duration: 5000
-    });
-  } finally {
-    loading.value = false;
-  }
-};
-
-// 重置表单
-const handleReset = () => {
-  form.value.previousFile = null;
-  form.value.currentFile = null;
-  form.value.previousTrafficFile = null;
-  form.value.currentTrafficFile = null;
-  if (previousUploadRef.value) {
-    previousUploadRef.value.clearFiles();
-  }
-  if (currentUploadRef.value) {
-    currentUploadRef.value.clearFiles();
-  }
-  if (previousTrafficUploadRef.value) {
-    previousTrafficUploadRef.value.clearFiles();
-  }
-  if (currentTrafficUploadRef.value) {
-    currentTrafficUploadRef.value.clearFiles();
-  }
-  ElMessage.info('已重置所有文件');
-};
-
-// 下载示例文件
-const downloadTemplate = () => {
-  try {
-    // 使用fetch获取文件（文件现在在public目录中）
-    fetch('/ms表头.xls')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('文件不存在');
-        }
-        return response.blob();
-      })
-      .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'ms表头.xls');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        ElMessage.success({
-          message: '示例文件下载成功！',
-          duration: 2000
-        });
-      })
-      .catch(error => {
-        console.error('下载示例文件失败:', error);
-        ElMessage.error({
-          message: '示例文件下载失败，请联系管理员',
-          duration: 3000
-        });
-      });
-  } catch (error) {
-    console.error('下载示例文件失败:', error);
-    ElMessage.error({
-      message: '示例文件下载失败，请联系管理员',
-      duration: 3000
-    });
-  }
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  if (days === 0) return '今天';
+  if (days === 1) return '昨天';
+  if (days < 7) return `${days}天前`;
+  
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 };
 </script>
 
 <style scoped>
-.data-analysis-page {
+/* === 基础布局 === */
+.research-report-container {
   min-height: 100vh;
-  background: url('@/assets/allPic/public/deepbac.jpg') no-repeat center center;
-  background-size: cover;
-  background-attachment: fixed;
+  background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 50%, #e0e7ff 100%);
   position: relative;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.data-analysis-page::before {
-  content: '';
-  position: absolute;
+/* 背景装饰 */
+.bg-decoration {
+  position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(103, 58, 183, 0.1) 100%);
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   z-index: 0;
 }
 
-.main-container {
+.gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.2;
+  animation: float 25s ease-in-out infinite;
+}
+
+.orb-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #7dd3fc 0%, #38bdf8 100%);
+  top: -150px;
+  left: -150px;
+}
+
+.orb-2 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #5eead4 0%, #2dd4bf 100%);
+  bottom: -200px;
+  right: -200px;
+  animation-delay: -12s;
+}
+
+.orb-3 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #a5f3fc 0%, #67e8f9 100%);
+  top: 50%;
+  left: 50%;
+  animation-delay: -6s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -40px) scale(1.1); }
+  66% { transform: translate(-30px, 30px) scale(0.9); }
+}
+
+.main-content {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
-}
-
-:deep(.el-main) {
-  padding: 2rem 3rem;
-}
-
-.content-wrapper {
-  max-width: 1200px;
-  width: 100%;
+  max-width: 1600px;
   margin: 0 auto;
+  padding: 32px;
 }
 
-.mock-alert {
-  margin-bottom: 1.5rem;
-  border-radius: 12px;
-}
-
-.mock-alert code {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
-}
-
-.glass-effect {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-/* 头部卡片 */
-.header-card {
-  margin-bottom: 2rem;
-  border-radius: 20px;
+/* === 页面头部 === */
+.page-header {
+  margin-bottom: 32px;
 }
 
 .header-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 24px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.title-section {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 1rem 0;
+  gap: 20px;
 }
 
-.header-text h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #2c3e50;
-  margin: 0 0 0.5rem 0;
-  background: linear-gradient(135deg, #409eff 0%, #673ab7 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.header-text p {
-  font-size: 1rem;
-  color: #7f8c8d;
-  margin: 0;
-}
-
-/* 上传卡片 */
-.upload-card {
-  margin-bottom: 2rem;
+.icon-wrapper {
+  width: 64px;
+  height: 64px;
   border-radius: 20px;
-  padding: 2rem;
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #f0f0f0;
-}
-
-.upload-form {
-  margin-top: 1.5rem;
-}
-
-.upload-section {
-  width: 100%;
-}
-
-.upload-area {
-  width: 100%;
-}
-
-:deep(.el-upload-dragger) {
-  width: 100%;
-  height: 180px;
-  border: 2px dashed #d9d9d9;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8f4f8 100%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
+  box-shadow: 0 8px 24px rgba(20, 184, 166, 0.3);
 }
 
-:deep(.el-upload-dragger:hover) {
-  border-color: #409eff;
-  background: linear-gradient(135deg, #e8f4f8 0%, #d4ebf7 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
-}
-
-.upload-content {
-  text-align: center;
-}
-
-.upload-icon {
-  color: #409eff;
-  margin-bottom: 1rem;
-}
-
-.upload-text .primary-text {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0 0 0.5rem 0;
-}
-
-.upload-text .secondary-text {
-  font-size: 0.9rem;
-  color: #7f8c8d;
+.title-text h1 {
   margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(90deg, #0891b2, #14b8a6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.2;
 }
 
-.file-info {
-  margin-top: 1rem;
-  animation: slideInUp 0.3s ease-out;
+.title-text p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+.version-tag {
+  font-weight: 600;
+  background: white;
+  border: 2px solid #14b8a6;
+  color: #14b8a6;
+  padding: 8px 16px;
+}
+
+/* === 工作区布局 === */
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr 480px;
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 1fr;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+}
+
+/* === 卡片样式 === */
+.section-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.section-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* === 预测卡片 === */
+.forecast-card {
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.month-selector {
+  width: 100px;
+}
+
+.unit-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.predict-btn {
+  font-weight: 600;
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+}
+
+.chart-container {
+  flex: 1;
+  min-height: 400px;
+  position: relative;
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.02) 0%, transparent 100%);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.echarts-box {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #94a3b8;
+}
+
+.empty-state p {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+/* 统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1400px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-:deep(.el-tag) {
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
+.stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
-:deep(.el-tag .el-icon) {
-  margin-right: 0.5rem;
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
-.file-size {
-  margin-left: 0.5rem;
-  color: #909399;
-  font-size: 0.9rem;
+.stat-card.highlight {
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  color: white;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.stat-icon.peak {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  color: white;
+}
+
+.stat-icon.low {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+}
+
+.stat-icon.avg {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: white;
+}
+
+.stat-icon.growth {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-info .label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stat-card.highlight .stat-info .label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-info .value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.stat-card.highlight .stat-info .value {
+  color: white;
+}
+
+.growth-value {
+  color: #10b981 !important;
+}
+
+.stat-card.highlight .growth-value {
+  color: white !important;
+}
+
+/* === 侧边栏 === */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab 样式 */
+.function-tabs {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+:deep(.el-tabs__header) {
+  margin-bottom: 20px;
+}
+
+:deep(.el-tabs__item) {
+  font-weight: 600;
+  color: #64748b;
+}
+
+:deep(.el-tabs__item.is-active) {
+  color: #14b8a6;
+}
+
+:deep(.el-tabs__active-bar) {
+  background-color: #14b8a6;
+}
+
+/* === 生成卡片 === */
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.month-selector-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  background: #f0fdfa;
+  border-radius: 12px;
+  border: 2px solid #99f6e4;
+}
+
+.selector-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selector-item label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.upload-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.file-box {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f8fafc;
+  min-height: 120px;
+  justify-content: center;
+}
+
+.file-box:hover {
+  border-color: #14b8a6;
+  background: #f0fdfa;
+  transform: translateY(-2px);
+}
+
+.file-box.active {
+  border-color: #10b981;
+  border-style: solid;
+  background: #ecfdf5;
+}
+
+.box-icon {
+  font-size: 32px;
+  color: #94a3b8;
+}
+
+.file-box.active .box-icon {
+  color: #10b981;
+}
+
+.box-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.file-name {
+  font-size: 11px;
+  color: #10b981;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-buttons {
   display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 2rem;
+  gap: 12px;
+  margin-top: 8px;
 }
 
-.generate-btn {
-  min-width: 180px;
-  height: 48px;
-  font-size: 1.1rem;
+.gen-btn {
+  flex: 1;
   font-weight: 600;
-  background: linear-gradient(135deg, #409eff 0%, #673ab7 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
   border: none;
-  box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
-  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
 }
 
-.generate-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.5);
-}
-
-.btn-icon {
-  margin-right: 0.5rem;
-}
-
-.progress-section {
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background: rgba(64, 158, 255, 0.05);
+.progress-wrapper {
+  background: #f8fafc;
+  padding: 16px;
   border-radius: 12px;
-  animation: fadeIn 0.3s ease-out;
 }
 
-@keyframes fadeIn {
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+/* === 文档上传卡片 === */
+.upload-doc-area {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.doc-uploader {
+  width: 100%;
+}
+
+:deep(.el-upload-dragger) {
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 40px 20px;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-upload-dragger:hover) {
+  border-color: #14b8a6;
+  background: #f0fdfa;
+}
+
+.upload-icon {
+  font-size: 60px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.upload-text .primary {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.upload-text .secondary {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.selected-file {
+  background: #f0fdfa;
+  border: 2px solid #5eead4;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-icon {
+  font-size: 28px;
+  color: #14b8a6;
+}
+
+.file-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-info .name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.file-info .size {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.upload-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+}
+
+.help-icon {
+  color: #f59e0b;
+  cursor: help;
+}
+
+.upload-btn {
+  width: 100%;
+  font-weight: 600;
+  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+}
+
+/* === 文档管理 === */
+.docs-card {
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.docs-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px;
+}
+
+.empty-docs {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+
+.empty-docs p {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.doc-item {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.doc-item:hover {
+  background: #f0fdfa;
+  transform: translateX(4px);
+}
+
+.doc-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-icon {
+  font-size: 20px;
+  color: #14b8a6;
+  flex-shrink: 0;
+}
+
+.doc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.doc-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-meta {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.doc-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* === 动画 === */
+.animate-slide-down {
+  animation: slideDown 0.6s ease-out;
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.8s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideRight 0.8s ease-out;
+}
+
+@keyframes slideDown {
   from {
+    transform: translateY(-30px);
     opacity: 0;
   }
   to {
+    transform: translateY(0);
     opacity: 1;
   }
 }
 
-.progress-text {
-  text-align: center;
-  margin-top: 1rem;
-  font-size: 1rem;
-  color: #409eff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-weight: 500;
-}
-
-/* 说明卡片 */
-.info-card {
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.95) !important;
-}
-
-:deep(.el-collapse) {
-  border: none;
-}
-
-:deep(.el-collapse-item__header) {
-  background: transparent;
-  border: none;
-  font-size: 1.1rem;
-  font-weight: 600;
-  padding: 1rem 0;
-}
-
-:deep(.el-collapse-item__wrap) {
-  background: transparent;
-  border: none;
-}
-
-:deep(.el-collapse-item__content) {
-  padding: 1.5rem 0;
-}
-
-.collapse-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #2c3e50;
-}
-
-.info-content {
-  padding: 1rem;
-}
-
-:deep(.el-steps) {
-  margin-bottom: 2rem;
-}
-
-.step-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.step-desc {
-  font-size: 0.9rem;
-  color: #606266;
-}
-
-.tips-section {
-  margin-top: 1.5rem;
-}
-
-.tips-section h4 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0 0 1rem 0;
-}
-
-.tips-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.tips-list li {
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.75rem;
-  background: linear-gradient(135deg, #e8f4f8 0%, #f0f9ff 100%);
-  border-left: 4px solid #409eff;
-  border-radius: 6px;
-  color: #5f6368;
-  font-size: 0.95rem;
-  line-height: 1.6;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  :deep(.el-main) {
-    padding: 1rem;
+@keyframes slideLeft {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
   }
-
-  .header-content {
-    flex-direction: column;
-    text-align: center;
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
+}
 
-  .header-text h1 {
-    font-size: 1.5rem;
+@keyframes slideRight {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
   }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
 
-  .header-text p {
-    font-size: 0.9rem;
-  }
+/* 滚动条美化 */
+.docs-list::-webkit-scrollbar {
+  width: 6px;
+}
 
-  .upload-card {
-    padding: 1.5rem;
-  }
+.docs-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
 
-  :deep(.el-form-item__label) {
-    width: 100% !important;
-    text-align: left;
-    margin-bottom: 0.5rem;
-  }
+.docs-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
 
-  :deep(.el-form-item__content) {
-    margin-left: 0 !important;
-  }
+.docs-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 
-  :deep(.el-upload-dragger) {
-    height: 150px;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-  }
-
-  .action-buttons .el-button {
-    width: 100%;
-  }
+.mr-1 {
+  margin-right: 4px;
 }
 </style>
