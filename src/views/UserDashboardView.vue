@@ -180,14 +180,75 @@
               <span>{{ row.userCount }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="用户" min-width="220" show-overflow-tooltip>
+          <el-table-column label="用户" min-width="220">
             <template #default="{ row }">
-              <span>{{ row.userNamesLabel }}</span>
+              <div v-if="row.userCount === 0" class="empty-text">-</div>
+              <div v-else-if="row.userCount <= 3" class="simple-text">
+                {{ row.userNamesLabel }}
+              </div>
+              <div v-else class="expandable-cell">
+                <span class="preview-text">{{ getPreviewText(row.userNamesLabel, 2) }}</span>
+                <el-popover
+                  placement="bottom"
+                  :width="300"
+                  trigger="click"
+                >
+                  <template #reference>
+                    <el-link type="primary" :underline="false" style="margin-left: 8px;">
+                      查看全部({{ row.userCount }})
+                    </el-link>
+                  </template>
+                  <div class="popover-content">
+                    <div class="popover-title">分组用户列表</div>
+                    <div class="popover-list">
+                      <el-tag
+                        v-for="(userName, index) in row.userNamesLabel.split('、')"
+                        :key="index"
+                        size="small"
+                        style="margin: 4px;"
+                      >
+                        {{ userName }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </el-popover>
+              </div>
             </template>
           </el-table-column>
-          <el-table-column label="权限" min-width="240" show-overflow-tooltip>
+          <el-table-column label="权限" min-width="240">
             <template #default="{ row }">
-              <span>{{ row.permissionLabels }}</span>
+              <div v-if="!row.permissionLabels || row.permissionLabels === '-'" class="empty-text">-</div>
+              <div v-else-if="getPermissionCount(row.permissionLabels) <= 3" class="simple-text">
+                {{ row.permissionLabels }}
+              </div>
+              <div v-else class="expandable-cell">
+                <span class="preview-text">{{ getPreviewText(row.permissionLabels, 2) }}</span>
+                <el-popover
+                  placement="bottom"
+                  :width="400"
+                  trigger="click"
+                >
+                  <template #reference>
+                    <el-link type="primary" :underline="false" style="margin-left: 8px;">
+                      查看全部({{ getPermissionCount(row.permissionLabels) }})
+                    </el-link>
+                  </template>
+                  <div class="popover-content">
+                    <div class="popover-title">分组权限列表</div>
+                    <div class="popover-list">
+                      <el-tag
+                        v-for="(permName, index) in row.permissionLabels.split('、')"
+                        :key="index"
+                        type="success"
+                        size="small"
+                        style="margin: 4px;"
+                      >
+                        {{ permName }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </el-popover>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -515,6 +576,7 @@
       </el-card>
     </div>
 
+
     <!-- 用户详情弹窗 -->
     <el-dialog
       v-model="detailDialogVisible"
@@ -550,6 +612,20 @@
           </el-descriptions-item>
           <el-descriptions-item label="最近登录">{{ formatDate(currentUser.last_login_at) || '从未登录' }}</el-descriptions-item>
           <el-descriptions-item label="最近登录IP" v-if="showIP">{{ currentUser.last_login_ip || '暂无记录' }}</el-descriptions-item>
+          <el-descriptions-item label="可访问页面" :span="2">
+            <div class="accessible-pages">
+              <el-tag
+                v-for="pageName in getAccessiblePageNames(currentUser)"
+                :key="pageName"
+                type="primary"
+                size="small"
+                style="margin-right: 8px; margin-bottom: 8px;"
+              >
+                {{ pageName }}
+              </el-tag>
+              <span v-if="getAccessiblePageNames(currentUser).length === 0" class="detail-value">-</span>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item
             v-for="field in detailFields"
             :key="field.key"
@@ -787,6 +863,21 @@ const groupTableRows = computed(() => {
     }
   })
 })
+
+// 获取预览文本（显示前N项，其余用省略号）
+const getPreviewText = (text: string, maxItems: number): string => {
+  if (!text || text === '-') return '-'
+  const items = text.split('、')
+  if (items.length <= maxItems) return text
+  return items.slice(0, maxItems).join('、') + '...'
+}
+
+// 获取权限数量
+const getPermissionCount = (permissionLabels: string): number => {
+  if (!permissionLabels || permissionLabels === '-') return 0
+  return permissionLabels.split('、').filter(Boolean).length
+}
+
 
 let onlineStatusWs: WebSocket | null = null
 
@@ -1377,6 +1468,25 @@ const formatPermissionLabel = (user: DashboardUser): string => {
   const labels = codes.map(code => labelMap.get(code) || code)
   return labels.join('、')
 }
+
+// 获取用户可访问的页面名称列表
+const getAccessiblePageNames = (user: DashboardUser): string[] => {
+  const codes = resolveUserPermissionCodes(user)
+  if (codes.length === 0) return []
+  
+  // 只筛选页面权限（以 PAGE_ 开头的权限码）
+  const pageCodes = codes.filter(code => code.startsWith('PAGE_'))
+  
+  // 将权限码映射为页面名称
+  const labelMap = permissionLabelMap.value
+  const pageNames = pageCodes
+    .map(code => labelMap.get(code))
+    .filter(Boolean) as string[]
+  
+  // 去重并排序
+  return Array.from(new Set(pageNames)).sort()
+}
+
 
 const upsertGroupOption = (groupId: unknown, groupName?: unknown, remark?: unknown, status?: unknown) => {
   const normalizedId = normalizeGroupId(groupId)
@@ -2454,6 +2564,55 @@ watch(
 
 .detail-value {
   word-break: break-all;
+}
+
+.accessible-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* 分组列表展开单元格样式 */
+.empty-text {
+  color: #909399;
+  font-size: 14px;
+}
+
+.simple-text {
+  font-size: 14px;
+  color: #606266;
+}
+
+.expandable-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preview-text {
+  font-size: 14px;
+  color: #606266;
+}
+
+.popover-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.popover-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #EBEEF5;
+}
+
+.popover-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 /* 响应式 */
