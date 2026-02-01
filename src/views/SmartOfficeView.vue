@@ -155,7 +155,7 @@
         <el-card shadow="hover" class="kb-list-card">
           <div class="kb-list-header mb-2">
             <span class="list-title">文档列表</span>
-            <el-badge :value="kbFiles.length" :max="99" type="primary" />
+            <el-badge :value="filteredKbFiles.length" :max="99" type="primary" />
           </div>
           <div class="kb-search-box">
             <el-input
@@ -374,12 +374,12 @@
                     size="small"
                     style="width: 160px;"
                   >
-                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
+                    <!-- <el-option label="Qwen-Plus (云端)" value="qwen-plus" /> -->
                     <el-option label="Qwen (通用)" valwue="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
-                    <el-option label="DeepSeekv3_2" value="deepseek" />
-                    <el-option label="DeepSeek 云端" value="deepseek-cloud" />
-                    <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" />
+                    <el-option label="DeepSeekv3.1" value="deepseek" />
+                    <!-- <el-option label="DeepSeek 云端" value="deepseek-cloud" /> -->
+                    <!-- <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" /> -->
                   </el-select>
                 </div>
                 <div class="config-item">
@@ -1004,6 +1004,7 @@ export default defineComponent({
     const sessionListLoading = ref<boolean>(false);
     const sessionCreating = ref<boolean>(false);
     const sessionSidebarCollapsed = ref<boolean>(false);
+    const titleGenerated = ref<boolean>(false);  // 标记当前会话是否已生成过标题
     
     // 会话列表懒加载
     const sessionDisplayLimit = ref<number>(20);
@@ -1235,6 +1236,7 @@ export default defineComponent({
       templateReady.value = false;
       ocrResults.value = [];
       prompt.value = '';
+      titleGenerated.value = false;  // 新会话，重置标题生成标记
       
       // 创建新会话
       await ensureSession();
@@ -1274,6 +1276,7 @@ export default defineComponent({
         templateReady.value = false;
         ocrResults.value = [];
         prompt.value = '';
+        titleGenerated.value = false;  // 新会话，重置标题生成标记
         
         // 创建新会话
         await ensureSession();
@@ -1323,6 +1326,9 @@ export default defineComponent({
           ocrResults.value = [];
           prompt.value = '';
           
+          // 如果会话已有对话历史，说明标题已生成过，标记为 true
+          titleGenerated.value = messages.value.length > 0;
+          
           ElMessage.success(`已切换到会话: ${data.title}`);
         }
       } catch (e) {
@@ -1360,6 +1366,7 @@ export default defineComponent({
             templateReady.value = false;
             ocrResults.value = [];
             prompt.value = '';
+            titleGenerated.value = false;  // 重置标题生成标记
           }
           ElMessage.success('会话已删除');
         }
@@ -2059,6 +2066,43 @@ export default defineComponent({
         sending.value = false;
         abortController.value = null;
         scrollToBottom();
+        
+        // 首条消息发送后，自动生成会话标题
+        // 使用 titleGenerated 标记防止重复生成
+        if (!titleGenerated.value && messages.value.length === 2 && sessionId.value) {
+          titleGenerated.value = true;  // 立即标记，防止并发重复调用
+          generateSessionTitle(text);
+        }
+      }
+    };
+
+    // 自动生成会话标题（使用 AI 根据用户首条消息生成）
+    const generateSessionTitle = async (firstMessage: string) => {
+      if (!sessionId.value || !firstMessage) return;
+      
+      try {
+        const resp = await fetch(`${writerBase}/writer/session/generate-title`, {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            session_id: sessionId.value,
+            first_message: firstMessage,
+            model_id: selectedModel.value || undefined,
+          }),
+        });
+        const data = await resp.json();
+        if (data.ok && data.title) {
+          // 更新会话列表中的标题
+          const session = sessionList.value.find(s => s.session_id === sessionId.value);
+          if (session) {
+            session.title = data.title;
+          }
+          // 刷新会话列表以确保同步
+          await refreshSessionList();
+        }
+      } catch (e) {
+        console.warn('自动生成会话标题失败:', e);
+        // 静默失败，不影响用户体验
       }
     };
 

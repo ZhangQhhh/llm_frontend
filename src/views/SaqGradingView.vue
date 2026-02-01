@@ -129,6 +129,20 @@
             </div>
           </div>
 
+          <!-- 解析 -->
+          <div v-if="currentSaq.analysis" class="section analysis-section">
+            <div class="section-header">
+              <span class="section-title">📖 解析</span>
+              <el-button size="small" text @click="copyText(currentSaq.analysis)">
+                <el-icon><CopyDocument /></el-icon>
+                复制
+              </el-button>
+            </div>
+            <div class="section-body answer-body">
+              <pre>{{ currentSaq.analysis }}</pre>
+            </div>
+          </div>
+
           <!-- 学生答案 -->
           <div class="section student-section">
             <div class="section-header">
@@ -372,6 +386,7 @@ interface SaqItem {
   qid: string
   stem: string
   correct_answer: string
+  analysis?: string
   my_answer: string
   stem_images?: Array<{ content_type: string; base64: string }>
   is_graded?: boolean
@@ -1213,6 +1228,7 @@ function goBack() {
 .stem-image:hover { border-color: #60a5fa; }
 
 .reference-section .section-header { border-left: 3px solid #22c55e; }
+.analysis-section .section-header { border-left: 3px solid #f59e0b; }
 .student-section .section-header { border-left: 3px solid #60a5fa; }
 
 .answer-body {

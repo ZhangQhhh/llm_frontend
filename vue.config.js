@@ -31,9 +31,21 @@ module.exports = defineConfig({
     },
     client: {
       overlay: {
-        // 忽略 ResizeObserver 错误，这是浏览器的无害警告
+        // 忽略无害的运行时错误
         runtimeErrors: (error) => {
-          if (error.message.includes('ResizeObserver')) {
+          // 获取错误信息，兼容不同格式
+          const msg = error?.message || error?.toString() || String(error)
+          
+          // ResizeObserver 错误是浏览器的无害警告
+          if (msg.includes('ResizeObserver')) {
+            return false
+          }
+          // axios 请求取消不是真正的错误
+          if (msg === 'cancel' || msg === 'canceled' || msg.includes('cancel')) {
+            return false
+          }
+          // CanceledError 也是 axios 取消
+          if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
             return false
           }
           return true
