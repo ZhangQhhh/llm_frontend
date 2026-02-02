@@ -386,7 +386,7 @@ export default defineComponent({
     let userHasScrolledUp = false; // 用户是否手动向上滚动
     let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
     let scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null; // 防抖定时器
-    const SCROLL_DEBOUNCE_MS = 100; // 防抖间隔（毫秒）
+    const SCROLL_DEBOUNCE_MS = 400; // 防抖间隔（毫秒）- 快速输出时减少滚动频率
 
     const applyConversationMocks = () => {
       const mockHistory = getMockConversation();
