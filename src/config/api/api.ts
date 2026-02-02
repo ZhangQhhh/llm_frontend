@@ -180,6 +180,13 @@ export const API_ENDPOINTS = {
     UPDATE_USER_DEPARTMENT: `/user/department`,        // POST 更新用户部门
     GET_DEPARTMENT_LIST: `/departments`,              // GET 获取部门列表
     CHECK_DEPARTMENT_REQUIRED: `/user/department/check` // GET 检查是否需要设置部门
+  },
+  // 软件管理API（使用http，baseURL已包含/api前缀）
+  SOFTWARE: {
+    UPLOAD: `/software/upload`,                    // POST 上传软件
+    LIST: `/software/list`,                        // GET 获取软件列表
+    DOWNLOAD: (filename: string) => `/software/download/${encodeURIComponent(filename)}`,  // GET 下载软件
+    DELETE: (filename: string) => `/software/${encodeURIComponent(filename)}`,  // DELETE 删除软件
   }
 };
 

@@ -99,6 +99,10 @@
                 <el-icon><Document /></el-icon>
                 <span>格式化工具</span>
               </el-dropdown-item>
+              <el-dropdown-item command="software-download">
+                <el-icon><Download /></el-icon>
+                <span>软件下载</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 <span>退出登录</span>
@@ -136,7 +140,8 @@ import {
   DataBoard,
   FolderOpened,
   VideoCamera,
-  Monitor
+  Monitor,
+  Download
 } from '@element-plus/icons-vue'
 import { RoleNames, UserRole } from '@/config/permissions'
 import PerformanceSettings from './PerformanceSettings.vue'
@@ -155,6 +160,7 @@ export default defineComponent({
     FolderOpened,
     VideoCamera,
     Monitor,
+    Download,
     PerformanceSettings
   },
   setup() {
@@ -276,6 +282,8 @@ export default defineComponent({
         router.push('/knowledge-base')
       } else if (command === 'video-center') {
         router.push('/video-center')
+      } else if (command === 'software-download') {
+        router.push('/software-download')
       }
     }
 

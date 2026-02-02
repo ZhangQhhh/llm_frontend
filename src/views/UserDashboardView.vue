@@ -787,7 +787,8 @@ const pagePermissionCatalog: PermissionOption[] = [
   { code: 'PAGE_019', label: '反馈详情', access: 'normal' },
   { code: 'PAGE_021', label: '问答日志管理', access: 'super_admin' },
   { code: 'PAGE_022', label: '知识库管理', access: 'super_admin' },
-  { code: 'PAGE_023', label: '视频中心', access: 'normal' }
+  { code: 'PAGE_023', label: '视频中心', access: 'normal' },
+  { code: 'PAGE_024', label: '软件下载', access: 'public' }
 ]
 
 const functionPermissions = [
