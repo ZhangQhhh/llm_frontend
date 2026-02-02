@@ -577,11 +577,11 @@ export default defineComponent({
     const answerBodyRef = ref<HTMLElement | null>(null);
     const scrollAnchor = ref<HTMLElement | null>(null);
     
-    // ChatGPT/Claude 风格滚动控制 + 防抖
+    // ChatGPT/Claude 风格滚动控制 + 节流
     let userHasScrolledUp = false; // 用户是否手动向上滚动
     let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
-    let scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null; // 防抖定时器
-    const SCROLL_DEBOUNCE_MS = 400; // 防抖间隔（毫秒）- 快速输出时减少滚动频率
+    let lastScrollTime = 0; // 上次滚动时间
+    const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -1376,38 +1376,35 @@ export default defineComponent({
       }
     };
 
-    // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 防抖
+    // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 节流
     const autoScrollToBottom = (force = false) => {
       // 如果用户手动向上滚动了，不自动滚动（除非强制）
       if (userHasScrolledUp && !force) {
         return;
       }
       
-      // 防抖：清除之前的定时器，等待内容稳定后再滚动
-      if (scrollDebounceTimer) {
-        clearTimeout(scrollDebounceTimer);
+      const now = Date.now();
+      // 节流：限制滚动频率，但强制滚动立即执行
+      if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
+        return;
       }
+      lastScrollTime = now;
       
-      // 强制滚动立即执行，普通滚动延迟执行
-      const delay = force ? 0 : SCROLL_DEBOUNCE_MS;
-      
-      scrollDebounceTimer = setTimeout(() => {
-        requestAnimationFrame(() => {
-          if (scrollAnchor.value) {
-            isAutoScrolling = true;
-            scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            setTimeout(() => { isAutoScrolling = false; }, 150);
-          } else {
-            // 降级方案：直接滚动到底部
-            isAutoScrolling = true;
-            window.scrollTo({
-              top: document.documentElement.scrollHeight,
-              behavior: 'smooth'
-            });
-            setTimeout(() => { isAutoScrolling = false; }, 150);
-          }
-        });
-      }, delay);
+      requestAnimationFrame(() => {
+        if (scrollAnchor.value) {
+          isAutoScrolling = true;
+          scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          setTimeout(() => { isAutoScrolling = false; }, 150);
+        } else {
+          // 降级方案：直接滚动到底部
+          isAutoScrolling = true;
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth'
+          });
+          setTimeout(() => { isAutoScrolling = false; }, 150);
+        }
+      });
     };
 
     // 检测用户是否手动向上滚动（ChatGPT/Claude 风格）
