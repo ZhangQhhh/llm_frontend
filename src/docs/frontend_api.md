@@ -1,4 +1,4 @@
-# 前端接入开发文档
+﻿# 前端接入开发文档
 
 本文档梳理当前服务能力与对接方式，面向前端调用与联调使用。
 
@@ -18,9 +18,140 @@
   ```
   Authorization: Bearer <token>
   ```
-- **报告模板**：`template/report_templete.docx`
+- **报告模板**：
+  - 月度模板：`template/report_template_month.docx`
+  - 年度模板：`template/report_template_year.docx`
+  - 兼容旧模板：`template/report_templete.docx`
 - **CORS 配置**：默认允许所有源，可通过 `CORS_ORIGINS` 环境变量配置
 
+## 模板与占位符
+
+### 模板选择
+
+- `analysisMode=month`：使用 `template/report_template_month.docx`
+- `analysisMode=year`：使用 `template/report_template_year.docx`
+- 未传 `analysisMode`：默认按月模板
+
+> 生成报告后，会在模板中“附录”段落后自动追加一张汇总表。
+
+### 占位符清单（文档模板可用）
+
+**基础日期/周期**
+- `year`：报告年份
+- `reportYear`：报告日期（格式：YYYY年M月D日）
+- `mm`：报告月份
+- `dd`：报告日期
+- `periodTitle`：周期标题（如“2025年度”“2025年9月”“2025年3-5月”）
+- `periodScope`：周期范围（如“全年”“9月”“3-5月”）
+- `periodEnd`：截至日期（如“2025年9月30日”）
+
+**总量与结构**
+- `totalCount`
+- `passengerTotal`
+- `employeeTotal`
+- `chinesePassenger`
+- `hktPassenger`
+- `foreignPassenger`
+- `chineseEmployee`
+- `hktEmployee`
+- `foreignEmployee`
+- `chineseEntry`
+- `chineseExit`
+- `chinesePassenger_percent`
+- `hktPassenger_percent`
+- `foreignPassenger_percent`
+- `hkPassenger`
+- `moPassenger`
+- `twPassenger`
+
+**出入境与航班**
+- `traffic_current_flights`
+- `traffic_current_passengers`
+- `traffic_current_exit`
+- `traffic_current_entry`
+- `traffic_flights_change_trend`
+- `traffic_flights_change_rate`
+- `traffic_passengers_change_trend`
+- `traffic_passengers_change_rate`
+- `civil_aircraft_count`
+- `business_jet_count`
+- `cargo_aircraft_count`
+- `total_routes`
+- `passenger_routes`
+- `cargo_routes`
+- `passenger_main_directions`
+- `cargo_main_directions`
+- `monthly_passenger_flights`
+- `monthly_cargo_flights`
+- `cargo_routes_change_trend`
+- `cargo_routes_change_rate`
+
+**热点统计（TOP3）**
+- `top_one_issue`
+- `top_one_issue_count`
+- `top_one_issue_count_percent`
+- `top_two_issue`
+- `top_two_issue_count`
+- `top_two_issue_count_percent`
+- `top_three_issue`
+- `top_three_issue_count`
+- `top_three_issue_count_percent`
+- `top_one_exit_des`
+- `top_one_exit_des_count`
+- `top_one_exit_des_count_percent`
+- `top_two_exit_des`
+- `top_two_exit_des_count`
+- `top_two_exit_des_count_percent`
+- `top_three_exit_des`
+- `top_three_exit_des_count`
+- `top_three_exit_des_count_percent`
+- `top_one_hkw_issue`
+- `top_one_hkw_issue_count`
+- `top_one_hkw_issue_count_percent`
+- `top_two_hkw_issue`
+- `top_two_hkw_issue_count`
+- `top_two_hkw_issue_count_percent`
+- `top_three_hkw_issue`
+- `top_three_hkw_issue_count`
+- `top_three_hkw_issue_count_percent`
+- `top_one_foreign`
+- `top_one_foreign_count`
+- `top_one_foreign_count_percent`
+- `top_two_foreign`
+- `top_two_foreign_count`
+- `top_two_foreign_count_percent`
+- `top_three_foreign`
+- `top_three_foreign_count`
+- `top_three_foreign_count_percent`
+- `top_one_aim`
+- `top_one_aim_count`
+- `top_one_aim_count_percent`
+- `top_two_aim`
+- `top_two_aim_count`
+- `top_two_aim_count_percent`
+- `top_three_aim`
+- `top_three_aim_count`
+- `top_three_aim_count_percent`
+
+**类别统计**
+- `personCategoryStats_入境外国人`
+- `personCategoryStats_出境外国人`
+
+**LLM 文本输出**
+- `exitLlmSummary`
+- `foreignLlmSummary`
+- `aimLlm`
+- `dataTrendSummary`
+- `specialExitSummary`
+- `specialForeignSummary`
+- `specialAimSummary`
+
+**图表占位符（图片）**
+- `pic1`：出入境趋势
+- `pic2`：航线概览
+- `pic3`：旅客构成
+- `pic4`：中国籍出境关注
+- `pic5`：港澳台入境关注
 ## 统一返回格式（JSON）
 
 多数接口成功返回：
@@ -66,7 +197,7 @@
 | `previousYearTrafficFile` | File | **是** | Excel 文件（.xlsx），航班数据基准期年度表 |
 | `currentYearTrafficFile` | File | **是** | Excel 文件（.xlsx），航班数据对比期年度表 |
 | `jobId` | String | 否 | 自定义任务 ID，用于后续查询进度。不提供则自动生成 UUID |
-| `analysisMode` | String | 否 | 分析模式：`month`（默认）/ `year` |
+| `analysisMode` | String | 否 | 分析维度：`month`（默认）/ `year` |
 | `months` | String | 否 | 月份过滤，逗号分隔，例：`"3,4"` 或 `"1,2,3"`，不传则按上传月份统计 |
 | `username` | String | 否 | 操作用户名，用于日志记录和审计 |
 
@@ -77,8 +208,7 @@
 > - 所有 Excel 文件必须为 `.xlsx` 格式，`.xls` 格式不支持
 > - 支持多文件上传：同名字段可重复上传多份月表，后台会自动合并统计（给多少分析多少）
 > - months 不传/传 "全年"/"all" 表示不过滤，按上传月份统计
-> - `analysisMode=year` 表示按年分析（通常不传 `months`），按年仍需 4 张表（人员基准/人员对比 + 航班基准/航班对比）
-> - `analysisMode=month` 时航班表为逐航班明细表（每行一班）；不传 `months` 也可正常统计，若传 `months` 请确保与表内月份一致
+> - `analysisMode` 用于选择模板：`month`=按月模板，`year`=按年模板（不传默认按月）
 
 **请求头：**
 
@@ -222,6 +352,7 @@ try {
 | `previousYearFile` | File | 是* | Excel 文件（.xlsx），兼容旧参数名，等同于 `basePeriodFile` |
 | `currentYearFile` | File | 是* | Excel 文件（.xlsx），兼容旧参数名，等同于 `comparePeriodFile` |
 | `jobId` | String | 否 | 自定义任务 ID，用于后续查询进度。不提供则自动生成 UUID |
+| `analysisMode` | String | 否 | 分析维度：`month`（默认）/ `year` |
 | `months` | String | 否 | 月份过滤，逗号分隔，例：`"3,4"` 或 `"1,2,3"`，不传则按上传月份统计 |
 
 > **说明**：
@@ -256,6 +387,7 @@ curl -X POST "http://localhost:8030/entry-exit/generate-full-report" \
   -H "Authorization: Bearer your_token_here" \
   -F "basePeriodFile=@/path/to/2024年数据.xlsx" \
   -F "comparePeriodFile=@/path/to/2025年数据.xlsx" \
+  -F "analysisMode=year" \
   -F "months=1,2,3"
 ```
 
@@ -439,6 +571,98 @@ if (result.success) {
 }
 ```
 
+
+---
+
+### 4.2) 上传总量历史数据
+
+**POST** `/entryExit/forecast-total/history`
+**Content-Type** `multipart/form-data`
+
+上传出入境总量的月度历史 CSV，会按 `year+month` 去重覆盖旧数据。
+
+#### 请求参数
+
+**表单字段（multipart/form-data）：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `file` | File | 是 | CSV 文件，列必须为 `year,month,totalCount` |
+
+**请求头：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `Authorization` | String | 条件 | 格式：`Bearer <token>`，当服务端配置 `API_TOKEN` 时必填 |
+
+#### 响应
+
+**成功响应：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "rows": 36,
+    "inserted": 12,
+    "updated": 3
+  }
+}
+```
+
+#### 请求示例
+
+```bash
+curl -X POST "http://localhost:8030/entryExit/forecast-total/history" \
+  -H "Authorization: Bearer your_token_here" \
+  -F "file=@/path/to/total_count_history.csv"
+```
+
+---
+
+### 4.3) 上传交通工具总量历史数据
+
+**POST** `/entryExit/forecast-traffic-tools/history`
+**Content-Type** `multipart/form-data`
+
+上传交通工具总量的月度历史 CSV，会按 `year+month` 去重覆盖旧数据。
+
+#### 请求参数
+
+**表单字段（multipart/form-data）：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `file` | File | 是 | CSV 文件，列必须为 `year,month,totalCount` |
+
+**请求头：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `Authorization` | String | 条件 | 格式：`Bearer <token>`，当服务端配置 `API_TOKEN` 时必填 |
+
+#### 响应
+
+**成功响应：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "rows": 36,
+    "inserted": 12,
+    "updated": 3
+  }
+}
+```
+
+#### 请求示例
+
+```bash
+curl -X POST "http://localhost:8030/entryExit/forecast-traffic-tools/history" \
+  -H "Authorization: Bearer your_token_here" \
+  -F "file=@/path/to/traffic_tool_history.csv"
+```
 ## 文档管理接口
 
 文档统一保存至服务器 `sava_here/` 目录。
@@ -789,6 +1013,8 @@ async function deleteDocument(filename) {
 
 查询报告生成历史记录，支持分页和多条件过滤。
 
+> 说明：同一 `job_id` 可能有多条记录（状态流转），列表按 `timestamp` 倒序；单条接口返回该 `job_id` 最新记录。
+
 #### 请求参数
 
 **查询参数（Query String）：**
@@ -826,8 +1052,7 @@ async function deleteDocument(filename) {
         "username": "张三",
         "report_type": "comprehensive",
         "status": "completed",
-        "created_at": "2026-01-29T15:30:10",
-        "updated_at": "2026-01-29T15:35:20",
+        "timestamp": "2026-01-29T15:35:20",
         "file_info": {
           "base_file": "2024年数据.xlsx",
           "compare_file": "2025年数据.xlsx",
@@ -844,8 +1069,7 @@ async function deleteDocument(filename) {
         "username": "李四",
         "report_type": "comprehensive",
         "status": "failed",
-        "created_at": "2026-01-29T14:20:30",
-        "updated_at": "2026-01-29T14:22:15",
+        "timestamp": "2026-01-29T14:22:15",
         "file_info": {
           "base_file": "2024年数据.xlsx",
           "compare_file": "2025年数据.xlsx"
@@ -870,8 +1094,7 @@ async function deleteDocument(filename) {
 | `logs[].username` | String | 操作用户名 |
 | `logs[].report_type` | String | 报告类型：`comprehensive`（综合报告）/`people_only`（仅人员） |
 | `logs[].status` | String | 状态：`started`/`completed`/`failed` |
-| `logs[].created_at` | String | 创建时间（ISO 8601） |
-| `logs[].updated_at` | String | 更新时间（ISO 8601） |
+| `logs[].timestamp` | String | 记录时间（ISO 8601） |
 | `logs[].file_info` | Object | 文件信息（动态字段） |
 | `logs[].error_message` | String/null | 错误信息（失败时） |
 
@@ -961,8 +1184,7 @@ fetchLogs(1, { username: '张三', status: 'completed' });
     "username": "张三",
     "report_type": "comprehensive",
     "status": "completed",
-    "created_at": "2026-01-29T15:30:10",
-    "updated_at": "2026-01-29T15:35:20",
+    "timestamp": "2026-01-29T15:35:20",
     "file_info": {
       "base_file": "2024年数据.xlsx",
       "compare_file": "2025年数据.xlsx",
@@ -1010,7 +1232,7 @@ async function getLogByJobId(jobId) {
     console.log(`任务: ${log.job_id}`);
     console.log(`用户: ${log.username}`);
     console.log(`状态: ${log.status}`);
-    console.log(`创建时间: ${log.created_at}`);
+    console.log(`记录时间: ${log.timestamp}`);
   } else {
     console.error(result.message);
   }
@@ -1119,3 +1341,5 @@ async function generateReportWithProgress(files, options = {}) {
   return jobId;
 }
 ```
+
+

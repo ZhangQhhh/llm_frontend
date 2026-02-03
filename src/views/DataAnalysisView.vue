@@ -407,6 +407,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { useStore } from 'vuex';
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { 
@@ -479,6 +480,7 @@ interface DocumentItem {
 
 const documents = ref<DocumentItem[]>([]);
 const loadingDocs = ref(false);
+const store = useStore();
 
 // --- Computed ---
 const canGenerate = computed(() => {
@@ -820,6 +822,20 @@ const handleGenerate = async () => {
     formData.append('comparePeriodFile', files.comparePeriod!);
     formData.append('previousYearTrafficFile', files.prevTraffic!);
     formData.append('currentYearTrafficFile', files.currTraffic!);
+
+    const username =
+      store.state.user?.username ||
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('multi_turn_chat_user') || '{}');
+          return user.username;
+        } catch {
+          return '';
+        }
+      })();
+    if (username) {
+      formData.append('username', username);
+    }
     
     formData.append('analysisMode', analysisMode.value);
     if (analysisMode.value === 'month') {

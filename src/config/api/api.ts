@@ -158,6 +158,11 @@ export const API_ENDPOINTS = {
     DAILY: `/writing_logs/daily`,      // GET 获取某天的写作日志记录
     DETAIL: `/writing_logs/detail`,    // GET 获取单条写作日志详情
   },
+  // 数研报告日志相关API（使用davHttp，baseURL取DAV_PREFIX）
+  REPORT_LOGS: {
+    LIST: `/logs/report-generation`,                 // GET 获取报告生成日志列表
+    DETAIL: (jobId: string) => `/logs/report-generation/${jobId}` // GET 获取单条日志详情
+  },
   // 知识库管理API（使用llmHttp，baseURL已包含/api前缀）
   KNOWLEDGE_BASE: {
     UPLOAD: `/knowledge/upload`,           // POST 上传文件

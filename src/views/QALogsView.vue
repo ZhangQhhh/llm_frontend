@@ -29,8 +29,9 @@
             style="width: 200px;"
             @change="handleLogCategoryChange"
           >
-            <el-option label="问答日志" value="qa" />
-            <el-option label="公文写作日志" value="official_document" />
+          <el-option label="问答日志" value="qa" />
+          <el-option label="公文写作日志" value="official_document" />
+          <el-option label="数研报告日志" value="report" />
           </el-select>
         </div>
         <div class="filter-item">
@@ -82,7 +83,7 @@
           <span class="stat-label">当前页:</span>
           <span class="stat-value">{{ logData.page }} / {{ logData.total_pages || 1 }}</span>
         </div>
-        <div class="stat-item" v-if="!isWritingLogs">
+        <div class="stat-item" v-if="isQaLogs">
           <span class="stat-label">可用日期数:</span>
           <span class="stat-value highlight">{{ availableDates.length }}</span>
         </div>
@@ -116,10 +117,10 @@
           @click="viewDetail(log)"
         >
           <div class="log-header">
-            <span class="log-type" :class="getTypeClass(log.type)">{{ getTypeLabel(log.type) }}</span>
+            <span class="log-type" :class="getTypeClass(getLogType(log))">{{ getTypeLabel(getLogType(log)) }}</span>
             <span class="log-time">
               <el-icon><Clock /></el-icon>
-              {{ formatTime(log.timestamp) }}
+              {{ formatTime(getLogTimestamp(log)) }}
             </span>
           </div>
           <div class="log-question">
@@ -128,13 +129,25 @@
           </div>
           <div v-if="getLogPreview(log)" class="log-preview">{{ getLogPreview(log) }}</div>
           <div class="log-meta">
-            <span v-if="getLogUserId(log)" class="meta-item">
+            <span v-if="getLogUserName(log)" class="meta-item">
+              <el-icon><User /></el-icon>
+              {{ getLogUserName(log) }}
+            </span>
+            <span v-else-if="getLogUserId(log)" class="meta-item">
               <el-icon><User /></el-icon>
               {{ getUserName(getLogUserId(log)) }}
             </span>
             <span v-if="getLogOperation(log)" class="meta-item">
               <el-icon><EditPen /></el-icon>
               {{ getOperationLabel(getLogOperation(log)) }}
+            </span>
+            <span v-if="isReportLogs && getReportTypeLabel(log)" class="meta-item">
+              <el-icon><Document /></el-icon>
+              {{ getReportTypeLabel(log) }}
+            </span>
+            <span v-if="isReportLogs && getReportStatusLabel(log)" class="meta-item">
+              <el-icon><Cpu /></el-icon>
+              {{ getReportStatusLabel(log) }}
             </span>
             <span v-if="getLogSessionId(log)" class="meta-item">
               <el-icon><Link /></el-icon>
@@ -187,13 +200,17 @@
             </div>
             <div class="detail-item">
               <label>时间:</label>
-              <span>{{ formatTime(logDetail.timestamp) }}</span>
+              <span>{{ formatTime(getLogTimestamp(logDetail)) }}</span>
             </div>
             <div class="detail-item">
               <label>类型:</label>
-              <span class="log-type" :class="getTypeClass(logDetail.type)">{{ getTypeLabel(logDetail.type) }}</span>
+              <span class="log-type" :class="getTypeClass(getLogType(logDetail))">{{ getTypeLabel(getLogType(logDetail)) }}</span>
             </div>
-            <div class="detail-item" v-if="getLogUserId(logDetail)">
+            <div class="detail-item" v-if="getLogUserName(logDetail)">
+              <label>用户:</label>
+              <span>{{ getLogUserName(logDetail) }}</span>
+            </div>
+            <div class="detail-item" v-else-if="getLogUserId(logDetail)">
               <label>用户:</label>
               <span>{{ getUserName(getLogUserId(logDetail)) }}</span>
             </div>
@@ -213,10 +230,30 @@
               <label>回答类型:</label>
               <span>{{ getLogAnswerType(logDetail) }}</span>
             </div>
+            <div class="detail-item" v-if="isReportLogs && getReportStatusLabel(logDetail)">
+              <label>状态:</label>
+              <span>{{ getReportStatusLabel(logDetail) }}</span>
+            </div>
+            <div class="detail-item" v-if="isReportLogs && getReportTypeLabel(logDetail)">
+              <label>报告类型:</label>
+              <span>{{ getReportTypeLabel(logDetail) }}</span>
+            </div>
           </div>
         </div>
 
-        <div v-if="isWritingLogs">
+        <div v-if="isReportLogs">
+          <div class="detail-section" v-if="getReportFileInfo(logDetail)">
+            <h4>文件信息</h4>
+            <div class="metadata-json">
+              <pre>{{ JSON.stringify(getReportFileInfo(logDetail), null, 2) }}</pre>
+            </div>
+          </div>
+          <div class="detail-section" v-if="getReportErrorMessage(logDetail)">
+            <h4>错误信息</h4>
+            <div class="detail-content question-content">{{ getReportErrorMessage(logDetail) }}</div>
+          </div>
+        </div>
+        <div v-else-if="isWritingLogs">
           <div class="detail-section">
             <h4>写作请求</h4>
             <div class="detail-content question-content">{{ getWritingDetailRequest(logDetail) }}</div>
@@ -276,7 +313,11 @@ import {
   getWritingLogsByDate,
   getWritingLogDetail,
   type WritingLogItem,
-  type WritingLogDetail
+  type WritingLogDetail,
+  getReportLogs,
+  getReportLogDetail,
+  type ReportLogItem,
+  type ReportLogDetail
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
 import { buildUserFilterParams } from '@/utils/qaLogFilters';
@@ -288,9 +329,9 @@ const store = useStore();
 // 模拟数据模式
 const isMockMode = ref(isMockEnabled());
 
-type LogCategory = 'qa' | 'official_document';
-type LogItem = QALogItem | WritingLogItem;
-type LogDetail = QALogDetail | WritingLogDetail;
+type LogCategory = 'qa' | 'official_document' | 'report';
+type LogItem = QALogItem | WritingLogItem | ReportLogItem;
+type LogDetail = QALogDetail | WritingLogDetail | ReportLogDetail;
 
 interface LogListState {
   date: string;
@@ -334,7 +375,13 @@ const detailLoading = ref(false);
 const logDetail = ref<LogDetail | null>(null);
 
 const isWritingLogs = computed(() => logCategory.value === 'official_document');
-const pageTitle = computed(() => (isWritingLogs.value ? '公文写作日志' : '问答日志管理'));
+const isReportLogs = computed(() => logCategory.value === 'report');
+const isQaLogs = computed(() => logCategory.value === 'qa');
+const pageTitle = computed(() => {
+  if (isWritingLogs.value) return '公文写作日志';
+  if (isReportLogs.value) return '数研报告日志';
+  return '问答日志管理';
+});
 
 // 获取今天日期
 function getTodayDate(): string {
@@ -357,7 +404,11 @@ function getTypeLabel(type: string): string {
     'conversation': '多轮对话',
     'mcq': '选择题',
     'writing_start': '写作请求',
-    'writing_result': '写作结果'
+    'writing_result': '写作结果',
+    'report_started': '报告生成中',
+    'report_completed': '报告已完成',
+    'report_failed': '报告失败',
+    'report_unknown': '报告记录'
   };
   return typeMap[type] || type;
 }
@@ -370,7 +421,11 @@ function getTypeClass(type: string): string {
     'conversation': 'type-conv',
     'mcq': 'type-mcq',
     'writing_start': 'type-writing-start',
-    'writing_result': 'type-writing-result'
+    'writing_result': 'type-writing-result',
+    'report_started': 'type-report-started',
+    'report_completed': 'type-report-completed',
+    'report_failed': 'type-report-failed',
+    'report_unknown': 'type-default'
   };
   return classMap[type] || 'type-default';
 }
@@ -389,6 +444,23 @@ function formatTime(timestamp: string): string {
   });
 }
 
+function getLogType(log: LogItem): string {
+  if (isReportLogs.value) {
+    const status = (log as ReportLogItem).status || 'unknown';
+    return `report_${status}`;
+  }
+  return (log as any).type || 'unknown';
+}
+
+function getLogTimestamp(log: LogItem): string {
+  return (
+    (log as any).timestamp ||
+    (log as ReportLogItem).created_at ||
+    (log as ReportLogItem).updated_at ||
+    ''
+  );
+}
+
 function pickFirstString(values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) {
@@ -399,7 +471,7 @@ function pickFirstString(values: unknown[]): string | undefined {
 }
 
 function getLogId(log: LogItem, index?: number, allowIndexFallback = false): string {
-  const direct = (log as any).id ?? (log as any).log_id ?? (log as any).detail_id;
+  const direct = (log as any).id ?? (log as any).log_id ?? (log as any).detail_id ?? (log as any).job_id;
   if (direct) {
     return String(direct);
   }
@@ -420,6 +492,14 @@ function getLogUserId(log: LogItem): string | undefined {
     return undefined;
   }
   return String(userId);
+}
+
+function getLogUserName(log: LogItem): string | undefined {
+  if (isReportLogs.value) {
+    const username = (log as ReportLogItem).username;
+    return typeof username === 'string' ? username : undefined;
+  }
+  return undefined;
 }
 
 function getLogOperation(log: LogItem): string | undefined {
@@ -457,6 +537,13 @@ function getLogAnswerType(log: LogItem): string | undefined {
 }
 
 function getLogTitle(log: LogItem): string {
+  if (isReportLogs.value) {
+    const reportType = getReportTypeLabel(log);
+    const statusLabel = getReportStatusLabel(log);
+    const jobId = getLogId(log);
+    const pieces = [reportType, statusLabel, jobId && `任务 ${jobId}`].filter(Boolean);
+    return pieces.length ? pieces.join(' / ') : '报告记录';
+  }
   if (isWritingLogs.value) {
     const instruction = pickFirstString([
       (log as any).instruction,
@@ -479,6 +566,15 @@ function getLogTitle(log: LogItem): string {
 }
 
 function getLogPreview(log: LogItem): string {
+  if (isReportLogs.value) {
+    const errorMsg = getReportErrorMessage(log);
+    if (errorMsg) return errorMsg;
+    const fileInfo = getReportFileInfo(log);
+    if (fileInfo && typeof fileInfo === 'object' && 'output_file' in fileInfo) {
+      return String((fileInfo as any).output_file || '');
+    }
+    return '';
+  }
   if (!isWritingLogs.value) {
     return (log as QALogItem).answer_preview || '';
   }
@@ -490,6 +586,37 @@ function getLogPreview(log: LogItem): string {
       (log as any).answer
     ]) || ''
   );
+}
+
+function getReportTypeLabel(log: LogItem): string {
+  const reportType = (log as ReportLogItem).report_type;
+  if (!reportType) return '';
+  const map: Record<string, string> = {
+    comprehensive: '综合报告',
+    people_only: '仅人员'
+  };
+  return map[reportType] || reportType;
+}
+
+function getReportStatusLabel(log: LogItem): string {
+  const status = (log as ReportLogItem).status;
+  if (!status) return '';
+  const map: Record<string, string> = {
+    started: '生成中',
+    completed: '已完成',
+    failed: '失败'
+  };
+  return map[status] || status;
+}
+
+function getReportFileInfo(log: LogItem): Record<string, unknown> | null {
+  const fileInfo = (log as ReportLogItem).file_info;
+  return fileInfo && typeof fileInfo === 'object' ? (fileInfo as Record<string, unknown>) : null;
+}
+
+function getReportErrorMessage(log: LogItem): string {
+  const errorMessage = (log as ReportLogItem).error_message;
+  return typeof errorMessage === 'string' ? errorMessage : '';
 }
 
 function getWritingDetailRequest(detail: LogDetail): string {
@@ -531,7 +658,7 @@ function getQADetailAnswer(detail: LogDetail): string {
 
 // 加载可用日期列表
 async function loadAvailableDates() {
-  if (isWritingLogs.value) {
+  if (isWritingLogs.value || isReportLogs.value) {
     availableDates.value = [];
     return;
   }
@@ -559,68 +686,97 @@ async function loadLogs(options: { silent?: boolean } = {}) {
   try {
     const token = store.state.user.token;
     const hasUserFilter = filterUserName.value.trim().length > 0;
-    const userFilterResult = await buildUserFilterParams(filterUserName.value);
-    if (!silent && userFilterResult.status === 'ambiguous') {
-      const keyword = userFilterResult.keyword || filterUserName.value.trim();
-      ElMessage.warning(`用户名“${keyword}”匹配多个用户，请输入更完整的用户名`);
-    }
-    if (isWritingLogs.value) {
-      const result = await getWritingLogsByDate(token, {
-        date: selectedDate.value,
-        writing_type: logCategory.value,
+    if (isReportLogs.value) {
+      const date = selectedDate.value;
+      const start_date = date ? `${date}T00:00:00` : undefined;
+      const end_date = date ? `${date}T23:59:59` : undefined;
+      const result = await getReportLogs(token, {
         page: currentPage.value,
-        page_size: pageSize.value
+        page_size: pageSize.value,
+        username: hasUserFilter ? filterUserName.value.trim() : undefined,
+        start_date,
+        end_date
       });
 
-      let writingLogs = (result.logs || []).map((log) => {
-        const resolvedId = getLogId(log);
-        return resolvedId ? { ...log, id: resolvedId } : log;
-      });
-
-      if (hasUserFilter) {
-        const keyword = userFilterResult.keyword || filterUserName.value.trim();
-        const filterUserId = userFilterResult.params.user_id;
-        writingLogs = writingLogs.filter((log) => {
-          const userId = getLogUserId(log);
-          if (filterUserId && userId === filterUserId) {
-            return true;
-          }
-          const userName = getUserNameById(userId);
-          if (userName && userName.includes(keyword)) {
-            return true;
-          }
-          return userId ? userId.includes(keyword) : false;
-        });
-      }
-
-      const total = typeof result.total === 'number' ? result.total : writingLogs.length;
-      const page = result.page ?? currentPage.value;
-      const page_size = result.page_size ?? pageSize.value;
-      const totalForDisplay = hasUserFilter ? writingLogs.length : total;
-      const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
-      const total_pages = hasUserFilter
-        ? fallbackTotalPages
-        : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
+      const reportLogs = (result.logs || []).map((log) => ({
+        ...log,
+        timestamp: log.created_at
+      }));
 
       logData.value = {
-        date: result.date || selectedDate.value,
-        total: totalForDisplay,
-        page,
-        page_size,
-        total_pages,
-        logs: writingLogs
-      };
-      logs.value = writingLogs;
-    } else {
-      const result = await getQALogsByDate(token, {
         date: selectedDate.value,
-        ...userFilterResult.params,
-        page: currentPage.value,
-        page_size: pageSize.value
-      });
+        total: result.total ?? reportLogs.length,
+        page: result.page ?? currentPage.value,
+        page_size: result.page_size ?? pageSize.value,
+        total_pages: result.total_pages ?? 1,
+        logs: reportLogs
+      };
+      logs.value = reportLogs;
+    } else {
+      const userFilterResult = await buildUserFilterParams(filterUserName.value);
+      if (!silent && userFilterResult.status === 'ambiguous') {
+        const keyword = userFilterResult.keyword || filterUserName.value.trim();
+        ElMessage.warning(`用户名“${keyword}”匹配多个用户，请输入更完整的用户名`);
+      }
 
-      logData.value = result as LogListState;
-      logs.value = result.logs || [];
+      if (isWritingLogs.value) {
+        const result = await getWritingLogsByDate(token, {
+          date: selectedDate.value,
+          writing_type: logCategory.value,
+          page: currentPage.value,
+          page_size: pageSize.value
+        });
+
+        let writingLogs = (result.logs || []).map((log) => {
+          const resolvedId = getLogId(log);
+          return resolvedId ? { ...log, id: resolvedId } : log;
+        });
+
+        if (hasUserFilter) {
+          const keyword = userFilterResult.keyword || filterUserName.value.trim();
+          const filterUserId = userFilterResult.params.user_id;
+          writingLogs = writingLogs.filter((log) => {
+            const userId = getLogUserId(log);
+            if (filterUserId && userId === filterUserId) {
+              return true;
+            }
+            const userName = getUserNameById(userId);
+            if (userName && userName.includes(keyword)) {
+              return true;
+            }
+            return userId ? userId.includes(keyword) : false;
+          });
+        }
+
+        const total = typeof result.total === 'number' ? result.total : writingLogs.length;
+        const page = result.page ?? currentPage.value;
+        const page_size = result.page_size ?? pageSize.value;
+        const totalForDisplay = hasUserFilter ? writingLogs.length : total;
+        const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
+        const total_pages = hasUserFilter
+          ? fallbackTotalPages
+          : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
+
+        logData.value = {
+          date: result.date || selectedDate.value,
+          total: totalForDisplay,
+          page,
+          page_size,
+          total_pages,
+          logs: writingLogs
+        };
+        logs.value = writingLogs;
+      } else {
+        const result = await getQALogsByDate(token, {
+          date: selectedDate.value,
+          ...userFilterResult.params,
+          page: currentPage.value,
+          page_size: pageSize.value
+        });
+
+        logData.value = result as LogListState;
+        logs.value = result.logs || [];
+      }
     }
     error.value = '';
   } catch (err: any) {
@@ -643,7 +799,13 @@ async function viewDetail(log: LogItem) {
 
   try {
     const token = store.state.user.token;
-    if (isWritingLogs.value) {
+    if (isReportLogs.value) {
+      const logId = getLogId(log);
+      if (!logId) {
+        throw new Error('日志ID缺失，无法查看详情');
+      }
+      logDetail.value = await getReportLogDetail(token, logId);
+    } else if (isWritingLogs.value) {
       const logId = getLogId(log);
       if (!logId) {
         throw new Error('日志ID缺失，无法查看详情');
@@ -952,6 +1114,21 @@ onUnmounted(() => {
 .type-writing-result {
   background: #dcfce7;
   color: #15803d;
+}
+
+.type-report-started {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.type-report-completed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.type-report-failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .type-default {
