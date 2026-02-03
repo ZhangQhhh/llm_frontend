@@ -308,7 +308,7 @@ import {
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, STORAGE_KEYS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
-import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
+import { renderMarkdown } from '@/utils/markdown';
 import { 
   isProgressMessage, 
   parseProgressMessage, 
@@ -323,7 +323,6 @@ import {
   getMockThinking,
   shouldUseReferenceMocks
 } from '@/mocks/referenceMocks';
-import 'highlight.js/styles/atom-one-dark.css';  // 代码高亮主题
 import 'katex/dist/katex.min.css';                // 数学公式样式
 import '@/assets/styles/markdown.css';            // Markdown 样式
 
@@ -470,7 +469,6 @@ export default defineComponent({
 
     // 初始化
     onMounted(async () => {
-      setupCopyCode();
 
       if (mockReferencesEnabled) {
         applyConversationMocks();

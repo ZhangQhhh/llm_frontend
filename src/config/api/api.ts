@@ -134,7 +134,10 @@ export const API_ENDPOINTS = {
   LLM_SUMMARY: {
     DOX_SUMMARY: `${DAV_PREFIX}/entry-exit/generate-full-report`,
     MAX_SUMMARY: `${DAV_PREFIX}/entryExit/summary-entrance-comprehensive`,
-    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`
+    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`,
+    TRAFFIC_TOOLS_FORECAST: `${DAV_PREFIX}/entryExit/forecast-traffic-tools`,
+    TOTAL_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-total/history`,
+    TRAFFIC_TOOLS_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-traffic-tools/history`
   },
   // 文档管理接口
   DOCUMENTS: {
