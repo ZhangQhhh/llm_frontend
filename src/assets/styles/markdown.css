@@ -102,73 +102,6 @@
   color: inherit;
 }
 
-/* ========== 代码块样式 ========== */
-.code-block {
-  margin: 16px 0;
-  border-radius: 6px;
-  overflow: hidden;
-  background-color: #1e1e1e;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.code-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px;
-  background-color: #2d2d2d;
-  border-bottom: 1px solid #404040;
-}
-
-.code-header .language {
-  font-size: 12px;
-  color: #9ca3af;
-  font-weight: 500;
-  text-transform: uppercase;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-}
-
-.code-header .copy-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.code-header .copy-btn:hover {
-  background-color: #2563eb;
-}
-
-.code-header .copy-btn.copied {
-  background-color: #10b981;
-}
-
-.code-header .copy-btn svg {
-  flex-shrink: 0;
-}
-
-.code-block pre {
-  margin: 0;
-  padding: 16px;
-  overflow-x: auto;
-  background-color: #1e1e1e;
-}
-
-.code-block pre code {
-  display: block;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #d4d4d4;
-}
-
 /* ========== 列表样式 ========== */
 .markdown-content ul,
 .markdown-content ol {
@@ -306,59 +239,6 @@
   font-size: 1.2em;
 }
 
-/* ========== Mermaid 图表样式 ========== */
-.mermaid-block {
-  margin: 16px 0;
-  border-radius: 6px;
-  overflow: hidden;
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.mermaid-header {
-  padding: 8px 16px;
-  background-color: #f3f4f6;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.mermaid-header .language {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.mermaid-container {
-  padding: 20px;
-  text-align: center;
-  background-color: #ffffff;
-  overflow-x: auto;
-}
-
-.mermaid-loading {
-  color: #6b7280;
-  font-style: italic;
-  padding: 40px 20px;
-}
-
-.mermaid-error {
-  color: #ef4444;
-  background-color: #fee2e2;
-  padding: 16px;
-  border-radius: 4px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 14px;
-  text-align: left;
-  white-space: pre-wrap;
-}
-
-/* Mermaid SVG 样式调整 */
-.mermaid-container svg {
-  max-width: 100%;
-  height: auto;
-}
-
 /* ========== 响应式设计 ========== */
 @media (max-width: 768px) {
   .markdown-content {
@@ -373,14 +253,6 @@
     font-size: 1.5em;
   }
 
-  .code-block pre {
-    padding: 12px;
-  }
-
-  .code-block pre code {
-    font-size: 13px;
-  }
-
   .math-block {
     padding: 12px;
   }
@@ -393,7 +265,4 @@
     font-size: 1.1em;
   }
 
-  .mermaid-container {
-    padding: 12px;
-  }
 }

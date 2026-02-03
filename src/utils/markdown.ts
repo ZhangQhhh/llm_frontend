@@ -1,27 +1,15 @@
 import { marked } from 'marked';
-import hljs from 'highlight.js';
 import DOMPurify from 'dompurify';
 import katex from 'katex';
-import mermaid from 'mermaid';
 
 /**
- * Markdown 渲染工具（完整版本）
- * 支持：
- * - 完整的 Markdown 语法
- * - 代码高亮
- * - 数学公式（LaTeX）
- * - Mermaid 图表
- * - XSS 防护
- * 适用于内网环境，所有依赖本地化
+ * Markdown rendering utilities.
+ * Supports:
+ * - Markdown basics
+ * - KaTeX math
+ * - XSS sanitization
+ * Local dependencies only.
  */
-
-// 初始化 Mermaid
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  fontFamily: 'Arial, sans-serif',
-});
 
 // 配置 marked - 使用 GitHub 风格的 Markdown
 marked.setOptions({
@@ -48,16 +36,7 @@ export function renderMarkdown(markdown: string): string {
     // 移除可能残留的单独标签
     normalizedMarkdown = normalizedMarkdown.replace(/<\/?think>/gi, '');
     
-    // 0.1 防御性处理：检测未闭合的代码块标记
-    // 统计代码块标记（三个反引号）的数量
-    const codeBlockMarkers = (normalizedMarkdown.match(/```/g) || []).length;
-    
-    // 如果代码块标记数量是奇数，说明有未闭合的代码块
-    if (codeBlockMarkers % 2 !== 0) {
-      console.warn('[Markdown] 检测到未闭合的代码块标记，已自动修复');
-      // 在末尾添加闭合标记
-      normalizedMarkdown += '\n```';
-    }
+    // 0.1 Skip code block handling for this app
     
     // 0.5. 确保 marked 能正确处理换行：
     // 1. 先将所有 \n 替换为临时标记（避免重复处理）
@@ -77,8 +56,7 @@ export function renderMarkdown(markdown: string): string {
     // 3. 恢复并渲染数学公式
     html = restoreMathBlocks(html, mathBlocks);
     
-    // 4. 代码高亮和 Mermaid 图表处理
-    html = processCodeBlocks(html);
+    // 4. 业务不渲染代码块，跳过代码块增强处理
     
     // 5. 使用 DOMPurify 清理 HTML，防止 XSS 攻击
     const cleanHtml = DOMPurify.sanitize(html, {
@@ -179,120 +157,4 @@ function restoreMathBlocks(html: string, mathBlocks: string[]): string {
   });
 
   return html;
-}
-
-/**
- * 处理代码块：添加语法高亮、复制按钮、语言标签、Mermaid 图表
- */
-function processCodeBlocks(html: string): string {
-  let mermaidIndex = 0;
-  
-  // 匹配 <pre><code> 标签
-  return html.replace(/<pre><code(?:\s+class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/g, (match, lang, code) => {
-    const language = lang || 'plaintext';
-    
-    // 解码 HTML 实体
-    const decodedCode = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-    
-    // 检查是否是 Mermaid 图表
-    if (language === 'mermaid') {
-      const mermaidId = `mermaid-${Date.now()}-${mermaidIndex++}`;
-      
-      // 使用 setTimeout 异步渲染 Mermaid（避免阻塞）
-      setTimeout(() => {
-        const element = document.getElementById(mermaidId);
-        if (element) {
-          mermaid.render(`mermaid-svg-${mermaidId}`, decodedCode).then(({ svg }) => {
-            element.innerHTML = svg;
-          }).catch((err) => {
-            console.error('Mermaid 渲染失败:', err);
-            element.innerHTML = `<pre class="mermaid-error">${decodedCode}</pre>`;
-          });
-        }
-      }, 0);
-      
-      return `
-        <div class="mermaid-block">
-          <div class="mermaid-header">
-            <span class="language">Mermaid 图表</span>
-          </div>
-          <div id="${mermaidId}" class="mermaid-container">
-            <div class="mermaid-loading">正在渲染图表...</div>
-          </div>
-        </div>
-      `.trim();
-    }
-    
-    // 普通代码块：代码高亮
-    let highlighted: string;
-    try {
-      if (hljs.getLanguage(language)) {
-        highlighted = hljs.highlight(decodedCode, { language }).value;
-      } else {
-        highlighted = hljs.highlightAuto(decodedCode).value;
-      }
-    } catch (err) {
-      console.error('代码高亮失败:', err);
-      highlighted = decodedCode;
-    }
-    
-    // 返回带样式的代码块
-    // 当语言为 plaintext 时不显示语言标签
-    const languageLabel = language === 'plaintext' ? '' : `<span class="language">${language}</span>`;
-    
-    return `
-      <div class="code-block">
-        <div class="code-header">
-          ${languageLabel}
-          <button class="copy-btn" onclick="copyCode(this)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            复制
-          </button>
-        </div>
-        <pre><code class="hljs language-${language}">${highlighted}</code></pre>
-      </div>
-    `.trim();
-  });
-}
-
-/**
- * 复制代码到剪贴板（需要在全局注册）
- */
-export function setupCopyCode() {
-  (window as any).copyCode = function(button: HTMLButtonElement) {
-    const codeBlock = button.closest('.code-block');
-    if (!codeBlock) return;
-    
-    const code = codeBlock.querySelector('code');
-    if (!code) return;
-    
-    const text = code.textContent || '';
-    
-    navigator.clipboard.writeText(text).then(() => {
-      const originalText = button.innerHTML;
-      button.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-        已复制
-      `;
-      button.classList.add('copied');
-      
-      setTimeout(() => {
-        button.innerHTML = originalText;
-        button.classList.remove('copied');
-      }, 2000);
-    }).catch(err => {
-      console.error('复制失败:', err);
-      alert('复制失败，请手动复制');
-    });
-  };
 }

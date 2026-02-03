@@ -33,8 +33,27 @@
         <section class="forecast-section animate-slide-left">
           <div class="section-card forecast-card">
             <div class="card-header">
-              <h2><el-icon><DataLine /></el-icon> 智能预测大屏</h2>
+              <h2><el-icon><DataLine /></el-icon> {{ forecastTitle }}</h2>
               <div class="header-controls">
+                <el-select v-model="forecastType" class="forecast-type-select" size="small">
+                  <el-option label="出入境总人数" value="total" />
+                  <el-option label="交通工具总量" value="traffic" />
+                </el-select>
+                <el-upload
+                  ref="forecastUploadRef"
+                  class="forecast-upload"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept=".csv"
+                  :on-change="handleForecastHistoryFileChange"
+                >
+                  <el-tooltip content="上传历史CSV（列：year,month,totalCount）" placement="top">
+                    <el-button size="small" plain :loading="uploadingForecastHistory" class="upload-history-btn">
+                      <el-icon><Upload /></el-icon>
+                      {{ uploadingForecastHistory ? '上传中...' : '更新历史CSV' }}
+                    </el-button>
+                  </el-tooltip>
+                </el-upload>
                 <el-input-number 
                   v-model="forecastMonths" 
                   :min="1" 
@@ -115,28 +134,37 @@
 
                 <div class="upload-area">
                   
-                  <!-- 月份选择 -->
+                  <!-- 分析模式 -->
+                  <div class="analysis-mode">
+                    <label>分析模式</label>
+                    <el-radio-group v-model="analysisMode" size="small">
+                      <el-radio-button label="month">按月</el-radio-button>
+                      <el-radio-button label="year">按年</el-radio-button>
+                    </el-radio-group>
+                  </div>
+
+                  <!-- 月份/年份选择 -->
                   <div class="month-selector-group">
                     <div class="selector-item">
-                      <label>基准期月份</label>
+                      <label>{{ analysisMode === 'year' ? '基准期年份' : '基准期月份' }}</label>
                       <el-date-picker
                         v-model="baseMonth"
-                        type="month"
-                        placeholder="选择基准期月份"
-                        format="YYYY-MM"
-                        value-format="YYYY-MM"
+                        :type="analysisMode === 'year' ? 'year' : 'month'"
+                        :placeholder="analysisMode === 'year' ? '选择基准期年份' : '选择基准期月份'"
+                        :format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
+                        :value-format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
                         size="default"
                         style="width: 100%"
                       />
                     </div>
                     <div class="selector-item">
-                      <label>对比期月份</label>
+                      <label>{{ analysisMode === 'year' ? '对比期年份' : '对比期月份' }}</label>
                       <el-date-picker
                         v-model="compareMonth"
-                        type="month"
-                        placeholder="选择对比期月份"
-                        format="YYYY-MM"
-                        value-format="YYYY-MM"
+                        :type="analysisMode === 'year' ? 'year' : 'month'"
+                        :placeholder="analysisMode === 'year' ? '选择对比期年份' : '选择对比期月份'"
+                        :format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
+                        :value-format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
                         size="default"
                         style="width: 100%"
                       />
@@ -147,7 +175,7 @@
                   <div class="upload-group">
                     <div class="group-title">
                       <el-icon><User /></el-icon>
-                      <span>人员月度数据</span>
+                      <span>{{ peopleGroupTitle }}</span>
                     </div>
                     <div class="file-grid">
                       <div 
@@ -157,7 +185,7 @@
                       >
                         <input type="file" ref="fileInput_basePeriod" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'basePeriod')" />
                         <el-icon class="box-icon"><FolderAdd /></el-icon>
-                        <span class="box-label">基准期</span>
+                        <span class="box-label">{{ peopleBaseLabel }}</span>
                         <span v-if="files.basePeriod" class="file-name">{{ files.basePeriod.name }}</span>
                       </div>
                       <div 
@@ -167,7 +195,7 @@
                       >
                         <input type="file" ref="fileInput_comparePeriod" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'comparePeriod')" />
                         <el-icon class="box-icon"><FolderAdd /></el-icon>
-                        <span class="box-label">对比期</span>
+                        <span class="box-label">{{ peopleCompareLabel }}</span>
                         <span v-if="files.comparePeriod" class="file-name">{{ files.comparePeriod.name }}</span>
                       </div>
                     </div>
@@ -177,7 +205,7 @@
                   <div class="upload-group">
                     <div class="group-title">
                       <el-icon><Ship /></el-icon>
-                      <span>航班年度数据</span>
+                      <span>{{ trafficGroupTitle }}</span>
                     </div>
                     <div class="file-grid">
                       <div 
@@ -187,7 +215,7 @@
                       >
                         <input type="file" ref="fileInput_prevTraffic" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'prevTraffic')" />
                         <el-icon class="box-icon"><FolderAdd /></el-icon>
-                        <span class="box-label">基准年</span>
+                        <span class="box-label">{{ trafficBaseLabel }}</span>
                         <span v-if="files.prevTraffic" class="file-name">{{ files.prevTraffic.name }}</span>
                       </div>
                       <div 
@@ -197,7 +225,7 @@
                       >
                         <input type="file" ref="fileInput_currTraffic" style="display:none" accept=".xlsx" @change="(e) => handleFileChange(e, 'currTraffic')" />
                         <el-icon class="box-icon"><FolderAdd /></el-icon>
-                        <span class="box-label">对比年</span>
+                        <span class="box-label">{{ trafficCompareLabel }}</span>
                         <span v-if="files.currTraffic" class="file-name">{{ files.currTraffic.name }}</span>
                       </div>
                     </div>
@@ -379,6 +407,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { useStore } from 'vuex';
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { 
@@ -395,14 +424,19 @@ import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
 // --- State ---
 const activeTab = ref('generate');
 const forecastMonths = ref(6);
+const forecastType = ref<'total' | 'traffic'>('total');
 const predicting = ref(false);
 const hasForecastData = ref(false);
 const chartRef = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
+const forecastUploadRef = ref();
+const forecastHistoryFile = ref<File | null>(null);
+const uploadingForecastHistory = ref(false);
 
 // 月份选择
 const baseMonth = ref('');
 const compareMonth = ref('');
+const analysisMode = ref<'month' | 'year'>('month');
 
 const files = reactive({
   basePeriod: null as File | null,
@@ -446,13 +480,51 @@ interface DocumentItem {
 
 const documents = ref<DocumentItem[]>([]);
 const loadingDocs = ref(false);
+const store = useStore();
 
 // --- Computed ---
 const canGenerate = computed(() => {
-  return files.basePeriod && files.comparePeriod && 
-         files.prevTraffic && files.currTraffic &&
-         baseMonth.value && compareMonth.value;
+  if (!files.basePeriod || !files.comparePeriod || !files.prevTraffic || !files.currTraffic) {
+    return false;
+  }
+  if (analysisMode.value === 'month') {
+    return Boolean(baseMonth.value && compareMonth.value);
+  }
+  return true;
 });
+
+const forecastTitle = computed(() =>
+  forecastType.value === 'traffic' ? '交通工具预测' : '出入境总人数预测'
+);
+
+const peopleGroupTitle = computed(() =>
+  analysisMode.value === 'year' ? '人员年度数据' : '人员月度数据'
+);
+
+const peopleBaseLabel = computed(() =>
+  analysisMode.value === 'year' ? '基准年' : '基准月'
+);
+
+const peopleCompareLabel = computed(() =>
+  analysisMode.value === 'year' ? '对比年' : '对比月'
+);
+
+const trafficGroupTitle = computed(() =>
+  analysisMode.value === 'year' ? '航班年度数据' : '航班月度数据（逐航班明细）'
+);
+
+const trafficBaseLabel = computed(() =>
+  analysisMode.value === 'year' ? '基准年' : '基准月'
+);
+
+const trafficCompareLabel = computed(() =>
+  analysisMode.value === 'year' ? '对比年' : '对比月'
+);
+
+const parseCount = (value: any) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
 // --- Lifecycle ---
 onMounted(() => {
@@ -499,34 +571,116 @@ const handleForecast = async () => {
   hasForecastData.value = false;
   
   try {
-    const res: any = await davHttp.get(API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST, {
+    const endpoint = forecastType.value === 'traffic'
+      ? API_ENDPOINTS.LLM_SUMMARY.TRAFFIC_TOOLS_FORECAST
+      : API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST;
+    const res: any = await davHttp.get(endpoint, {
       params: { steps: forecastMonths.value }
     });
     
     if (res.data && res.data.success && res.data.data) {
-      updateChart(res.data.data);
-      calculateStats(res.data.data);
+      const history = Array.isArray(res.data.data.history) ? res.data.data.history : [];
+      const forecast = Array.isArray(res.data.data.forecast) ? res.data.data.forecast : [];
+      if (!history.length && !forecast.length) {
+        ElMessage.warning('未能获取预测数据');
+        return;
+      }
+      updateChart(history, forecast);
+      calculateStats(history, forecast);
       hasForecastData.value = true;
-      ElMessage.success('预测完成');
+      const label = forecastType.value === 'traffic' ? '交通工具预测完成' : '总人数预测完成';
+      ElMessage.success(label);
     } else {
       ElMessage.warning('未能获取预测数据');
     }
   } catch (e) {
     console.error(e);
-    ElMessage.error('预测服务暂时不可用');
+    ElMessage.error('预测数据处理失败');
   } finally {
     predicting.value = false;
   }
 };
 
-const updateChart = (data: any[]) => {
+const handleForecastHistoryFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+  forecastHistoryFile.value = file;
+  await uploadForecastHistory();
+};
+
+const uploadForecastHistory = async () => {
+  if (!forecastHistoryFile.value || uploadingForecastHistory.value) return;
+  uploadingForecastHistory.value = true;
+  try {
+    const endpoint = forecastType.value === 'traffic'
+      ? API_ENDPOINTS.LLM_SUMMARY.TRAFFIC_TOOLS_FORECAST_HISTORY
+      : API_ENDPOINTS.LLM_SUMMARY.TOTAL_FORECAST_HISTORY;
+    const formData = new FormData();
+    formData.append('file', forecastHistoryFile.value);
+    const res: any = await davHttp.post(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    if (res.data && res.data.success) {
+      const payload = res.data.data || res.data;
+      const inserted = parseCount(payload?.inserted);
+      const updated = parseCount(payload?.updated);
+      if (inserted !== null || updated !== null) {
+        ElMessage.success(`历史数据更新成功：新增 ${inserted ?? 0}，覆盖 ${updated ?? 0}`);
+      } else {
+        ElMessage.success('历史数据更新成功');
+      }
+    } else {
+      ElMessage.error(res.data?.message || '历史数据更新失败');
+    }
+  } catch (error) {
+    console.error(error);
+    ElMessage.error('历史数据更新失败');
+  } finally {
+    uploadingForecastHistory.value = false;
+    forecastHistoryFile.value = null;
+    forecastUploadRef.value?.clearFiles();
+  }
+};
+
+const formatLabel = (item: any) => {
+  if (item && Number.isFinite(item.year) && Number.isFinite(item.month)) {
+    const month = String(item.month).padStart(2, '0');
+    return `${item.year}-${month}`;
+  }
+  if (item && Number.isFinite(item.month)) {
+    return String(item.month);
+  }
+  return '';
+};
+
+const getValue = (item: any) => {
+  if (item && Number.isFinite(item.totalCount)) return item.totalCount;
+  if (item && Number.isFinite(item.value)) return item.value;
+  return 0;
+};
+
+const updateChart = (history: any[], forecast: any[]) => {
   if (!chartInstance) return;
-  
-  const dates = data.map(item => item.month);
-  const values = data.map(item => item.value);
+  const historyLabels = history.map(formatLabel);
+  const forecastLabels = forecast.map(formatLabel);
+  const labels = [...historyLabels, ...forecastLabels];
+  const historyValues = history.map(getValue);
+  const forecastValues = forecast.map(getValue);
+  const historySeries = [...historyValues, ...new Array(forecastValues.length).fill(null)];
+  const forecastSeries = [...new Array(historyValues.length).fill(null), ...forecastValues];
   
   const option = {
     backgroundColor: 'transparent',
+    title: {
+      text: forecastTitle.value,
+      left: 'center',
+      top: 8,
+      textStyle: {
+        color: '#1e293b',
+        fontSize: 14,
+        fontWeight: 700
+      }
+    },
     tooltip: { 
       trigger: 'axis',
       backgroundColor: 'rgba(0,0,0,0.8)',
@@ -535,7 +689,7 @@ const updateChart = (data: any[]) => {
     },
     xAxis: {
       type: 'category',
-      data: dates,
+      data: labels,
       axisLabel: { color: '#666', fontSize: 11 }
     },
     yAxis: {
@@ -545,7 +699,7 @@ const updateChart = (data: any[]) => {
     },
     series: [
       {
-        data: values,
+        data: historySeries,
         type: 'line',
         smooth: true,
         symbolSize: 8,
@@ -567,6 +721,22 @@ const updateChart = (data: any[]) => {
             { offset: 1, color: 'rgba(20, 184, 166, 0.0)' }
           ])
         }
+      },
+      {
+        data: forecastSeries,
+        type: 'line',
+        smooth: true,
+        symbolSize: 8,
+        itemStyle: {
+          color: '#f59e0b',
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        lineStyle: {
+          width: 3,
+          type: 'dashed',
+          color: '#f59e0b'
+        }
       }
     ]
   };
@@ -574,9 +744,11 @@ const updateChart = (data: any[]) => {
   chartInstance.setOption(option);
 };
 
-const calculateStats = (data: any[]) => {
-  if (!data.length) return;
-  const values = data.map(d => d.value);
+const calculateStats = (history: any[], forecast: any[]) => {
+  const forecastValues = forecast.map(getValue).filter(v => Number.isFinite(v));
+  const historyValues = history.map(getValue).filter(v => Number.isFinite(v));
+  const values = forecastValues.length ? forecastValues : historyValues;
+  if (!values.length) return;
   stats.max = Math.max(...values).toLocaleString();
   stats.min = Math.min(...values).toLocaleString();
   const sum = values.reduce((a, b) => a + b, 0);
@@ -616,6 +788,7 @@ const resetForm = () => {
   files.currTraffic = null;
   baseMonth.value = '';
   compareMonth.value = '';
+  analysisMode.value = 'month';
   if(fileInput_basePeriod.value) fileInput_basePeriod.value.value = '';
   if(fileInput_comparePeriod.value) fileInput_comparePeriod.value.value = '';
   if(fileInput_prevTraffic.value) fileInput_prevTraffic.value.value = '';
@@ -638,7 +811,7 @@ const handleGenerate = async () => {
   const progressTimer = setInterval(() => {
     if (progressPercent.value < 90) {
       progressPercent.value += 5;
-      if (progressPercent.value > 30) progressStep.value = 'AI 正在分析...';
+      if (progressPercent.value > 30) progressStep.value = '正在时间序列分析...';
       if (progressPercent.value > 60) progressStep.value = '正在生成 Word 报告...';
     }
   }, 800);
@@ -649,11 +822,32 @@ const handleGenerate = async () => {
     formData.append('comparePeriodFile', files.comparePeriod!);
     formData.append('previousYearTrafficFile', files.prevTraffic!);
     formData.append('currentYearTrafficFile', files.currTraffic!);
+
+    const username =
+      store.state.user?.username ||
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('multi_turn_chat_user') || '{}');
+          return user.username;
+        } catch {
+          return '';
+        }
+      })();
+    if (username) {
+      formData.append('username', username);
+    }
     
-    // 提取月份数字并传递
-    const baseMonthNum = baseMonth.value.split('-')[1];
-    const compareMonthNum = compareMonth.value.split('-')[1];
-    formData.append('months', `${baseMonthNum},${compareMonthNum}`);
+    formData.append('analysisMode', analysisMode.value);
+    if (analysisMode.value === 'month') {
+      const baseMonthNum = baseMonth.value.split('-')[1];
+      const compareMonthNum = compareMonth.value.split('-')[1];
+      if (baseMonthNum || compareMonthNum) {
+        const months = [baseMonthNum, compareMonthNum].filter(Boolean);
+        if (months.length) {
+          formData.append('months', months.join(','));
+        }
+      }
+    }
 
     const response = await davHttp.post(
         API_ENDPOINTS.LLM_SUMMARY.MAX_SUMMARY,
@@ -1021,6 +1215,18 @@ const formatDate = (dateStr: string): string => {
   gap: 12px;
 }
 
+.forecast-upload {
+  display: inline-flex;
+}
+
+.upload-history-btn {
+  font-weight: 600;
+}
+
+.forecast-type-select {
+  width: 140px;
+}
+
 .month-selector {
   width: 100px;
 }
@@ -1204,6 +1410,22 @@ const formatDate = (dateStr: string): string => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.analysis-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f0fdfa;
+  border-radius: 12px;
+  border: 2px solid #99f6e4;
+}
+
+.analysis-mode label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f766e;
 }
 
 .month-selector-group {

@@ -80,7 +80,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/knowledge-qa',
     name: 'knowledge-qa',
     component: KnowledgeQAView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '知识问答',
       pageCode: 'PAGE_003',
@@ -91,7 +91,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/knowledge-qa/debug',
     name: 'knowledge-qa-debug',
     component: KnowledgeQAView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '知识问答 (Debug模式)',
       pageCode: 'PAGE_004'
@@ -101,7 +101,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/conversation',
     name: 'conversation',
     component: ConversationView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '多轮对话',
       pageCode: 'PAGE_005',
@@ -112,7 +112,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin',
     name: 'admin',
     component: () => import('../views/AdminView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       requiresAdmin: true,
       title: '管理中心',
@@ -145,7 +145,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/profile',
     name: 'profile',
     component: () => import('../views/ProfileView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '个人设置',
       pageCode: 'PAGE_009',
@@ -156,7 +156,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/excel-tool',
     name: 'excel-tool',
     component: () => import('../views/ExcelToolView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: 'Excel 工具',
       pageCode: 'PAGE_010',
@@ -167,7 +167,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/format-tool',
     name: 'format-tool',
     component: () => import('../views/FormatToolView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '选择题格式化工具',
       pageCode: 'PAGE_011',
@@ -178,7 +178,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/exam',
     name: 'exam',
     component: () => import('../views/ExamView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '边检智能家教',
       pageCode: 'PAGE_012'
@@ -188,7 +188,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/smart-office',
     name: 'smart-office',
     component: SmartOfficeView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '智慧办公',
       pageCode: 'PAGE_013'
@@ -198,7 +198,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/immigration-12367',
     name: 'immigration-12367',
     component: Immigration12367View,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '移民局12367',
       pageCode: 'PAGE_014',
@@ -209,7 +209,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/test-explain',
     name: 'test-explain',
     component: () => import('../views/TestExplainView.vue'),
-    meta: { 
+    meta: {
       title: '选择题问答测试',
       pageCode: 'PAGE_015'
     }
@@ -218,7 +218,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/report-generator',
     name: 'report-generator',
     component: () => import('../views/ReportGeneratorView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '数据分析',
       pageCode: 'PAGE_016'
@@ -228,7 +228,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/data-analysis',
     name: 'data-analysis',
     component: () => import('../views/DataAnalysisView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: '数研报告',
       pageCode: 'PAGE_017'
@@ -238,7 +238,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/feedback',
     name: 'feedback-list',
     component: () => import('../views/FeedbackListView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       requiresAdmin: true,
       title: '反馈记录列表',
@@ -249,7 +249,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/feedback/:id',
     name: 'feedback-detail',
     component: () => import('../views/FeedbackDetailView.vue'),
-    meta: { 
+    meta: {
       requiresAuth: true,
       requiresAdmin: true,
       title: '反馈详情',
@@ -260,7 +260,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/help',
     name: 'help-center',
     component: () => import('../views/HelpCenterView.vue'),
-    meta: { 
+    meta: {
       title: '帮助中心',
       pageCode: 'PAGE_020'
     }
@@ -315,6 +315,16 @@ const routes: Array<RouteRecordRaw> = [
       requiresAdmin: true,
       title: '简答题评分'
     }
+  },
+  {
+    path: '/software-download',
+    name: 'software-download',
+    component: () => import('../views/SoftwareDownloadView.vue'),
+    meta: {
+      title: '软件下载',
+      pageCode: 'PAGE_024',
+      publicAccess: true  // 公开访问，无需登录
+    }
   }
 ]
 
@@ -326,28 +336,28 @@ const router = createRouter({
 // 路由守卫：权限检查
 router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('jwt_token')
-  
+
   // 设置页面标题
   if (to.meta.title) {
     document.title = `${to.meta.title} - 边检知识问答系统`
   }
-  
+
   // 未登录用户访问首页，重定向到登录页
   if (to.name === 'home' && !token) {
     next({ name: 'login' })
     return
   }
-  
+
   // 检查是否需要登录
   if (to.meta.requiresAuth && !token) {
     ElMessage.warning('请先登录')
-    next({ 
+    next({
       name: 'login',
       query: { redirect: to.fullPath }
     })
     return
   }
-  
+
   // 如果有 token 且需要权限检查，确保用户信息已加载
   if (token && (to.meta.requiresAdmin || to.meta.requiresSuperAdmin || to.meta.requiresAdminRole)) {
     const isLoggedIn = (store.state as any).user.is_login
@@ -374,6 +384,18 @@ router.beforeEach(async (to, from, next) => {
   const isSuperAdmin = store.getters.isSuperAdmin
   const isBjzxAdmin = store.getters.isBjzxAdmin
   const isPrivileged = isAdmin || isSuperAdmin || isBjzxAdmin
+
+  // 🔥 修复：对于 publicAccess 页面，跳过所有权限检查
+  if (to.meta.publicAccess) {
+    // 公开访问页面，直接放行
+    if (to.name === 'login' && isLoggedIn) {
+      next({ name: 'home' })
+      return
+    }
+    next()
+    return
+  }
+
   let hasPagePermission = false
   if (token && to.meta.pageCode && !isPrivileged) {
     await ensurePermissionsLoaded()
@@ -413,8 +435,8 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  // Page permission checks only apply to non-admin users
-  if (token && to.meta.pageCode && !to.meta.publicAccess && !isPrivileged) {
+  // Page permission checks only apply to non-admin users and non-public pages
+  if (token && to.meta.pageCode && !isPrivileged) {
     if (store.getters.permissionsLoaded) {
       if (!hasPagePermission) {
         ElMessage.error('\u65e0\u6743\u8bbf\u95ee\u8be5\u9875\u9762')
@@ -431,11 +453,12 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
+  // 🔥 修复：登录用户访问登录页，重定向到首页
   if (to.name === 'login' && isLoggedIn) {
     next({ name: 'home' })
     return
   }
-  
+
   next()
 })
 

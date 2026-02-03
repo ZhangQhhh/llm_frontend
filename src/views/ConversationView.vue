@@ -183,6 +183,9 @@
               <div class="spinner"></div>
               <span>AI正在思考中...</span>
             </div>
+            
+            <!-- 底部锚点：ChatGPT/Claude 风格滚动锚定 -->
+            <div ref="scrollAnchor" class="scroll-anchor"></div>
           </div>
 
           <!-- 参考来源折叠按钮 -->
@@ -287,7 +290,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, ref, onMounted, nextTick } from 'vue';
+import { computed, defineComponent, ref, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import SessionList from '@/components/SessionList.vue';
@@ -305,7 +308,7 @@ import {
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, STORAGE_KEYS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
-import { renderMarkdown, setupCopyCode } from '@/utils/markdown';
+import { renderMarkdown } from '@/utils/markdown';
 import { 
   isProgressMessage, 
   parseProgressMessage, 
@@ -320,7 +323,6 @@ import {
   getMockThinking,
   shouldUseReferenceMocks
 } from '@/mocks/referenceMocks';
-import 'highlight.js/styles/atom-one-dark.css';  // 代码高亮主题
 import 'katex/dist/katex.min.css';                // 数学公式样式
 import '@/assets/styles/markdown.css';            // Markdown 样式
 
@@ -376,12 +378,14 @@ export default defineComponent({
 
     // DOM引用
     const conversationBox = ref<HTMLElement | null>(null);
+    const scrollAnchor = ref<HTMLElement | null>(null);
     const mockReferencesEnabled = shouldUseReferenceMocks();
     
-    // 滚动控制：节流和用户滚动检测
-    let lastScrollTime = 0;
-    const SCROLL_THROTTLE_MS = 150; // 节流间隔（毫秒）
+    // ChatGPT/Claude 风格滚动控制 + 节流
     let userHasScrolledUp = false; // 用户是否手动向上滚动
+    let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
+    let lastScrollTime = 0; // 上次滚动时间
+    const SCROLL_THROTTLE_MS = 300; // 节流间隔（毫秒）- 保证每300ms至少滚动一次
 
     const applyConversationMocks = () => {
       const mockHistory = getMockConversation();
@@ -426,45 +430,45 @@ export default defineComponent({
       return true;
     };
 
-    // 滚动到底部（带节流和平滑滚动）
+    // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 节流
     const scrollToBottom = (force = false) => {
-      const now = Date.now();
-      
       // 如果用户手动向上滚动了，不自动滚动（除非强制）
       if (userHasScrolledUp && !force) {
         return;
       }
       
-      // 节流：限制滚动频率
+      const now = Date.now();
+      // 节流：限制滚动频率，但强制滚动立即执行
       if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
         return;
       }
       lastScrollTime = now;
       
-      nextTick(() => {
-        if (conversationBox.value) {
-          // 使用平滑滚动
-          conversationBox.value.scrollTo({
-            top: conversationBox.value.scrollHeight,
-            behavior: 'smooth'
-          });
+      requestAnimationFrame(() => {
+        if (scrollAnchor.value) {
+          isAutoScrolling = true;
+          scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          setTimeout(() => { isAutoScrolling = false; }, 150);
         }
       });
     };
     
-    // 检测用户是否手动向上滚动
+    // 检测用户是否手动向上滚动（ChatGPT/Claude 风格）
     const handleConversationScroll = () => {
+      // 如果是自动滚动触发的，忽略
+      if (isAutoScrolling) return;
       if (!conversationBox.value) return;
       
       const { scrollTop, scrollHeight, clientHeight } = conversationBox.value;
-      // 如果距离底部超过 100px，认为用户在查看历史
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      userHasScrolledUp = distanceFromBottom > 100;
+      
+      // 距离底部超过 50px 认为用户在查看历史
+      // 距离底部小于 50px 认为用户回到了底部，恢复自动滚动
+      userHasScrolledUp = distanceFromBottom > 50;
     };
 
     // 初始化
     onMounted(async () => {
-      setupCopyCode();
 
       if (mockReferencesEnabled) {
         applyConversationMocks();
@@ -866,6 +870,7 @@ export default defineComponent({
       thinkingMode,
       insertBlock,
       conversationBox,
+      scrollAnchor,
       sessionDisplay,
       sessionList,
       sessionsLoading,
@@ -1084,13 +1089,22 @@ export default defineComponent({
   margin-top: 2rem;
 }
 
-/* 对话框 */
+/* 对话框 - ChatGPT/Claude 风格滚动 */
 .conversation-box {
   background: #f9fafb;
   border-radius: 16px;
   padding: 1.5rem;
   height: 600px;
   overflow-y: auto;
+  overflow-anchor: none; /* 禁用浏览器默认锚定，我们使用自定义锚点 */
+  scroll-behavior: smooth;
+}
+
+/* 底部滚动锚点 - ChatGPT/Claude 风格 */
+.scroll-anchor {
+  height: 1px;
+  width: 100%;
+  overflow-anchor: auto; /* 锚点启用锚定 */
 }
 
 .welcome-message {

@@ -134,7 +134,10 @@ export const API_ENDPOINTS = {
   LLM_SUMMARY: {
     DOX_SUMMARY: `${DAV_PREFIX}/entry-exit/generate-full-report`,
     MAX_SUMMARY: `${DAV_PREFIX}/entryExit/summary-entrance-comprehensive`,
-    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`
+    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`,
+    TRAFFIC_TOOLS_FORECAST: `${DAV_PREFIX}/entryExit/forecast-traffic-tools`,
+    TOTAL_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-total/history`,
+    TRAFFIC_TOOLS_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-traffic-tools/history`
   },
   // 文档管理接口
   DOCUMENTS: {
@@ -154,6 +157,11 @@ export const API_ENDPOINTS = {
   WRITING_LOGS: {
     DAILY: `/writing_logs/daily`,      // GET 获取某天的写作日志记录
     DETAIL: `/writing_logs/detail`,    // GET 获取单条写作日志详情
+  },
+  // 数研报告日志相关API（使用davHttp，baseURL取DAV_PREFIX）
+  REPORT_LOGS: {
+    LIST: `/logs/report-generation`,                 // GET 获取报告生成日志列表
+    DETAIL: (jobId: string) => `/logs/report-generation/${jobId}` // GET 获取单条日志详情
   },
   // 知识库管理API（使用llmHttp，baseURL已包含/api前缀）
   KNOWLEDGE_BASE: {
@@ -180,6 +188,13 @@ export const API_ENDPOINTS = {
     UPDATE_USER_DEPARTMENT: `/user/department`,        // POST 更新用户部门
     GET_DEPARTMENT_LIST: `/departments`,              // GET 获取部门列表
     CHECK_DEPARTMENT_REQUIRED: `/user/department/check` // GET 检查是否需要设置部门
+  },
+  // 软件管理API（使用http，baseURL已包含/api前缀）
+  SOFTWARE: {
+    UPLOAD: `/software/upload`,                    // POST 上传软件
+    LIST: `/software/list`,                        // GET 获取软件列表
+    DOWNLOAD: (filename: string) => `/software/download/${encodeURIComponent(filename)}`,  // GET 下载软件
+    DELETE: (filename: string) => `/software/${encodeURIComponent(filename)}`,  // DELETE 删除软件
   }
 };
 

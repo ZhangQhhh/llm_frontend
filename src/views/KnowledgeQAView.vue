@@ -457,6 +457,9 @@
             </div>
           </div>
         </div>
+        
+        <!-- 底部锚点：ChatGPT/Claude 风格滚动锚定 -->
+        <div ref="scrollAnchor" class="scroll-anchor"></div>
       </el-main>
     </el-container>
 
@@ -572,7 +575,13 @@ export default defineComponent({
     const references = ref<ReferenceSource[]>([]);
     const activeThinking = ref(['1']); // 默认展开思考
     const answerBodyRef = ref<HTMLElement | null>(null);
-    const autoScrollEnabled = ref(true); // 自动滚动开关
+    const scrollAnchor = ref<HTMLElement | null>(null);
+    
+    // ChatGPT/Claude 风格滚动控制 + 节流
+    let userHasScrolledUp = false; // 用户是否手动向上滚动
+    let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
+    let lastScrollTime = 0; // 上次滚动时间
+    const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -760,7 +769,7 @@ export default defineComponent({
       loading.value = true;
       answer.value = '';
       thinking.value = '';
-      autoScrollEnabled.value = true;  // 重置自动滚动
+      userHasScrolledUp = false;  // 重置滚动状态
       
       // 模拟流式输出思考过程
       const mockThinking = getMockThinking();
@@ -1211,7 +1220,7 @@ export default defineComponent({
       feedbackSubmitted.value = false;
       loading.value = true;
       activeThinking.value = ['1'];
-      autoScrollEnabled.value = true;  // 重置自动滚动
+      userHasScrolledUp = false;  // 重置滚动状态
 
       if (insertBlock.value) {
         showProgress.value = true;
@@ -1367,36 +1376,49 @@ export default defineComponent({
       }
     };
 
-    // 滚动节流控制
-    let lastScrollTime = 0;
-    const SCROLL_THROTTLE_MS = 150; // 节流间隔（毫秒）
-    
-    // 自动滚动到页面底部（带节流和平滑滚动）
+    // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 节流
     const autoScrollToBottom = (force = false) => {
-      if (!autoScrollEnabled.value && !force) return;
+      // 如果用户手动向上滚动了，不自动滚动（除非强制）
+      if (userHasScrolledUp && !force) {
+        return;
+      }
       
       const now = Date.now();
-      // 节流：限制滚动频率
+      // 节流：限制滚动频率，但强制滚动立即执行
       if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
         return;
       }
       lastScrollTime = now;
       
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
+      requestAnimationFrame(() => {
+        if (scrollAnchor.value) {
+          isAutoScrolling = true;
+          scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          setTimeout(() => { isAutoScrolling = false; }, 150);
+        } else {
+          // 降级方案：直接滚动到底部
+          isAutoScrolling = true;
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth'
+          });
+          setTimeout(() => { isAutoScrolling = false; }, 150);
+        }
       });
     };
 
-    // 监听用户滚动，如果用户向上滚动则禁用自动滚动
-    let lastScrollTop = 0;
+    // 检测用户是否手动向上滚动（ChatGPT/Claude 风格）
     const handleUserScroll = () => {
+      // 如果是自动滚动触发的，忽略
+      if (isAutoScrolling) return;
+      
       const currentScrollTop = window.scrollY;
-      // 如果用户向上滚动超过50px，禁用自动滚动
-      if (currentScrollTop < lastScrollTop - 50) {
-        autoScrollEnabled.value = false;
-      }
-      lastScrollTop = currentScrollTop;
+      const maxScrollTop = document.documentElement.scrollHeight - window.innerHeight;
+      const distanceFromBottom = maxScrollTop - currentScrollTop;
+      
+      // 距离底部超过 50px 认为用户在查看历史
+      // 距离底部小于 50px 认为用户回到了底部，恢复自动滚动
+      userHasScrolledUp = distanceFromBottom > 50;
     };
 
     // 监听 answer 和 thinking 变化，自动滚动（已内置节流）
@@ -1489,7 +1511,7 @@ export default defineComponent({
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       streamTestEnabled, streamTestAvailable,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
-      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef,
+      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef, scrollAnchor,
       // 答案归纳相关
       summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
@@ -2877,6 +2899,13 @@ export default defineComponent({
   border: 1px solid var(--ai-border);
   color: var(--ai-text-dim);
   justify-content: center;
+}
+
+/* 底部滚动锚点 - ChatGPT/Claude 风格 */
+.scroll-anchor {
+  height: 1px;
+  width: 100%;
+  overflow-anchor: auto;
 }
 
 .spinner-small {

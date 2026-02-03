@@ -168,6 +168,11 @@
           <!-- 返回首页 -->
           <div class="back-home">
             <router-link to="/">← 返回首页</router-link>
+            <span class="separator">|</span>
+            <router-link to="/software-download">
+              <el-icon><Download /></el-icon>
+              软件下载
+            </router-link>
           </div>
         </div>
       </div>
@@ -238,7 +243,7 @@ import { defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Search, ChatDotRound, Reading, Document, Phone, DataLine } from '@element-plus/icons-vue';
+import { Search, ChatDotRound, Reading, Document, Phone, DataLine, Download } from '@element-plus/icons-vue';
 import http from '@/config/api/http';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/config/api/api';
 import { initSessionWatch } from '@/utils/userStatusChecker';
@@ -251,7 +256,8 @@ export default defineComponent({
     Reading,
     Document,
     Phone,
-    DataLine
+    DataLine,
+    Download
   },
   setup() {
     const store = useStore();
@@ -719,6 +725,15 @@ export default defineComponent({
 .back-home {
   margin-top: 2rem;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.back-home .separator {
+  color: #d1d5db;
+  font-size: 14px;
 }
 
 .back-home a {
@@ -726,6 +741,9 @@ export default defineComponent({
   text-decoration: none;
   font-size: 14px;
   transition: color 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .back-home a:hover {

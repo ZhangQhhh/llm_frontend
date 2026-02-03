@@ -5,6 +5,7 @@
 import { API_ENDPOINTS } from '@/config/api/api';
 import http from '@/config/api/http';
 import llmHttp from '@/config/api/llmHttp';
+import { davHttp } from '@/config/api/http';
 import { isMockEnabled } from '@/mocks/mockService';
 import { createModuleLogger, LogModules } from '@/utils/logger';
 
@@ -689,6 +690,74 @@ export async function getWritingLogDetail(
   const url = `${API_ENDPOINTS.WRITING_LOGS.DETAIL}?${queryParams.toString()}`;
 
   const response = await llmHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+// ==================== 数研报告日志相关 API ====================
+
+export interface ReportLogItem {
+  job_id: string;
+  username?: string;
+  report_type?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  file_info?: Record<string, unknown>;
+  error_message?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ReportLogDetail extends ReportLogItem {}
+
+export interface ReportLogListParams {
+  page?: number;
+  page_size?: number;
+  username?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface ReportLogListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  logs: ReportLogItem[];
+}
+
+export async function getReportLogs(
+  token: string,
+  params: ReportLogListParams = {}
+): Promise<ReportLogListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params.page) queryParams.append('page', String(params.page));
+  if (params.page_size) queryParams.append('page_size', String(params.page_size));
+  if (params.username) queryParams.append('username', params.username);
+  if (params.status) queryParams.append('status', params.status);
+  if (params.start_date) queryParams.append('start_date', params.start_date);
+  if (params.end_date) queryParams.append('end_date', params.end_date);
+
+  const queryString = queryParams.toString();
+  const url = `${API_ENDPOINTS.REPORT_LOGS.LIST}${queryString ? '?' + queryString : ''}`;
+
+  const response = await davHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+export async function getReportLogDetail(
+  token: string,
+  jobId: string
+): Promise<ReportLogDetail> {
+  const response = await davHttp.get(API_ENDPOINTS.REPORT_LOGS.DETAIL(jobId), {
     headers: {
       'Authorization': `Bearer ${token}`
     }
