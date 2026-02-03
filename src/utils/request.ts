@@ -3,14 +3,40 @@
  */
 
 import { STORAGE_KEYS } from '@/config/api/api'
-import http from '@/config/api/http'
+import http, { mcqHttp } from '@/config/api/http'
 
 /**
- * 带认证的Axios请求
+ * 带认证的Axios请求（用于 /api 前缀的接口）
  */
 export const fetchWithAuth = async (url: string, options: any = {}) => {
   try {
     const response = await http.request({
+      url,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      data: options.data || options.body
+    })
+    
+    return { 
+      data: response.data, 
+      ok: true, 
+      status: response.status 
+    }
+  } catch (error: any) {
+    return {
+      data: error.response?.data || {},
+      ok: false,
+      status: error.response?.status || 500
+    }
+  }
+}
+
+/**
+ * 带认证的MCQ请求（用于 /llm 前缀的接口，不经过 /api）
+ */
+export const fetchMcqWithAuth = async (url: string, options: any = {}) => {
+  try {
+    const response = await mcqHttp.request({
       url,
       method: options.method || 'GET',
       headers: options.headers || {},

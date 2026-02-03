@@ -58,7 +58,7 @@
           <div class="question-list">
             <div class="list-title">题目列表</div>
             <div 
-              v-for="(saq, idx) in currentStudent.pending_saqs" 
+              v-for="(saq, idx) in sortedSaqs" 
               :key="saq.qid"
               class="question-item"
               :class="{ 
@@ -68,11 +68,17 @@
               @click="goToQuestion(idx)"
             >
               <span class="q-num">{{ idx + 1 }}</span>
+              <span class="q-category-tag" v-if="saq.category" :class="getCategoryColorClass(saq.category)">
+                {{ formatCategoryTag(saq.category) }}
+              </span>
               <span class="q-status">
                 <el-icon v-if="grades[saq.qid]?.is_correct !== undefined" class="icon-graded"><Check /></el-icon>
               </span>
               <span class="q-score" v-if="grades[saq.qid]?.is_correct !== undefined">
-                {{ grades[saq.qid].score }}分
+                {{ grades[saq.qid].score }}/{{ saq.full_score ?? 10 }}
+              </span>
+              <span class="q-full-score" v-else style="color: #909399; font-size: 11px;">
+                ({{ saq.full_score ?? 10 }}分)
               </span>
             </div>
           </div>
@@ -207,7 +213,7 @@
         </div>
 
         <!-- 自定义分数 -->
-        <div class="custom-score">
+        <div class="custom-score" v-if="currentGrade">
           <div class="grade-label">自定义分数</div>
           <div class="score-input-row">
             <el-input-number 
@@ -223,7 +229,7 @@
         </div>
 
         <!-- 评语 -->
-        <div class="comment-area">
+        <div class="comment-area" v-if="currentGrade">
           <div class="grade-label">
             评语
             <el-dropdown trigger="click" @command="insertTemplate" style="margin-left: 8px">
@@ -257,7 +263,7 @@
             @click="gradeAndNext" 
             class="nav-btn next"
           >
-            {{ currentStudent && currentQuestionIndex >= currentStudent.pending_saqs.length - 1 ? '完成' : '下一题' }}
+            {{ currentStudent && currentQuestionIndex >= sortedSaqs.length - 1 ? '完成' : '下一题' }}
             <el-icon><ArrowRight /></el-icon>
           </el-button>
         </div>
@@ -376,7 +382,7 @@ import {
   Refresh, Back, User, Check, CopyDocument, ArrowLeft, ArrowRight, Search
 } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { fetchWithAuth } from '@/utils/request'
+import { fetchMcqWithAuth } from '@/utils/request'
 import { MCQ_BASE_URL } from '@/config/api/api'
 
 const router = useRouter()
@@ -391,7 +397,9 @@ interface SaqItem {
   stem_images?: Array<{ content_type: string; base64: string }>
   is_graded?: boolean
   score?: number
+  full_score?: number  // 该题满分（支持自定义分数）
   comment?: string
+  category?: string  // 岗位分类标签
 }
 
 interface StudentData {
@@ -431,7 +439,11 @@ const grades = reactive<Record<string, GradeInfo>>({})
 const gradesCache = reactive<Record<string, Record<string, GradeInfo>>>({})
 // 跟踪已提交评分的考生
 const submittedStudents = reactive(new Set<string>())
-const saqFullScore = ref(10)
+// 当前题目的满分（根据每题配置动态获取）
+const saqFullScore = computed(() => {
+  if (!currentSaq.value) return 10
+  return currentSaq.value.full_score ?? 10
+})
 const currentQuestionIndex = ref(0)
 // 防止最后一题重复弹窗
 const completionDialogShown = ref(false)
@@ -513,9 +525,21 @@ const filteredExamList = computed(() => {
   return list
 })
 
+// 按岗位分类排序的题目列表（同一岗位放在一起）
+const sortedSaqs = computed(() => {
+  if (!currentStudent.value) return []
+  const saqs = [...currentStudent.value.pending_saqs]
+  // 按 category 排序，无分类的放最后
+  return saqs.sort((a, b) => {
+    const catA = a.category || 'zzz_未分类'
+    const catB = b.category || 'zzz_未分类'
+    return catA.localeCompare(catB, 'zh-CN')
+  })
+})
+
 const currentSaq = computed(() => {
   if (!currentStudent.value) return null
-  return currentStudent.value.pending_saqs[currentQuestionIndex.value] || null
+  return sortedSaqs.value[currentQuestionIndex.value] || null
 })
 
 const currentGrade = computed(() => {
@@ -561,7 +585,7 @@ onUnmounted(() => {
 async function loadPendingList() {
   loading.value = true
   try {
-    const res = await fetchWithAuth(`${MCQ_BASE_URL}/saq/pending`)
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/pending`)
     if (res.data.ok) {
       const newExams = res.data.exams || []
       // 合并数据：保留已有的考试（可能已评分完成），更新或添加新考试
@@ -731,7 +755,7 @@ function prevQuestion() {
 function nextQuestion() {
   if (!currentStudent.value || !currentExam.value) return
   
-  const isLastQuestion = currentQuestionIndex.value >= currentStudent.value.pending_saqs.length - 1
+  const isLastQuestion = currentQuestionIndex.value >= sortedSaqs.value.length - 1
   
   if (!isLastQuestion) {
     // 还有下一题
@@ -790,7 +814,7 @@ function gradeAndNext() {
     grades[qid].is_correct = grades[qid].score >= saqFullScore.value * 0.6
   }
   // 前往下一题或完成
-  if (currentQuestionIndex.value < currentStudent.value.pending_saqs.length - 1) {
+  if (currentQuestionIndex.value < sortedSaqs.value.length - 1) {
     nextQuestion()
   } else {
     // 最后一题
@@ -837,6 +861,27 @@ function copyText(text: string) {
   }).catch(() => {
     ElMessage.error('复制失败')
   })
+}
+
+// 岗位分类颜色映射
+const categoryColorMap: Record<string, string> = {}
+const categoryColors = ['cat-blue', 'cat-green', 'cat-orange', 'cat-purple', 'cat-cyan', 'cat-pink']
+let colorIndex = 0
+
+function getCategoryColorClass(category: string): string {
+  if (!category) return ''
+  if (!categoryColorMap[category]) {
+    categoryColorMap[category] = categoryColors[colorIndex % categoryColors.length]
+    colorIndex++
+  }
+  return categoryColorMap[category]
+}
+
+function formatCategoryTag(category: string): string {
+  if (!category) return ''
+  // 保留完整名称，最多显示6个字符
+  const maxLen = 6
+  return category.length > maxLen ? category.slice(0, maxLen) + '…' : category
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -914,7 +959,7 @@ async function submitGrades() {
   
   submitting.value = true
   try {
-    const res = await fetchWithAuth(`${MCQ_BASE_URL}/saq/grade`, {
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/grade`, {
       method: 'POST',
       data: {
         attempt_id: currentStudent.value.attempt_id,
@@ -1158,6 +1203,52 @@ function goBack() {
 .q-status { flex: 1; }
 .icon-graded { color: #22c55e; }
 .q-score { font-size: 0.8rem; color: #22c55e; font-weight: 600; }
+
+/* 岗位分类标签样式 */
+.q-category-tag {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.q-category-tag.cat-blue {
+  background: rgba(96, 165, 250, 0.25);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
+.q-category-tag.cat-green {
+  background: rgba(34, 197, 94, 0.25);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.q-category-tag.cat-orange {
+  background: rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.q-category-tag.cat-purple {
+  background: rgba(168, 85, 247, 0.25);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.q-category-tag.cat-cyan {
+  background: rgba(34, 211, 238, 0.25);
+  color: #22d3ee;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+}
+
+.q-category-tag.cat-pink {
+  background: rgba(236, 72, 153, 0.25);
+  color: #ec4899;
+  border: 1px solid rgba(236, 72, 153, 0.4);
+}
 
 .submit-section {
   padding: 16px;
