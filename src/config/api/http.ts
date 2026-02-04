@@ -120,5 +120,60 @@ davHttp.interceptors.response.use(
   }
 );
 
+// 创建专门用于 MCQ 的 Axios 实例（无 /api 前缀，直接使用 /llm 路由）
+const mcqHttp: AxiosInstance = axios.create({
+  baseURL: '',  // 无前缀，MCQ_BASE_URL 已包含完整路径如 /llm/mcq_public
+  timeout: 600000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// MCQ 请求拦截器
+mcqHttp.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+    if (userStr && config.headers) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role) {
+          config.headers['X-User-Role'] = user.role;
+        }
+        if (user.username) {
+          config.headers['X-User-Name'] = encodeURIComponent(user.username);
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+    return config;
+  },
+  (error: AxiosError) => {
+    return Promise.reject(error);
+  }
+);
+
+// MCQ 响应拦截器
+mcqHttp.interceptors.response.use(
+  (response: AxiosResponse) => {
+    return response;
+  },
+  (error: AxiosError) => {
+    const status = error.response?.status;
+    const bizCode = (error.response?.data as any)?.code;
+
+    if (status === 401 || status === 460 || bizCode === 'BANNED') {
+      forceLogout('登录已失效或账号已被封禁，请重新登录');
+    }
+
+    ErrorHandler.handleHttpError(error);
+    return Promise.reject(error);
+  }
+);
+
 export default http;
-export { davHttp };
+export { davHttp, mcqHttp };

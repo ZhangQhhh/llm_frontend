@@ -1340,6 +1340,9 @@ export default defineComponent({
     const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
     const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
     const blurTimeoutId = ref<number | null>(null)  // blur 延迟检测定时器
+    const initialWindowSize = ref({ width: 0, height: 0 })  // 初始窗口大小
+    const resizeIntervalId = ref<number | null>(null)  // 窗口缩小持续检测定时器
+    const isWindowShrunk = ref(false)  // 窗口是否处于缩小状态
 
     // ======= 错题本相关 =======
     const wrongBook = ref<any[]>([])  // 错题本列表
@@ -2164,6 +2167,9 @@ export default defineComponent({
       // 重置懒加载状态（低配模式）
       resetLazyLoad()
       
+      // 记录初始窗口大小（用于检测窗口缩小）
+      recordInitialWindowSize()
+      
       // 启动倒计时和自动保存
       startTimer()
       startAutoSave()
@@ -2278,6 +2284,72 @@ export default defineComponent({
       if (blurTimeoutId.value) {
         clearTimeout(blurTimeoutId.value)
         blurTimeoutId.value = null
+      }
+    }
+
+    // 检查窗口是否缩小
+    const checkWindowShrunk = () => {
+      if (initialWindowSize.value.width === 0 || initialWindowSize.value.height === 0) return false
+      const currentWidth = window.innerWidth
+      const currentHeight = window.innerHeight
+      const initWidth = initialWindowSize.value.width
+      const initHeight = initialWindowSize.value.height
+      const areaRatio = (currentWidth * currentHeight) / (initWidth * initHeight)
+      return areaRatio < 0.7  // 面积小于70%视为缩小
+    }
+
+    // 启动窗口缩小持续检测定时器
+    const startShrinkInterval = () => {
+      if (resizeIntervalId.value) return  // 已在运行
+      resizeIntervalId.value = window.setInterval(() => {
+        if (!examStarted.value || submitted.value) {
+          stopShrinkInterval()
+          return
+        }
+        if (checkWindowShrunk()) {
+          handleSwitchDetected('窗口缩小')
+        } else {
+          // 窗口已恢复，停止检测
+          isWindowShrunk.value = false
+          stopShrinkInterval()
+        }
+      }, 5000)
+    }
+
+    // 停止窗口缩小持续检测定时器
+    const stopShrinkInterval = () => {
+      if (resizeIntervalId.value) {
+        clearInterval(resizeIntervalId.value)
+        resizeIntervalId.value = null
+      }
+    }
+
+    // 窗口缩小检测（视为切屏）
+    const handleWindowResize = () => {
+      // 只在考试进行中且未提交时检测
+      if (!examStarted.value || submitted.value) return
+      // 如果没有记录初始窗口大小，跳过
+      if (initialWindowSize.value.width === 0 || initialWindowSize.value.height === 0) return
+      
+      const shrunk = checkWindowShrunk()
+      
+      if (shrunk && !isWindowShrunk.value) {
+        // 窗口刚刚缩小，立即触发一次，并启动持续检测
+        isWindowShrunk.value = true
+        handleSwitchDetected('窗口缩小')
+        startShrinkInterval()  // 5 秒后若仍缩小则再次触发
+      } else if (!shrunk && isWindowShrunk.value) {
+        // 窗口恢复，停止检测
+        isWindowShrunk.value = false
+        stopShrinkInterval()
+      }
+    }
+
+    // 记录初始窗口大小（开始考试时调用）
+    const recordInitialWindowSize = () => {
+      initialWindowSize.value = {
+        width: window.innerWidth,
+        height: window.innerHeight
       }
     }
 
@@ -2629,6 +2701,8 @@ export default defineComponent({
 
         // 重置防作弊状态
         resetAntiCheat()
+        // 记录初始窗口大小（用于检测窗口缩小）
+        recordInitialWindowSize()
 
         // 启动倒计时和自动保存
         startTimer()
@@ -3253,6 +3327,7 @@ export default defineComponent({
       document.addEventListener('visibilitychange', handleVisibilityChange)
       window.addEventListener('blur', handleWindowBlur)
       window.addEventListener('focus', handleWindowFocus)
+      window.addEventListener('resize', handleWindowResize)
     })
 
     onUnmounted(() => {
@@ -3264,11 +3339,14 @@ export default defineComponent({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
       window.removeEventListener('focus', handleWindowFocus)
+      window.removeEventListener('resize', handleWindowResize)
       // 清理延迟定时器
       if (blurTimeoutId.value) {
         clearTimeout(blurTimeoutId.value)
         blurTimeoutId.value = null
       }
+      // 停止窗口缩小检测定时器
+      stopShrinkInterval()
     })
 
     return {

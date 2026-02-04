@@ -464,7 +464,7 @@ const acceptFileTypes = computed(() => {
 const uploadTipText = computed(() => {
   switch (uploadForm.value.fileType) {
     case 'video':
-      return '支持 mp4、avi、mov、mkv 等格式，最大 500MB'
+      return '支持 mp4、avi、mov、mkv 等格式，最大 5000MB'
     case 'pdf':
       return '支持 PDF 格式，最大 100MB'
     case 'ppt':

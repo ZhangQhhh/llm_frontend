@@ -20,6 +20,11 @@ module.exports = defineConfig({
     port: 8080,
     allowedHosts: 'all',      // ✅ 防止 "Invalid Host header"
     proxy: {
+      '/api/llm': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        pathRewrite: { '^/api/llm': '' }
+      },
       '/api': {
         target: 'http://127.0.0.1:3000',
         changeOrigin: true

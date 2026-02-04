@@ -420,7 +420,7 @@ const handleFormat = async () => {
   try {
     const fd = new FormData();
     fd.append('file', selectedFile.value);
-    fd.append('model_id', 'qwen-plus');  // 使用 qwen-plus 模型进行格式化
+    fd.append('model_id', 'qwen3-32b');  // 使用 qwen32b 模型进行格式化
     
     const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
     
