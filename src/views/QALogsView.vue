@@ -116,7 +116,7 @@
           <span class="value">{{ writingStats.summary.success_count }}</span>
         </div>
         <div class="writing-stat-card error">
-          <span class="label">??</span>
+          <span class="label">失败</span>
           <span class="value">{{ writingStats.summary.error_count }}</span>
         </div>
         <div class="writing-stat-card">
@@ -425,7 +425,7 @@ const currentPage = ref(1);
 const pageSize = ref(20);
 
 const refreshIntervalMs = 10000;
-let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let refreshTimer: number | null = null;
 let autoRefreshing = false;
 
 // 可用日期列表
@@ -467,42 +467,28 @@ function disabledDate(date: Date): boolean {
   today.setHours(23, 59, 59, 999);
 
   if (isWritingLogs.value) {
-        if (!selectedDate.value) {
-          await loadAvailableDates({ setDefault: true });
-        }
+    if (availableDates.value.length) {
+      const dateStr = formatDate(date);
+      return !availableDates.value.includes(dateStr);
+    }
+    return date > today;
+  }
 
-        const result = await getWritingLogsByDate(token, {
-          date: selectedDate.value,
-          writing_type: writingType.value || undefined,
-          page: currentPage.value,
-          page_size: pageSize.value
-        });
+  return date > today;
+}
 
-        const writingLogs = (result.logs || []).map((log) => {
-          const resolvedId = getLogId(log);
-          return resolvedId ? { ...log, id: resolvedId } : log;
-        });
-
-        const total = typeof result.total === 'number' ? result.total : writingLogs.length;
-        const page = result.page ?? currentPage.value;
-        const page_size = result.page_size ?? pageSize.value;
-        const totalForDisplay = hasUserFilter ? writingLogs.length : total;
-        const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
-        const total_pages = hasUserFilter
-          ? fallbackTotalPages
-          : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
-
-        logData.value = {
-          date: result.date || selectedDate.value,
-          total: totalForDisplay,
-          page,
-          page_size,
-          total_pages,
-          logs: writingLogs
-        };
-        logs.value = writingLogs;
-      } else {
-} else {
+// 加载可用日期
+async function loadAvailableDates(options: { setDefault?: boolean } = {}) {
+  const { setDefault = false } = options;
+  try {
+    const token = store.state.user.token;
+    if (isQaLogs.value) {
+      const result = await getQALogDates(token);
+      availableDates.value = result.dates || [];
+    } else if (isWritingLogs.value) {
+      const result = await getWritingLogDates(token);
+      availableDates.value = result.dates || [];
+    } else {
       availableDates.value = [];
     }
 
@@ -516,6 +502,322 @@ function disabledDate(date: Date): boolean {
   } catch (err: any) {
     console.error('加载日期列表失败:', err);
   }
+}
+
+async function loadWritingStatistics() {
+  if (!isWritingLogs.value) {
+    writingStats.value = null;
+    return;
+  }
+  try {
+    const token = store.state.user.token;
+    writingStats.value = await getWritingLogStatistics(token, 7);
+  } catch (err: any) {
+    console.error('加载写作统计失败:', err);
+    writingStats.value = null;
+  }
+}
+
+function getTypeLabel(type: string): string {
+  const typeMap: Record<string, string> = {
+    knowledge_qa_stream: '知识问答',
+    knowledge_chat: '知识问答',
+    conversation: '多轮对话',
+    mcq: '选择题',
+    writing_start: '写作开始',
+    retrieval_result: '检索结果',
+    writing_result: '写作结果',
+    writing_error: '写作失败',
+    report_started: '报告开始',
+    report_completed: '报告完成',
+    report_failed: '报告失败',
+    report_unknown: '报告未知'
+  };
+  return typeMap[type] || type;
+}
+
+function getTypeClass(type: string): string {
+  const classMap: Record<string, string> = {
+    knowledge_qa_stream: 'type-qa',
+    knowledge_chat: 'type-chat',
+    conversation: 'type-conv',
+    mcq: 'type-mcq',
+    writing_start: 'type-writing-start',
+    retrieval_result: 'type-retrieval',
+    writing_result: 'type-writing-result',
+    writing_error: 'type-writing-error',
+    report_started: 'type-report-started',
+    report_completed: 'type-report-completed',
+    report_failed: 'type-report-failed',
+    report_unknown: 'type-default'
+  };
+  return classMap[type] || 'type-default';
+}
+
+function formatTime(timestamp: string): string {
+  if (!timestamp) return '-';
+  const date = new Date(timestamp);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function getLogType(log: LogItem): string {
+  if (isReportLogs.value) {
+    const status = (log as ReportLogItem).status || 'unknown';
+    return `report_${status}`;
+  }
+  return (log as any).type || 'unknown';
+}
+
+function getLogTimestamp(log: LogItem): string {
+  return (
+    (log as any).timestamp ||
+    (log as ReportLogItem).created_at ||
+    (log as ReportLogItem).updated_at ||
+    ''
+  );
+}
+
+function pickFirstString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getLogId(log: LogItem, index?: number, allowIndexFallback = false): string {
+  const direct = (log as any).id ?? (log as any).log_id ?? (log as any).detail_id ?? (log as any).job_id;
+  if (direct) {
+    return String(direct);
+  }
+  const timestamp = (log as any).timestamp;
+  const lineIndex = (log as any).line_index;
+  if (timestamp && lineIndex !== undefined) {
+    return `${timestamp}_${lineIndex}`;
+  }
+  if (allowIndexFallback && index !== undefined) {
+    return timestamp ? `${timestamp}_${index}` : `log_${index}`;
+  }
+  return '';
+}
+
+function getLogUserId(log: LogItem): string | undefined {
+  const userId = (log as any).metadata?.user_id ?? (log as any).user_id;
+  if (userId === undefined || userId === null || userId === '') {
+    return undefined;
+  }
+  return String(userId);
+}
+
+function getLogUserName(log: LogItem): string | undefined {
+  if (isReportLogs.value) {
+    const username = (log as ReportLogItem).username;
+    return typeof username === 'string' ? username : undefined;
+  }
+  return undefined;
+}
+
+function getLogOperation(log: LogItem): string | undefined {
+  const operation = (log as any).operation;
+  return typeof operation === 'string' ? operation : undefined;
+}
+
+function getOperationLabel(operation?: string): string {
+  if (!operation) return '';
+  const normalized = operation.toLowerCase();
+  const map: Record<string, string> = {
+    generate: '生成',
+    edit: '编辑',
+    complete: '补全'
+  };
+  return map[normalized] || operation;
+}
+
+function getLogSessionId(log: LogItem): string | undefined {
+  const sessionId = (log as any).session_id;
+  if (sessionId === undefined || sessionId === null || sessionId === '') {
+    return undefined;
+  }
+  return String(sessionId);
+}
+
+function getLogIp(log: LogItem): string | undefined {
+  const ip = (log as any).metadata?.ip;
+  return typeof ip === 'string' ? ip : undefined;
+}
+
+function getLogAnswerType(log: LogItem): string | undefined {
+  const answerType = (log as any).metadata?.answer_type;
+  return typeof answerType === 'string' ? answerType : undefined;
+}
+
+function getWritingTypeLabel(type?: WritingType): string {
+  const map: Record<string, string> = {
+    official_document: '公文写作',
+    data_analysis_report: '数据分析报告',
+    general_writing: '通用写作'
+  };
+  return type ? (map[type] || type) : '全部';
+}
+
+function getLogTitle(log: LogItem): string {
+  if (isReportLogs.value) {
+    const reportType = getReportTypeLabel(log);
+    const statusLabel = getReportStatusLabel(log);
+    const jobId = getLogId(log);
+    const pieces = [reportType, statusLabel, jobId && `任务 ${jobId}`].filter(Boolean);
+    return pieces.length ? pieces.join(' / ') : '未知日志';
+  }
+  if (isWritingLogs.value) {
+    const writingLog = log as WritingLogItem;
+    const sessionId = getLogSessionId(log);
+    const typeLabel = getWritingTypeLabel(writingLog.writing_type);
+    if (writingLog.type === 'writing_start') {
+      return writingLog.instruction_preview || `写作请求${sessionId ? ` / ${sessionId}` : ''}`;
+    }
+    if (writingLog.type === 'retrieval_result') {
+      return `${typeLabel} / 检索结果${sessionId ? ` / ${sessionId}` : ''}`;
+    }
+    if (writingLog.type === 'writing_result') {
+      return `${typeLabel} / 写作结果${sessionId ? ` / ${sessionId}` : ''}`;
+    }
+    if (writingLog.type === 'writing_error') {
+      return `${typeLabel} / 写作失败${sessionId ? ` / ${sessionId}` : ''}`;
+    }
+    return `${typeLabel}${sessionId ? ` / ${sessionId}` : ''}`;
+  }
+
+  return (log as QALogItem).question || '-';
+}
+
+function formatWritingPreviewParts(parts: Array<string | undefined>): string {
+  return parts.filter((part) => part && part.trim()).join(' / ');
+}
+
+function getLogPreview(log: LogItem): string {
+  if (isReportLogs.value) {
+    const errorMsg = getReportErrorMessage(log);
+    if (errorMsg) return errorMsg;
+    const fileInfo = getReportFileInfo(log);
+    if (fileInfo && typeof fileInfo === 'object' && 'output_file' in fileInfo) {
+      return String((fileInfo as any).output_file || '');
+    }
+    return '';
+  }
+  if (isWritingLogs.value) {
+    const writingLog = log as WritingLogItem;
+    if (writingLog.type === 'writing_start') {
+      return formatWritingPreviewParts([
+        writingLog.instruction_preview,
+        writingLog.session_id ? `会话: ${writingLog.session_id}` : undefined
+      ]);
+    }
+    if (writingLog.type === 'retrieval_result') {
+      return formatWritingPreviewParts([
+        writingLog.retrieved_count !== undefined ? `检索 ${writingLog.retrieved_count}` : undefined,
+        writingLog.reranked_count !== undefined ? `重排 ${writingLog.reranked_count}` : undefined,
+        writingLog.avg_score !== undefined ? `平均分 ${writingLog.avg_score}` : undefined,
+        writingLog.source_files_preview ? `来源: ${writingLog.source_files_preview}` : undefined
+      ]);
+    }
+    if (writingLog.type === 'writing_result') {
+      return formatWritingPreviewParts([
+        writingLog.content_length !== undefined ? `长度 ${writingLog.content_length}` : undefined,
+        writingLog.source_count !== undefined ? `来源 ${writingLog.source_count}` : undefined,
+        writingLog.generation_time !== undefined ? `耗时 ${writingLog.generation_time}s` : undefined,
+        writingLog.content_preview
+      ]);
+    }
+    if (writingLog.type === 'writing_error') {
+      return formatWritingPreviewParts([
+        writingLog.error_type ? `错误类型: ${writingLog.error_type}` : undefined,
+        writingLog.error_message
+      ]);
+    }
+    return '';
+  }
+
+  return (log as QALogItem).answer_preview || '';
+}
+
+function getReportTypeLabel(log: LogItem): string {
+  const reportType = (log as ReportLogItem).report_type;
+  if (!reportType) return '';
+  const map: Record<string, string> = {
+    comprehensive: '综合报告',
+    people_only: '人员报告'
+  };
+  return map[reportType] || reportType;
+}
+
+function getReportStatusLabel(log: LogItem): string {
+  const status = (log as ReportLogItem).status;
+  if (!status) return '';
+  const map: Record<string, string> = {
+    started: '进行中',
+    completed: '已完成',
+    failed: '失败'
+  };
+  return map[status] || status;
+}
+
+function getReportFileInfo(log: LogItem): Record<string, unknown> | null {
+  const fileInfo = (log as ReportLogItem).file_info;
+  return fileInfo && typeof fileInfo === 'object' ? (fileInfo as Record<string, unknown>) : null;
+}
+
+function getReportErrorMessage(log: LogItem): string {
+  const errorMessage = (log as ReportLogItem).error_message;
+  return typeof errorMessage === 'string' ? errorMessage : '';
+}
+
+function getWritingDetailRequest(detail: LogDetail): string {
+  return (
+    pickFirstString([
+      (detail as any).user_instruction,
+      (detail as any).instruction_preview,
+      (detail as any).instruction,
+      (detail as any).content,
+      (detail as any).prompt,
+      (detail as any).detail
+    ]) || '-'
+  );
+}
+
+function getWritingDetailResult(detail: LogDetail): string {
+  return (
+    pickFirstString([
+      (detail as any).generated_content,
+      (detail as any).content_preview,
+      (detail as any).result,
+      (detail as any).output,
+      (detail as any).answer
+    ]) || ''
+  );
+}
+
+function getLogMetadata(detail: LogDetail): Record<string, unknown> {
+  const metadata = (detail as any).metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return {};
+  }
+  return metadata as Record<string, unknown>;
+}
+
+function getQADetailQuestion(detail: LogDetail): string {
+  return (detail as QALogDetail).question || '';
+}
+
+function getQADetailAnswer(detail: LogDetail): string {
+  return (detail as QALogDetail).answer || '';
 }
 
 function getUserName(userId?: string): string {
@@ -602,7 +904,6 @@ async function loadLogs(options: { silent?: boolean } = {}) {
         };
         logs.value = writingLogs;
       } else {
-} else {
         const result = await getQALogsByDate(token, {
           date: selectedDate.value,
           ...userFilterResult.params,
@@ -618,7 +919,7 @@ async function loadLogs(options: { silent?: boolean } = {}) {
   } catch (err: any) {
     if (!silent) {
       const rawMessage = err.response?.data?.message || err.message || '加载失败，请稍后重试';
-      if (typeof rawMessage === 'string' && (rawMessage.includes('date') || rawMessage.includes('??'))) {
+      if (typeof rawMessage === 'string' && (rawMessage.includes('date') || rawMessage.includes('日期'))) {
         error.value = '日期格式错误';
       } else {
         error.value = rawMessage;
