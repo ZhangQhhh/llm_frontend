@@ -690,6 +690,12 @@ export default defineComponent({
       if (mockReferencesEnabled) {
         applyReferenceMocks();
       }
+      if (store.state.user.token && !store.state.user.id) {
+        store.dispatch('getinfo', {
+          success: () => null,
+          error: () => null
+        });
+      }
       window.addEventListener('wheel', handleUserScroll, { passive: true });
       window.addEventListener('touchmove', handleUserScroll, { passive: true });
     });

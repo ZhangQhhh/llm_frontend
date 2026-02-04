@@ -231,6 +231,41 @@
                     </div>
                   </div>
 
+                  <!-- 模板区 -->
+                  <div class="template-panel">
+                    <div class="template-header">
+                      <el-icon><Collection /></el-icon>
+                      <span>模板区</span>
+                    </div>
+                    <div class="template-tip">
+                      <el-icon><InfoFilled /></el-icon>
+                      <span>“更新历史csv”请严格按照示意文件.csv的字段顺序与格式填写。</span>
+                    </div>
+                    <div class="template-grid">
+                      <div v-for="item in templateFiles" :key="item.filename" class="template-item">
+                        <div class="template-left">
+                          <el-icon class="template-icon"><Document /></el-icon>
+                        </div>
+                        <div class="template-body">
+                          <div class="template-name">{{ item.title }}</div>
+                          <div class="template-desc">{{ item.desc }}</div>
+                          <div class="template-meta">{{ item.filename }}</div>
+                        </div>
+                        <div class="template-actions">
+                          <el-button
+                            size="small"
+                            type="primary"
+                            plain
+                            :icon="Download"
+                            @click="downloadTemplate(item)"
+                          >
+                            下载模板
+                          </el-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- 操作按钮 -->
                   <div class="action-buttons">
                     <el-button 
@@ -415,11 +450,14 @@ import {
   MagicStick, Top, Bottom, DataBoard, User, Folder,
   Refresh, DocumentCopy, View, Download, Delete,
   Promotion, RefreshLeft, Medal, Upload, UploadFilled,
-  Close, QuestionFilled
+  Close, QuestionFilled, Collection, InfoFilled
 } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
+const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
+const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
+const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
 
 // --- State ---
 const activeTab = ref('generate');
@@ -478,9 +516,36 @@ interface DocumentItem {
   downloadUrl: string;
 }
 
+interface TemplateFile {
+  title: string;
+  filename: string;
+  desc: string;
+  url: string;
+}
+
 const documents = ref<DocumentItem[]>([]);
 const loadingDocs = ref(false);
 const store = useStore();
+const templateFiles: TemplateFile[] = [
+  {
+    title: '更新历史CSV示意',
+    filename: '示意文件.csv',
+    desc: '用于“更新历史csv”上传，字段顺序与格式请与示意文件保持一致。',
+    url: templateHistoryCsv
+  },
+  {
+    title: '人员数据示意表',
+    filename: '20240801.xlsx',
+    desc: '人员数据模板示例，按示例表结构填写。',
+    url: templateStaffXlsx
+  },
+  {
+    title: '航班表示意表',
+    filename: '航班表2024.xls',
+    desc: '航班数据模板示例（xls）。',
+    url: templateFlightXls
+  }
+];
 
 // --- Computed ---
 const canGenerate = computed(() => {
@@ -977,6 +1042,16 @@ const downloadDocument = (doc: DocumentItem) => {
   link.href = url;
   link.download = doc.name;
   link.click();
+};
+
+const downloadTemplate = (item: TemplateFile) => {
+  const link = document.createElement('a');
+  link.href = item.url;
+  link.download = item.filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 const deleteDocument = async (doc: DocumentItem) => {
@@ -1521,6 +1596,93 @@ const formatDate = (dateStr: string): string => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.template-panel {
+  padding: 16px;
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.template-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.template-tip {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.template-grid {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.template-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.template-left {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.template-icon {
+  font-size: 18px;
+  color: #14b8a6;
+}
+
+.template-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.template-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.template-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.template-actions {
+  flex-shrink: 0;
 }
 
 .action-buttons {

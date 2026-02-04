@@ -35,12 +35,12 @@
           :on-error="handleUploadError"
           :on-progress="handleUploadProgress"
           :show-file-list="false"
-          accept=".exe"
+          accept="*"
         >
           <el-icon class="upload-icon"><UploadFilled /></el-icon>
           <div class="upload-text">
-            <p class="upload-title">将exe文件拖到此处，或<em>点击上传</em></p>
-            <p class="upload-hint">仅支持 .exe 格式文件，文件大小不超过 100MB</p>
+            <p class="upload-title">将文件拖到此处，或<em>点击上传</em></p>
+            <p class="upload-hint">支持所有格式文件，文件大小不超过 1GB</p>
           </div>
         </el-upload>
 
@@ -231,15 +231,10 @@ const loadSoftwareList = async () => {
 
 // 上传前检查
 const beforeUpload = (file: File) => {
-  const isExe = file.name.toLowerCase().endsWith('.exe')
-  const isLt100M = file.size / 1024 / 1024 < 100
+  const isLt1G = file.size / 1024 / 1024 < 1024
 
-  if (!isExe) {
-    ElMessage.error('只能上传 .exe 格式的文件！')
-    return false
-  }
-  if (!isLt100M) {
-    ElMessage.error('文件大小不能超过 100MB！')
+  if (!isLt1G) {
+    ElMessage.error('文件大小不能超过 1GB')
     return false
   }
 
