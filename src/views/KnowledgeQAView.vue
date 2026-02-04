@@ -316,7 +316,7 @@
             <div v-if="!(mcqMode && mcqResults.length > 0)" class="metadata-section">
                 <!-- 关键词 -->
                 <transition name="el-zoom-in-top">
-                  <el-card v-if="keywords && (keywords.question.length || keywords.document.length)" class="meta-card glass-effect mb-4">
+                  <el-card v-if="isDebugMode && keywords && (keywords.question.length || keywords.document.length)" class="meta-card glass-effect mb-4">
                     <template #header>
                       <div class="meta-header">
                         <div class="left">

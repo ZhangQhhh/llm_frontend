@@ -67,7 +67,7 @@ http.interceptors.response.use(
 
 // 创建专门用于数研报告的 Axios 实例
 const davHttp: AxiosInstance = axios.create({
-  baseURL: DAV_PREFIX,
+  baseURL: process.env.NODE_ENV === 'development' ? DAV_PREFIX : '/dav', // 生产环境使用代理
   timeout: 600000, // 数研报告生成时间较长，设置10分钟超时
   headers: {
     'Content-Type': 'application/json',

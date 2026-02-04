@@ -132,20 +132,20 @@ export const API_ENDPOINTS = {
     STATUS: '/tasks/status',
   },
   LLM_SUMMARY: {
-    DOX_SUMMARY: `${DAV_PREFIX}/entry-exit/generate-full-report`,
-    MAX_SUMMARY: `${DAV_PREFIX}/entryExit/summary-entrance-comprehensive`,
-    TOTAL_FORECAST: `${DAV_PREFIX}/entryExit/forecast-total`,
-    TRAFFIC_TOOLS_FORECAST: `${DAV_PREFIX}/entryExit/forecast-traffic-tools`,
-    TOTAL_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-total/history`,
-    TRAFFIC_TOOLS_FORECAST_HISTORY: `${DAV_PREFIX}/entryExit/forecast-traffic-tools/history`
+    DOX_SUMMARY: `/entry-exit/generate-full-report`,
+    MAX_SUMMARY: `/entryExit/summary-entrance-comprehensive`,
+    TOTAL_FORECAST: `/entryExit/forecast-total`,
+    TRAFFIC_TOOLS_FORECAST: `/entryExit/forecast-traffic-tools`,
+    TOTAL_FORECAST_HISTORY: `/entryExit/forecast-total/history`,
+    TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`
   },
   // 文档管理接口
   DOCUMENTS: {
-    UPLOAD: `${DAV_PREFIX}/documents/upload`,
-    LIST: `${DAV_PREFIX}/documents`,
-    PREVIEW: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}/preview`,
-    DOWNLOAD: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}/download`,
-    DELETE: (filename: string) => `${DAV_PREFIX}/documents/${encodeURIComponent(filename)}`
+    UPLOAD: `/documents/upload`,
+    LIST: `/documents`,
+    PREVIEW: (filename: string) => `/documents/${encodeURIComponent(filename)}/preview`,
+    DOWNLOAD: (filename: string) => `/documents/${encodeURIComponent(filename)}/download`,
+    DELETE: (filename: string) => `/documents/${encodeURIComponent(filename)}`
   },
   // 问答日志相关API（使用llmHttp，baseURL已包含/api前缀）
   QA_LOGS: {
@@ -153,12 +153,14 @@ export const API_ENDPOINTS = {
     DETAIL: `/qa_logs/detail`,         // GET 获取单条日志详情
     DATES: `/qa_logs/dates`,           // GET 获取有日志的日期列表
   },
-  // 写作日志相关API（使用llmHttp，baseURL已包含/api前缀）
+  // Writing log APIs (llmHttp, baseURL includes /api)
   WRITING_LOGS: {
-    DAILY: `/writing_logs/daily`,      // GET 获取某天的写作日志记录
-    DETAIL: `/writing_logs/detail`,    // GET 获取单条写作日志详情
+    DATES: `/writing_logs/dates`,      // GET available writing log dates
+    DAILY: `/writing_logs/daily`,      // GET daily writing logs
+    DETAIL: `/writing_logs/detail`,    // GET writing log detail
+    STATISTICS: `/writing_logs/statistics` // GET writing log statistics
   },
-  // 数研报告日志相关API（使用davHttp，baseURL取DAV_PREFIX）
+
   REPORT_LOGS: {
     LIST: `/logs/report-generation`,                 // GET 获取报告生成日志列表
     DETAIL: (jobId: string) => `/logs/report-generation/${jobId}` // GET 获取单条日志详情

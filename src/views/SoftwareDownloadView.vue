@@ -100,7 +100,7 @@
             </template>
           </el-table-column>
           
-          <el-table-column prop="downloads" label="下载次数" width="100" align="center" />
+          <!-- <el-table-column prop="downloads" label="下载次数" width="100" align="center" /> -->
           
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">

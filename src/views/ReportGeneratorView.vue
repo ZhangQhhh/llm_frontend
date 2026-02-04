@@ -242,7 +242,7 @@ import {
   InfoFilled
 } from '@element-plus/icons-vue';
 import type { UploadFile } from 'element-plus';
-import http from '@/config/api/http';
+import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
 
 interface FormData {
@@ -397,7 +397,7 @@ const handleGenerate = async () => {
   loading.value = true;
 
   try {
-    const response = await http.post(
+    const response = await davHttp.post(
       API_ENDPOINTS.LLM_SUMMARY.DOX_SUMMARY,
       formData,
       {

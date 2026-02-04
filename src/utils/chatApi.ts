@@ -19,6 +19,8 @@ import {
 import {
   mockGetWritingLogsByDate,
   mockGetWritingLogDetail,
+  mockGetWritingLogDates,
+  mockGetWritingLogStatistics,
 } from '@/mocks/writingLogsMocks';
 
 /**
@@ -602,39 +604,53 @@ export async function getQALogDates(token: string): Promise<QALogDatesResponse> 
 /**
  * 写作日志记录项
  */
+export type WritingType = 'official_document' | 'data_analysis_report' | 'general_writing';
+
+/**
+ * Writing log item
+ */
 export interface WritingLogItem {
   id?: string;
   timestamp: string;
   type: string;
-  operation?: string;
-  user_id?: string;
+  writing_type?: WritingType;
   session_id?: string;
-  writing_type?: string;
-  instruction?: string;
-  content?: string;
-  result?: string;
+  instruction_preview?: string;
+  content_preview?: string;
+  content_length?: number;
+  source_count?: number;
+  generation_time?: number;
+  retrieved_count?: number;
+  reranked_count?: number;
+  avg_score?: number;
+  source_files_preview?: string;
+  error_type?: string;
+  error_message?: string;
+  metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
 /**
- * 写作日志详情
+ * Writing log detail
  */
 export interface WritingLogDetail extends WritingLogItem {
-  detail?: string;
+  user_instruction?: string;
+  generated_content?: string;
 }
 
 /**
- * 写作日志列表查询参数
+ * Writing log list params
  */
 export interface WritingLogListParams {
   date?: string;
-  writing_type?: string;
+  writing_type?: WritingType;
+  session_id?: string;
   page?: number;
   page_size?: number;
 }
 
 /**
- * 写作日志列表响应
+ * Writing log list response
  */
 export interface WritingLogListResponse {
   date?: string;
@@ -646,7 +662,38 @@ export interface WritingLogListResponse {
 }
 
 /**
- * 获取某天的写作日志记录
+ * Writing log dates response
+ */
+export interface WritingLogDatesResponse {
+  dates: string[];
+  total: number;
+}
+
+export interface WritingLogStatisticsResponse {
+  period: {
+    start_date: string;
+    end_date: string;
+    days: number;
+  };
+  summary: {
+    total_entries: number;
+    total_sessions: number;
+    success_count: number;
+    error_count: number;
+    avg_generation_time: number;
+    avg_content_length: number;
+  };
+  writing_types: Record<string, number>;
+  daily_stats: Array<{
+    date: string;
+    total: number;
+    success: number;
+    errors: number;
+  }>;
+}
+
+/**
+ * Get writing logs by date
  */
 export async function getWritingLogsByDate(
   token: string,
@@ -659,6 +706,7 @@ export async function getWritingLogsByDate(
   const queryParams = new URLSearchParams();
   if (params.date) queryParams.append('date', params.date);
   if (params.writing_type) queryParams.append('writing_type', params.writing_type);
+  if (params.session_id) queryParams.append('session_id', params.session_id);
   if (params.page) queryParams.append('page', String(params.page));
   if (params.page_size) queryParams.append('page_size', String(params.page_size));
 
@@ -674,18 +722,20 @@ export async function getWritingLogsByDate(
 }
 
 /**
- * 获取单条写作日志详情
+ * Get writing log detail
  */
 export async function getWritingLogDetail(
   token: string,
-  id: string
+  id: string,
+  date?: string
 ): Promise<WritingLogDetail> {
   if (isMockEnabled()) {
-    return mockGetWritingLogDetail(token, id) as Promise<WritingLogDetail>;
+    return mockGetWritingLogDetail(token, id, date) as Promise<WritingLogDetail>;
   }
 
   const queryParams = new URLSearchParams();
   queryParams.append('id', id);
+  if (date) queryParams.append('date', date);
 
   const url = `${API_ENDPOINTS.WRITING_LOGS.DETAIL}?${queryParams.toString()}`;
 
@@ -697,7 +747,44 @@ export async function getWritingLogDetail(
   return response.data.data;
 }
 
-// ==================== 数研报告日志相关 API ====================
+/**
+ * Get writing log dates
+ */
+export async function getWritingLogDates(token: string): Promise<WritingLogDatesResponse> {
+  if (isMockEnabled()) {
+    return mockGetWritingLogDates(token) as Promise<WritingLogDatesResponse>;
+  }
+
+  const response = await llmHttp.get(API_ENDPOINTS.WRITING_LOGS.DATES, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
+
+/**
+ * Get writing log statistics
+ */
+export async function getWritingLogStatistics(
+  token: string,
+  days = 7
+): Promise<WritingLogStatisticsResponse> {
+  if (isMockEnabled()) {
+    return mockGetWritingLogStatistics(token, days) as Promise<WritingLogStatisticsResponse>;
+  }
+
+  const queryParams = new URLSearchParams();
+  queryParams.append('days', String(days));
+  const url = `${API_ENDPOINTS.WRITING_LOGS.STATISTICS}?${queryParams.toString()}`;
+
+  const response = await llmHttp.get(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return response.data.data;
+}
 
 export interface ReportLogItem {
   job_id: string;

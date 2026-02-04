@@ -30,8 +30,21 @@
             @change="handleLogCategoryChange"
           >
           <el-option label="问答日志" value="qa" />
-          <el-option label="公文写作日志" value="official_document" />
+          <el-option label="写作日志" value="writing" />
           <el-option label="数研报告日志" value="report" />
+          </el-select>
+        </div>
+        <div class="filter-item" v-if="isWritingLogs">
+          <label>写作类型：</label>
+          <el-select
+            v-model="writingType"
+            style="width: 200px;"
+            @change="handleWritingTypeChange"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="公文写作" value="official_document" />
+            <el-option label="数据分析报告" value="data_analysis_report" />
+            <el-option label="通用写作" value="general_writing" />
           </el-select>
         </div>
         <div class="filter-item">
@@ -83,9 +96,52 @@
           <span class="stat-label">当前页:</span>
           <span class="stat-value">{{ logData.page }} / {{ logData.total_pages || 1 }}</span>
         </div>
-        <div class="stat-item" v-if="isQaLogs">
+        <div class="stat-item" v-if="isQaLogs || isWritingLogs">
           <span class="stat-label">可用日期数:</span>
           <span class="stat-value highlight">{{ availableDates.length }}</span>
+        </div>
+      </div>
+
+      <div v-if="isWritingLogs && writingStats" class="writing-stats-grid">
+        <div class="writing-stat-card">
+          <span class="label">总条目</span>
+          <span class="value">{{ writingStats.summary.total_entries }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">会话数</span>
+          <span class="value">{{ writingStats.summary.total_sessions }}</span>
+        </div>
+        <div class="writing-stat-card success">
+          <span class="label">成功</span>
+          <span class="value">{{ writingStats.summary.success_count }}</span>
+        </div>
+        <div class="writing-stat-card error">
+          <span class="label">??</span>
+          <span class="value">{{ writingStats.summary.error_count }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">平均耗时</span>
+          <span class="value">{{ writingStats.summary.avg_generation_time }}s</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">平均长度</span>
+          <span class="value">{{ writingStats.summary.avg_content_length }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">公文写作</span>
+          <span class="value">{{ writingStats.writing_types.official_document || 0 }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">数据分析报告</span>
+          <span class="value">{{ writingStats.writing_types.data_analysis_report || 0 }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">通用写作</span>
+          <span class="value">{{ writingStats.writing_types.general_writing || 0 }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">统计周期</span>
+          <span class="value">{{ writingStats.period.start_date }} ~ {{ writingStats.period.end_date }}</span>
         </div>
       </div>
 
@@ -105,7 +161,7 @@
       <!-- 空状态 -->
       <div v-else-if="logs.length === 0" class="empty">
         <el-icon :size="64" color="#9ca3af"><FolderOpened /></el-icon>
-        <span>暂无日志记录</span>
+        <span>{{ isWritingLogs ? "该日期暂无写作日志" : "暂无日志记录" }}</span>
       </div>
 
       <!-- 日志列表 -->
@@ -312,8 +368,12 @@ import {
   type QALogDetail,
   getWritingLogsByDate,
   getWritingLogDetail,
+  getWritingLogDates,
+  getWritingLogStatistics,
   type WritingLogItem,
   type WritingLogDetail,
+  type WritingType,
+  type WritingLogStatisticsResponse,
   getReportLogs,
   getReportLogDetail,
   type ReportLogItem,
@@ -329,7 +389,7 @@ const store = useStore();
 // 模拟数据模式
 const isMockMode = ref(isMockEnabled());
 
-type LogCategory = 'qa' | 'official_document' | 'report';
+type LogCategory = 'qa' | 'writing' | 'report';
 type LogItem = QALogItem | WritingLogItem | ReportLogItem;
 type LogDetail = QALogDetail | WritingLogDetail | ReportLogDetail;
 
@@ -357,6 +417,8 @@ const logData = ref<LogListState>({
 
 // 筛选条件
 const logCategory = ref<LogCategory>('qa');
+const writingType = ref<WritingType | ''>('');
+
 const selectedDate = ref<string>(getTodayDate());
 const filterUserName = ref('');
 const currentPage = ref(1);
@@ -368,17 +430,19 @@ let autoRefreshing = false;
 
 // 可用日期列表
 const availableDates = ref<string[]>([]);
+const writingStats = ref<WritingLogStatisticsResponse | null>(null);
+
 
 // 详情弹窗
 const showDetailDialog = ref(false);
 const detailLoading = ref(false);
 const logDetail = ref<LogDetail | null>(null);
 
-const isWritingLogs = computed(() => logCategory.value === 'official_document');
+const isWritingLogs = computed(() => logCategory.value === 'writing');
 const isReportLogs = computed(() => logCategory.value === 'report');
 const isQaLogs = computed(() => logCategory.value === 'qa');
 const pageTitle = computed(() => {
-  if (isWritingLogs.value) return '公文写作日志';
+  if (isWritingLogs.value) return '写作日志';
   if (isReportLogs.value) return '数研报告日志';
   return '问答日志管理';
 });
@@ -390,282 +454,65 @@ function getTodayDate(): string {
 }
 
 // 禁用未来日期和没有日志的日期
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// 禁用未来日期和没有日志的日期
 function disabledDate(date: Date): boolean {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
-  return date > today;
-}
 
-// 获取类型标签
-function getTypeLabel(type: string): string {
-  const typeMap: Record<string, string> = {
-    'knowledge_qa_stream': '知识问答',
-    'knowledge_chat': '知识对话',
-    'conversation': '多轮对话',
-    'mcq': '选择题',
-    'writing_start': '写作请求',
-    'writing_result': '写作结果',
-    'report_started': '报告生成中',
-    'report_completed': '报告已完成',
-    'report_failed': '报告失败',
-    'report_unknown': '报告记录'
-  };
-  return typeMap[type] || type;
-}
-
-// 获取类型样式类
-function getTypeClass(type: string): string {
-  const classMap: Record<string, string> = {
-    'knowledge_qa_stream': 'type-qa',
-    'knowledge_chat': 'type-chat',
-    'conversation': 'type-conv',
-    'mcq': 'type-mcq',
-    'writing_start': 'type-writing-start',
-    'writing_result': 'type-writing-result',
-    'report_started': 'type-report-started',
-    'report_completed': 'type-report-completed',
-    'report_failed': 'type-report-failed',
-    'report_unknown': 'type-default'
-  };
-  return classMap[type] || 'type-default';
-}
-
-// 格式化时间
-function formatTime(timestamp: string): string {
-  if (!timestamp) return '-';
-  const date = new Date(timestamp);
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-}
-
-function getLogType(log: LogItem): string {
-  if (isReportLogs.value) {
-    const status = (log as ReportLogItem).status || 'unknown';
-    return `report_${status}`;
-  }
-  return (log as any).type || 'unknown';
-}
-
-function getLogTimestamp(log: LogItem): string {
-  return (
-    (log as any).timestamp ||
-    (log as ReportLogItem).created_at ||
-    (log as ReportLogItem).updated_at ||
-    ''
-  );
-}
-
-function pickFirstString(values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function getLogId(log: LogItem, index?: number, allowIndexFallback = false): string {
-  const direct = (log as any).id ?? (log as any).log_id ?? (log as any).detail_id ?? (log as any).job_id;
-  if (direct) {
-    return String(direct);
-  }
-  const timestamp = (log as any).timestamp;
-  const lineIndex = (log as any).line_index;
-  if (timestamp && lineIndex !== undefined) {
-    return `${timestamp}_${lineIndex}`;
-  }
-  if (allowIndexFallback && index !== undefined) {
-    return timestamp ? `${timestamp}_${index}` : `log_${index}`;
-  }
-  return '';
-}
-
-function getLogUserId(log: LogItem): string | undefined {
-  const userId = (log as any).metadata?.user_id ?? (log as any).user_id;
-  if (userId === undefined || userId === null || userId === '') {
-    return undefined;
-  }
-  return String(userId);
-}
-
-function getLogUserName(log: LogItem): string | undefined {
-  if (isReportLogs.value) {
-    const username = (log as ReportLogItem).username;
-    return typeof username === 'string' ? username : undefined;
-  }
-  return undefined;
-}
-
-function getLogOperation(log: LogItem): string | undefined {
-  const operation = (log as any).operation;
-  return typeof operation === 'string' ? operation : undefined;
-}
-
-function getOperationLabel(operation?: string): string {
-  if (!operation) return '';
-  const normalized = operation.toLowerCase();
-  const map: Record<string, string> = {
-    generate: '生成',
-    edit: '编辑',
-    complete: '补全'
-  };
-  return map[normalized] || operation;
-}
-
-function getLogSessionId(log: LogItem): string | undefined {
-  const sessionId = (log as any).session_id;
-  if (sessionId === undefined || sessionId === null || sessionId === '') {
-    return undefined;
-  }
-  return String(sessionId);
-}
-
-function getLogIp(log: LogItem): string | undefined {
-  const ip = (log as any).metadata?.ip;
-  return typeof ip === 'string' ? ip : undefined;
-}
-
-function getLogAnswerType(log: LogItem): string | undefined {
-  const answerType = (log as any).metadata?.answer_type;
-  return typeof answerType === 'string' ? answerType : undefined;
-}
-
-function getLogTitle(log: LogItem): string {
-  if (isReportLogs.value) {
-    const reportType = getReportTypeLabel(log);
-    const statusLabel = getReportStatusLabel(log);
-    const jobId = getLogId(log);
-    const pieces = [reportType, statusLabel, jobId && `任务 ${jobId}`].filter(Boolean);
-    return pieces.length ? pieces.join(' / ') : '报告记录';
-  }
   if (isWritingLogs.value) {
-    const instruction = pickFirstString([
-      (log as any).instruction,
-      (log as any).content,
-      (log as any).prompt,
-      (log as any).detail
-    ]);
-    if (instruction) {
-      return instruction;
+        if (!selectedDate.value) {
+          await loadAvailableDates({ setDefault: true });
+        }
+
+        const result = await getWritingLogsByDate(token, {
+          date: selectedDate.value,
+          writing_type: writingType.value || undefined,
+          page: currentPage.value,
+          page_size: pageSize.value
+        });
+
+        const writingLogs = (result.logs || []).map((log) => {
+          const resolvedId = getLogId(log);
+          return resolvedId ? { ...log, id: resolvedId } : log;
+        });
+
+        const total = typeof result.total === 'number' ? result.total : writingLogs.length;
+        const page = result.page ?? currentPage.value;
+        const page_size = result.page_size ?? pageSize.value;
+        const totalForDisplay = hasUserFilter ? writingLogs.length : total;
+        const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
+        const total_pages = hasUserFilter
+          ? fallbackTotalPages
+          : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
+
+        logData.value = {
+          date: result.date || selectedDate.value,
+          total: totalForDisplay,
+          page,
+          page_size,
+          total_pages,
+          logs: writingLogs
+        };
+        logs.value = writingLogs;
+      } else {
+} else {
+      availableDates.value = [];
     }
-    const opLabel = getOperationLabel(getLogOperation(log));
-    const sessionId = getLogSessionId(log);
-    if (opLabel && sessionId) {
-      return `${opLabel} · ${sessionId}`;
+
+    if (setDefault) {
+      selectedDate.value = availableDates.value[0] || getTodayDate();
+    } else if (availableDates.value.length && selectedDate.value) {
+      if (!availableDates.value.includes(selectedDate.value)) {
+        selectedDate.value = availableDates.value[0];
+      }
     }
-    return opLabel || sessionId || '写作记录';
-  }
-
-  return (log as QALogItem).question || '-';
-}
-
-function getLogPreview(log: LogItem): string {
-  if (isReportLogs.value) {
-    const errorMsg = getReportErrorMessage(log);
-    if (errorMsg) return errorMsg;
-    const fileInfo = getReportFileInfo(log);
-    if (fileInfo && typeof fileInfo === 'object' && 'output_file' in fileInfo) {
-      return String((fileInfo as any).output_file || '');
-    }
-    return '';
-  }
-  if (!isWritingLogs.value) {
-    return (log as QALogItem).answer_preview || '';
-  }
-
-  return (
-    pickFirstString([
-      (log as any).result,
-      (log as any).output,
-      (log as any).answer
-    ]) || ''
-  );
-}
-
-function getReportTypeLabel(log: LogItem): string {
-  const reportType = (log as ReportLogItem).report_type;
-  if (!reportType) return '';
-  const map: Record<string, string> = {
-    comprehensive: '综合报告',
-    people_only: '仅人员'
-  };
-  return map[reportType] || reportType;
-}
-
-function getReportStatusLabel(log: LogItem): string {
-  const status = (log as ReportLogItem).status;
-  if (!status) return '';
-  const map: Record<string, string> = {
-    started: '生成中',
-    completed: '已完成',
-    failed: '失败'
-  };
-  return map[status] || status;
-}
-
-function getReportFileInfo(log: LogItem): Record<string, unknown> | null {
-  const fileInfo = (log as ReportLogItem).file_info;
-  return fileInfo && typeof fileInfo === 'object' ? (fileInfo as Record<string, unknown>) : null;
-}
-
-function getReportErrorMessage(log: LogItem): string {
-  const errorMessage = (log as ReportLogItem).error_message;
-  return typeof errorMessage === 'string' ? errorMessage : '';
-}
-
-function getWritingDetailRequest(detail: LogDetail): string {
-  return (
-    pickFirstString([
-      (detail as any).instruction,
-      (detail as any).content,
-      (detail as any).prompt,
-      (detail as any).detail
-    ]) || '-'
-  );
-}
-
-function getWritingDetailResult(detail: LogDetail): string {
-  return (
-    pickFirstString([
-      (detail as any).result,
-      (detail as any).output,
-      (detail as any).answer
-    ]) || ''
-  );
-}
-
-function getLogMetadata(detail: LogDetail): Record<string, unknown> {
-  const metadata = (detail as any).metadata;
-  if (!metadata || typeof metadata !== 'object') {
-    return {};
-  }
-  return metadata as Record<string, unknown>;
-}
-
-function getQADetailQuestion(detail: LogDetail): string {
-  return (detail as QALogDetail).question || '';
-}
-
-function getQADetailAnswer(detail: LogDetail): string {
-  return (detail as QALogDetail).answer || '';
-}
-
-// 加载可用日期列表
-async function loadAvailableDates() {
-  if (isWritingLogs.value || isReportLogs.value) {
-    availableDates.value = [];
-    return;
-  }
-  try {
-    const token = store.state.user.token;
-    const result = await getQALogDates(token);
-    availableDates.value = result.dates || [];
   } catch (err: any) {
     console.error('加载日期列表失败:', err);
   }
@@ -720,33 +567,21 @@ async function loadLogs(options: { silent?: boolean } = {}) {
       }
 
       if (isWritingLogs.value) {
+        if (!selectedDate.value) {
+          await loadAvailableDates({ setDefault: true });
+        }
+
         const result = await getWritingLogsByDate(token, {
           date: selectedDate.value,
-          writing_type: logCategory.value,
+          writing_type: writingType.value || undefined,
           page: currentPage.value,
           page_size: pageSize.value
         });
 
-        let writingLogs = (result.logs || []).map((log) => {
+        const writingLogs = (result.logs || []).map((log) => {
           const resolvedId = getLogId(log);
           return resolvedId ? { ...log, id: resolvedId } : log;
         });
-
-        if (hasUserFilter) {
-          const keyword = userFilterResult.keyword || filterUserName.value.trim();
-          const filterUserId = userFilterResult.params.user_id;
-          writingLogs = writingLogs.filter((log) => {
-            const userId = getLogUserId(log);
-            if (filterUserId && userId === filterUserId) {
-              return true;
-            }
-            const userName = getUserNameById(userId);
-            if (userName && userName.includes(keyword)) {
-              return true;
-            }
-            return userId ? userId.includes(keyword) : false;
-          });
-        }
 
         const total = typeof result.total === 'number' ? result.total : writingLogs.length;
         const page = result.page ?? currentPage.value;
@@ -767,6 +602,7 @@ async function loadLogs(options: { silent?: boolean } = {}) {
         };
         logs.value = writingLogs;
       } else {
+} else {
         const result = await getQALogsByDate(token, {
           date: selectedDate.value,
           ...userFilterResult.params,
@@ -781,7 +617,12 @@ async function loadLogs(options: { silent?: boolean } = {}) {
     error.value = '';
   } catch (err: any) {
     if (!silent) {
-      error.value = err.response?.data?.message || err.message || '加载失败，请稍后重试';
+      const rawMessage = err.response?.data?.message || err.message || '加载失败，请稍后重试';
+      if (typeof rawMessage === 'string' && (rawMessage.includes('date') || rawMessage.includes('??'))) {
+        error.value = '日期格式错误';
+      } else {
+        error.value = rawMessage;
+      }
     }
     console.error('加载日志列表失败:', err);
   } finally {
@@ -810,7 +651,7 @@ async function viewDetail(log: LogItem) {
       if (!logId) {
         throw new Error('日志ID缺失，无法查看详情');
       }
-      logDetail.value = await getWritingLogDetail(token, logId);
+      logDetail.value = await getWritingLogDetail(token, logId, selectedDate.value);
     } else {
       logDetail.value = await getQALogDetail(token, (log as QALogItem).id, selectedDate.value);
     }
@@ -828,11 +669,23 @@ function handleDateChange() {
   loadLogs();
 }
 
-function handleLogCategoryChange() {
+async function handleLogCategoryChange() {
   currentPage.value = 1;
-  loadAvailableDates();
+  if (isWritingLogs.value) {
+    writingType.value = '';
+    await loadAvailableDates({ setDefault: true });
+    await loadWritingStatistics();
+  } else {
+    await loadAvailableDates();
+    writingStats.value = null;
+  }
   loadLogs();
   syncAutoRefresh();
+}
+
+function handleWritingTypeChange() {
+  currentPage.value = 1;
+  loadLogs();
 }
 
 // 处理搜索
@@ -842,11 +695,20 @@ function handleSearch() {
 }
 
 // 处理重置
-function handleReset() {
-  selectedDate.value = getTodayDate();
+async function handleReset() {
   filterUserName.value = '';
   currentPage.value = 1;
   pageSize.value = 20;
+
+  if (isWritingLogs.value) {
+    writingType.value = '';
+    await loadAvailableDates({ setDefault: true });
+    await loadWritingStatistics();
+  } else {
+    selectedDate.value = getTodayDate();
+    await loadAvailableDates();
+  }
+
   loadLogs();
 }
 
@@ -864,7 +726,7 @@ function handlePageChange(page: number) {
 }
 
 function shouldAutoRefresh(): boolean {
-  return selectedDate.value === getTodayDate();
+  return isQaLogs.value && selectedDate.value === getTodayDate();
 }
 
 function stopAutoRefresh() {
@@ -910,7 +772,12 @@ watch(selectedDate, () => {
 
 onMounted(async () => {
   await ensureUserCacheLoaded();  // 确保用户缓存已加载
-  loadAvailableDates();
+  if (isWritingLogs.value) {
+    await loadAvailableDates({ setDefault: true });
+    await loadWritingStatistics();
+  } else {
+    await loadAvailableDates();
+  }
   loadLogs();
   syncAutoRefresh();
 });
@@ -989,6 +856,44 @@ onUnmounted(() => {
   gap: 2rem;
   align-items: center;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.writing-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.writing-stat-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.writing-stat-card .label {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.writing-stat-card .value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.writing-stat-card.success {
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+}
+
+.writing-stat-card.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 .stat-item {
@@ -1114,6 +1019,16 @@ onUnmounted(() => {
 .type-writing-result {
   background: #dcfce7;
   color: #15803d;
+}
+
+.type-retrieval {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.type-writing-error {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .type-report-started {
