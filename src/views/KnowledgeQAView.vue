@@ -592,7 +592,7 @@ export default defineComponent({
     let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
     let lastScrollTime = 0; // 上次滚动时间
     const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
-    const STREAM_FLUSH_MS = 40;
+    const STREAM_FLUSH_MS = 16;
     let streamFlushTimer: number | null = null;
 
     const flushStreamBuffers = () => {
