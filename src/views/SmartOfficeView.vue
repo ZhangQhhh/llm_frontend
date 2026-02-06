@@ -3917,25 +3917,17 @@ export default defineComponent({
 
 
       // ========== 思考模式控制（根据模型类型区分） ==========
-      // Qwen 模型：通过在 instruction 末尾追加 /no_think 指令来禁用思考
+      // Qwen 模型：后端通过 enable_thinking=false 时追加 /no_think
       // DeepSeek 模型：通过 chat_template_kwargs 参数控制
       const modelId = selectedModel.value || '';
-      const isQwenModel = modelId.toLowerCase().includes('qwen');
       const isDeepSeekModel = modelId.toLowerCase().includes('deepseek');
       const enableThinking = !!thinkingMode.value;
-      
-      // 处理 instruction：Qwen 模型关闭思考时追加 /no_think
-      let finalInstruction = text;
-      if (isQwenModel && !enableThinking) {
-        finalInstruction = `${text} /no_think`;
-        console.log('[SmartOffice] Qwen 模型关闭思考，已追加 /no_think');
-      }
 
       const payload: any = {
 
         session_id: sessionId.value,
 
-        instruction: finalInstruction,
+        instruction: text,  // 使用原始文本，不追加 /no_think
 
         template_content: templateContent.value || '',
 
