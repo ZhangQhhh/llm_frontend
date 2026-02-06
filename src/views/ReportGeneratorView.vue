@@ -142,6 +142,43 @@
             </transition>
           </el-card>
 
+          <!-- 模板区 -->
+          <el-card class="template-card glass-effect" shadow="hover">
+            <div class="card-title">
+              <el-icon><Collection /></el-icon>
+              <span>模板区</span>
+            </div>
+
+            <div class="template-tip">
+              <el-icon><InfoFilled /></el-icon>
+              <span>“更新历史csv”请严格按照示意文件.csv的字段顺序与格式填写。</span>
+            </div>
+
+            <div class="template-grid">
+              <div v-for="item in templateFiles" :key="item.filename" class="template-item">
+                <div class="template-left">
+                  <el-icon class="template-icon"><Document /></el-icon>
+                </div>
+                <div class="template-body">
+                  <div class="template-name">{{ item.title }}</div>
+                  <div class="template-desc">{{ item.desc }}</div>
+                  <div class="template-meta">{{ item.filename }}</div>
+                </div>
+                <div class="template-actions">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    :icon="Download"
+                    @click="downloadTemplate(item)"
+                  >
+                    下载模板
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </el-card>
+
           <!-- 使用说明卡片 -->
           <el-card class="info-card" shadow="hover">
             <el-collapse v-model="activeCollapse">
@@ -239,15 +276,26 @@ import {
   QuestionFilled,
   Upload,
   Download,
-  InfoFilled
+  InfoFilled,
+  Collection
 } from '@element-plus/icons-vue';
 import type { UploadFile } from 'element-plus';
 import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
+const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
+const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
+const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
 
 interface FormData {
   previousFile: File | null;
   currentFile: File | null;
+}
+
+interface TemplateFile {
+  title: string;
+  filename: string;
+  desc: string;
+  url: string;
 }
 
 const form = ref<FormData>({
@@ -260,6 +308,26 @@ const previousUploadRef = ref();
 const currentUploadRef = ref();
 const activeCollapse = ref(['1']);
 const router = useRouter();
+const templateFiles: TemplateFile[] = [
+  {
+    title: '更新历史CSV示意',
+    filename: '示意文件.csv',
+    desc: '用于“更新历史csv”上传，字段顺序与格式请与示意文件保持一致。',
+    url: templateHistoryCsv
+  },
+  {
+    title: '人员数据示意表',
+    filename: '20240801.xlsx',
+    desc: '人员数据模板示例，按示例表结构填写。',
+    url: templateStaffXlsx
+  },
+  {
+    title: '航班表示意表',
+    filename: '航班表2024.xls',
+    desc: '航班数据模板示例（xls）。',
+    url: templateFlightXls
+  }
+];
 
 // 计算当前步骤
 const currentStep = computed(() => {
@@ -381,6 +449,17 @@ const formatFileSize = (bytes: number): string => {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+};
+
+// 下载模板文件
+const downloadTemplate = (item: TemplateFile) => {
+  const link = document.createElement('a');
+  link.href = item.url;
+  link.download = item.filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 // 生成报告
@@ -691,6 +770,90 @@ const handleReset = () => {
   font-weight: 500;
 }
 
+/* 模板区 */
+.template-card {
+  margin-bottom: 2rem;
+  border-radius: 20px;
+  padding: 2rem;
+}
+
+.template-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.08) 0%, rgba(103, 58, 183, 0.08) 100%);
+  border-radius: 10px;
+  color: #4b5563;
+  font-size: 0.95rem;
+  margin-bottom: 1.25rem;
+}
+
+.template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.template-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid #eef2f7;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.template-item:hover {
+  transform: translateY(-2px);
+  border-color: #dbe7f4;
+  box-shadow: 0 8px 20px rgba(64, 158, 255, 0.12);
+}
+
+.template-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(64, 158, 255, 0.1);
+}
+
+.template-icon {
+  font-size: 20px;
+  color: #409eff;
+}
+
+.template-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.template-desc {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.template-meta {
+  font-size: 0.85rem;
+  color: #9aa0a6;
+  margin-top: 0.35rem;
+}
+
+.template-actions {
+  flex-shrink: 0;
+}
+
 /* 说明卡片 */
 .info-card {
   border-radius: 20px;
@@ -817,6 +980,23 @@ const handleReset = () => {
   }
 
   .action-buttons .el-button {
+    width: 100%;
+  }
+
+  .template-card {
+    padding: 1.5rem;
+  }
+
+  .template-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .template-actions {
+    width: 100%;
+  }
+
+  .template-actions .el-button {
     width: 100%;
   }
 }

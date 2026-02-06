@@ -19,9 +19,16 @@ const llmHttp: AxiosInstance = axios.create({
 llmHttp.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         // LLM 服务可能使用不同的 token，例如 CHAT_TOKEN
-        const token = localStorage.getItem(STORAGE_KEYS.CHAT_TOKEN);
-        if (token && config.headers) {
-            config.headers.Authorization = `Bearer ${token}`;
+        // 若调用方已显式传入 Authorization，则不覆盖（避免被旧 token 覆盖）
+        const existingAuth =
+            (config.headers as any)?.Authorization ||
+            (config.headers as any)?.authorization;
+        if (!existingAuth && config.headers) {
+            const chatToken = localStorage.getItem(STORAGE_KEYS.CHAT_TOKEN);
+            const token = chatToken || localStorage.getItem(STORAGE_KEYS.TOKEN);
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
         // 添加用户角色信息（用于视频中心等功能的权限校验）
         const userStr = localStorage.getItem(STORAGE_KEYS.USER);

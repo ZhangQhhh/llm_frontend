@@ -189,6 +189,7 @@
                             <div class="spinner-small"></div>
                             <span>正在深度思考中...</span>
                           </div>
+                          <div v-else-if="loading" class="thinking-text thinking-plain" v-text="thinking"></div>
                           <div v-else class="thinking-text markdown-body" v-html="renderMarkdown(thinking)"></div>
                         </div>
                       </el-collapse-item>
@@ -217,6 +218,10 @@
                         <div class="spinner-small"></div>
                         <span>AI正在思考中...</span>
                       </div>
+                    </div>
+                    <div v-else-if="answer && loading" class="markdown-body">
+                      <div v-html="streamingStableHtml"></div>
+                      <span class="streaming-tail" v-text="streamingTail"></span>
                     </div>
                     <div v-else-if="answer" class="markdown-body" v-html="renderMarkdown(processedAnswer)"></div>
                   </div>
@@ -572,6 +577,11 @@ export default defineComponent({
     const question = ref('');
     const answer = ref('');
     const thinking = ref('');
+    const pendingAnswerBuffer = ref('');
+    const pendingThinkingBuffer = ref('');
+    const streamingStableHtml = ref('');
+    const streamingTail = ref('');
+    const lastStableText = ref('');
     const references = ref<ReferenceSource[]>([]);
     const activeThinking = ref(['1']); // 默认展开思考
     const answerBodyRef = ref<HTMLElement | null>(null);
@@ -582,6 +592,74 @@ export default defineComponent({
     let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
     let lastScrollTime = 0; // 上次滚动时间
     const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
+    const STREAM_FLUSH_MS = 40;
+    let streamFlushTimer: number | null = null;
+
+    const flushStreamBuffers = () => {
+      if (pendingThinkingBuffer.value) {
+        thinking.value += pendingThinkingBuffer.value;
+        pendingThinkingBuffer.value = '';
+      }
+      if (pendingAnswerBuffer.value) {
+        answer.value += pendingAnswerBuffer.value;
+        pendingAnswerBuffer.value = '';
+      }
+      if (loading.value) {
+        updateStreamingRender();
+      }
+    };
+
+    const scheduleStreamFlush = () => {
+      if (streamFlushTimer !== null) return;
+      streamFlushTimer = window.setTimeout(() => {
+        streamFlushTimer = null;
+        flushStreamBuffers();
+      }, STREAM_FLUSH_MS);
+    };
+
+    const mapReferenceIds = (text: string) => {
+      if (isDebugMode.value || !text) {
+        return text;
+      }
+      return text.replace(/\[业务规定\s*(\d+)\]/g, (match, originalId) => {
+        const newId = referenceIdMap.value.get(originalId);
+        return newId ? `[业务规定 ${newId}]` : match;
+      });
+    };
+
+    const splitStableContent = (text: string) => {
+      if (!text) return { stable: '', tail: '' };
+      let inFence = false;
+      let lastBoundary = -1;
+      for (let i = 0; i < text.length - 2; i++) {
+        if (text[i] === '`' && text[i + 1] === '`' && text[i + 2] === '`') {
+          inFence = !inFence;
+          i += 2;
+          continue;
+        }
+        if (!inFence && text[i] === '\n' && text[i + 1] === '\n') {
+          lastBoundary = i + 2;
+        }
+      }
+      if (lastBoundary === -1 && text.length > 400) {
+        const lastNewline = text.lastIndexOf('\n');
+        if (lastNewline > 0) lastBoundary = lastNewline + 1;
+      }
+      if (lastBoundary <= 0) {
+        return { stable: '', tail: text };
+      }
+      return { stable: text.slice(0, lastBoundary), tail: text.slice(lastBoundary) };
+    };
+
+    const updateStreamingRender = () => {
+      const fullText = mapReferenceIds(answer.value);
+      const { stable, tail } = splitStableContent(fullText);
+      streamingTail.value = tail;
+      if (stable !== lastStableText.value) {
+        streamingStableHtml.value = stable ? renderMarkdown(stable) : '';
+        lastStableText.value = stable;
+      }
+    };
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
     const filteredReferences = computed(() => {
@@ -634,15 +712,7 @@ export default defineComponent({
 
     // 处理答案中的引用标记，将原始ID替换为新的序号（仅非debug模式）
     const processedAnswer = computed(() => {
-      if (isDebugMode.value || !answer.value) {
-        return answer.value;
-      }
-      
-      // 将 [业务规定 X] 替换为 [业务规定 Y]，其中Y是新的序号
-      return answer.value.replace(/\[业务规定\s*(\d+)\]/g, (match, originalId) => {
-        const newId = referenceIdMap.value.get(originalId);
-        return newId ? `[业务规定 ${newId}]` : match;
-      });
+      return mapReferenceIds(answer.value);
     });
     const subQuestions = ref<SubQuestionsData | null>(null);
     const keywords = ref<KeywordsData | null>(null);
@@ -769,6 +839,15 @@ export default defineComponent({
       loading.value = true;
       answer.value = '';
       thinking.value = '';
+      pendingAnswerBuffer.value = '';
+      pendingThinkingBuffer.value = '';
+      streamingStableHtml.value = '';
+      streamingTail.value = '';
+      lastStableText.value = '';
+      if (streamFlushTimer !== null) {
+        clearTimeout(streamFlushTimer);
+        streamFlushTimer = null;
+      }
       userHasScrolledUp = false;  // 重置滚动状态
       
       // 模拟流式输出思考过程
@@ -998,6 +1077,15 @@ export default defineComponent({
       lastQuestion.value = question.value.trim();
       answer.value = '';
       thinking.value = '';
+      pendingAnswerBuffer.value = '';
+      pendingThinkingBuffer.value = '';
+      streamingStableHtml.value = '';
+      streamingTail.value = '';
+      lastStableText.value = '';
+      if (streamFlushTimer !== null) {
+        clearTimeout(streamFlushTimer);
+        streamFlushTimer = null;
+      }
       references.value = [];
       subQuestions.value = null;
       keywords.value = null;
@@ -1213,6 +1301,15 @@ export default defineComponent({
       lastQuestion.value = question.value.trim();
       answer.value = '';
       thinking.value = '';
+      pendingAnswerBuffer.value = '';
+      pendingThinkingBuffer.value = '';
+      streamingStableHtml.value = '';
+      streamingTail.value = '';
+      lastStableText.value = '';
+      if (streamFlushTimer !== null) {
+        clearTimeout(streamFlushTimer);
+        streamFlushTimer = null;
+      }
       references.value = [];
       subQuestions.value = null;
       keywords.value = null;
@@ -1260,7 +1357,8 @@ export default defineComponent({
 
       switch (message.type) {
         case 'THINK':
-          thinking.value = thinking.value + message.data;
+          pendingThinkingBuffer.value += message.data;
+          scheduleStreamFlush();
           break;
 
         case 'CONTENT':
@@ -1280,7 +1378,8 @@ export default defineComponent({
             }
           }
           else if (!isStatusMessage(message.data)) {
-            answer.value = answer.value + message.data;
+            pendingAnswerBuffer.value += message.data;
+            scheduleStreamFlush();
           }
           break;
 
@@ -1317,6 +1416,14 @@ export default defineComponent({
           break;
 
         case 'DONE':
+          if (streamFlushTimer !== null) {
+            clearTimeout(streamFlushTimer);
+            streamFlushTimer = null;
+          }
+          flushStreamBuffers();
+          streamingStableHtml.value = renderMarkdown(mapReferenceIds(answer.value));
+          streamingTail.value = '';
+          lastStableText.value = mapReferenceIds(answer.value);
           loading.value = false;
           showProgress.value = false;
           break;
@@ -1448,6 +1555,10 @@ export default defineComponent({
         clearTimeout(summaryTimeoutId);
         summaryTimeoutId = null;
       }
+      if (streamFlushTimer !== null) {
+        clearTimeout(streamFlushTimer);
+        streamFlushTimer = null;
+      }
     });
 
     // 答案归纳函数（自动执行版本，不显示提示）
@@ -1512,6 +1623,7 @@ export default defineComponent({
       streamTestEnabled, streamTestAvailable,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef, scrollAnchor,
+      streamingStableHtml, streamingTail,
       // 答案归纳相关
       summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
@@ -2564,6 +2676,10 @@ export default defineComponent({
   min-height: 20px;
 }
 
+.thinking-plain {
+  white-space: pre-wrap;
+}
+
 .thinking-text.markdown-body {
   font-size: 14px;
   color: var(--ai-text);
@@ -3023,6 +3139,10 @@ export default defineComponent({
   overflow-x: auto;
   border: 1px solid var(--ai-border);
   box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05);
+}
+
+.streaming-tail {
+  white-space: pre-wrap;
 }
 
 .markdown-body :deep(code) {

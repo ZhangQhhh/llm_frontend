@@ -206,10 +206,13 @@ export async function sendStreamChatRequest(
 /**
  * 创建新会话
  */
-export async function createNewSession(token: string): Promise<{ session_id: string; message: string }> {
+export async function createNewSession(
+  token: string,
+  userId?: string | number | null
+): Promise<{ session_id: string; message: string }> {
   const response = await llmHttp.post(
     API_ENDPOINTS.KNOWLEDGE.CONVERSATION_NEW,
-    {},
+    userId ? { user_id: userId } : {},
     {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -280,6 +283,7 @@ export interface SessionListParams {
   page?: number;
   page_size?: number;
   sort_by?: 'last_update' | 'create_time';
+  user_id?: string | number | null;
 }
 
 export interface SessionListResponse {
@@ -298,7 +302,8 @@ export async function getSessionList(
     {
       page: params.page || 1,
       page_size: params.page_size || 20,
-      sort_by: params.sort_by || 'last_update'
+      sort_by: params.sort_by || 'last_update',
+      user_id: params.user_id ?? undefined
     },
     {
       headers: {

@@ -492,9 +492,17 @@ export default defineComponent({
         setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
       }
       
-      await initializeSession();
-      await loadSessionList();
-    });
+        if (store.state.user.token && !store.state.user.id) {
+          await new Promise<void>((resolve) => {
+            store.dispatch('getinfo', {
+              success: () => resolve(),
+              error: () => resolve()
+            });
+          });
+        }
+        await initializeSession();
+        await loadSessionList();
+      });
 
     // 初始化会话
     const initializeSession = async () => {
@@ -510,7 +518,7 @@ export default defineComponent({
       // 如果没有会话ID，创建新会话
       if (!sessionId.value) {
         try {
-          const result = await createNewSession(currentToken);
+          const result = await createNewSession(currentToken, store.state.user.id || null);
           sessionId.value = result.session_id;
           setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
           console.log('新会话已创建:', result.session_id);
@@ -560,7 +568,8 @@ export default defineComponent({
         const result = await getSessionList(currentToken, {
           page,
           page_size: 20,
-          sort_by: 'last_update'
+          sort_by: 'last_update',
+          user_id: store.state.user.id || null
         });
         sessionList.value = result.sessions;
         sessionsPage.value = result.page;
@@ -584,7 +593,7 @@ export default defineComponent({
         const currentToken = store.state.user.token;
         setStorageItem(STORAGE_KEYS.CHAT_TOKEN, currentToken);
         
-        const result = await createNewSession(currentToken);
+        const result = await createNewSession(currentToken, store.state.user.id || null);
         sessionId.value = result.session_id;
         setStorageItem(STORAGE_KEYS.SESSION_ID, result.session_id);
         messages.value = [];
