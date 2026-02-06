@@ -465,15 +465,6 @@ function formatDate(date: Date): string {
 function disabledDate(date: Date): boolean {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
-
-  if (isWritingLogs.value) {
-    if (availableDates.value.length) {
-      const dateStr = formatDate(date);
-      return !availableDates.value.includes(dateStr);
-    }
-    return date > today;
-  }
-
   return date > today;
 }
 
@@ -494,10 +485,6 @@ async function loadAvailableDates(options: { setDefault?: boolean } = {}) {
 
     if (setDefault) {
       selectedDate.value = availableDates.value[0] || getTodayDate();
-    } else if (availableDates.value.length && selectedDate.value) {
-      if (!availableDates.value.includes(selectedDate.value)) {
-        selectedDate.value = availableDates.value[0];
-      }
     }
   } catch (err: any) {
     console.error('加载日期列表失败:', err);
