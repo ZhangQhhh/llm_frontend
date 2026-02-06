@@ -1169,7 +1169,7 @@ export default defineComponent({
           return null;
         };
         
-        const FRONTEND_TIMEOUT_MS = 65000; // 前端超时65秒（略大于后端60秒）
+        const FRONTEND_TIMEOUT_MS = 600000; // 前端超时600秒（10分钟，与后端一致）
         
         try {
           // 使用AbortController实现超时控制

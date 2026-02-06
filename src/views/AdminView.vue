@@ -1754,7 +1754,7 @@
                   <span style="margin-left: 10px; color: #909399;">分钟（学生进入考试后的答题时间）</span>
                 </el-form-item>
                 
-                <el-form-item label="目标部门">
+                <el-form-item label="目标分组">
                   <div style="display: flex; gap: 10px; width: 100%;">
                     <el-select
                       v-model="publishForm.targetDepartments"
@@ -1763,12 +1763,13 @@
                       clearable
                       placeholder="可多选，不选择表示对所有人可见"
                       style="flex: 1"
+                      :loading="loadingGroupList"
                     >
                       <el-option
-                        v-for="dept in departmentOptions"
-                        :key="dept.value"
-                        :label="dept.label"
-                        :value="dept.value"
+                        v-for="group in groupOptions"
+                        :key="group.id"
+                        :label="group.name"
+                        :value="group.id"
                       />
                     </el-select>
                     <el-button 
@@ -2038,14 +2039,14 @@
         </template>
       </el-dialog>
 
-      <!-- 部门用户预览对话框 -->
-      <el-dialog v-model="deptUsersDialogVisible" title="目标部门人员名单" width="600px">
+      <!-- 分组用户预览对话框 -->
+      <el-dialog v-model="deptUsersDialogVisible" title="目标分组人员名单" width="600px">
         <div v-if="loadingDeptUsers" style="text-align: center; padding: 20px;">
           <el-skeleton :rows="5" animated />
         </div>
         <template v-else>
           <div style="margin-bottom: 10px; color: #606266;">
-            已选部门：<el-tag v-for="dept in publishForm.targetDepartments" :key="dept" size="small" style="margin-right: 5px;">{{ dept }}</el-tag>
+            已选分组：<el-tag v-for="groupId in publishForm.targetDepartments" :key="groupId" size="small" style="margin-right: 5px;">{{ groupOptions.find(g => g.id === groupId)?.name || groupId }}</el-tag>
           </div>
           <div style="margin-bottom: 10px; font-weight: 500;">共 {{ deptUsersList.length }} 人</div>
           <el-table :data="deptUsersList" border stripe max-height="400" size="small">
@@ -2673,21 +2674,38 @@ export default defineComponent({
     const cancelingExam = reactive<Record<string, boolean>>({})
     const deletingExam = reactive<Record<string, boolean>>({})
 
-    // 部门列表 - 使用预设的固定部门选项
-    const DEPARTMENT_OPTIONS = [
-      { label: '站领导', value: '站领导' },
-      { label: '办公室', value: '办公室' },
-      { label: '边检处', value: '边检处' },
-      { label: '政治处', value: '政治处' },
-      { label: '后勤处', value: '后勤处' },
-      { label: '执勤一队', value: '执勤一队' },
-      { label: '执勤二队', value: '执勤二队' },
-      { label: '执勤三队', value: '执勤三队' },
-      { label: '执勤四队', value: '执勤四队' },
-      { label: '执勤五队', value: '执勤五队' },
-      { label: '执勤六队', value: '执勤六队' }
-    ]
-    const departmentOptions = ref(DEPARTMENT_OPTIONS)
+    // 分组列表 - 从接口动态加载
+    const loadingGroupList = ref(false)
+    const groupOptions = ref<Array<{ id: string; name: string; remark?: string; status?: number }>>([])
+
+    // 加载分组列表
+    const loadGroupOptions = async () => {
+      loadingGroupList.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.GROUPS_LIST))
+        if (response.ok && (response.data?.success || response.data?.code === 200)) {
+          const raw = response.data?.data?.list || response.data?.data || response.data || []
+          const list = Array.isArray(raw) ? raw : (raw.list || [])
+          groupOptions.value = list
+            .map((group: any) => {
+              const statusNumber = Number(group?.status)
+              return {
+                id: String(group?.id ?? '').trim(),
+                name: String(group?.name ?? `分组${group?.id ?? ''}`).trim(),
+                remark: group?.remark ? String(group.remark).trim() : '',
+                status: Number.isNaN(statusNumber) ? undefined : statusNumber
+              }
+            })
+            .filter((group: { id: string; name: string }) => group.id)
+        } else {
+          throw new Error(response.data?.message || '获取分组列表失败')
+        }
+      } catch (error: any) {
+        console.warn('加载分组列表失败', error)
+      } finally {
+        loadingGroupList.value = false
+      }
+    }
 
     // 知识点/考点列表（从服务器加载，所有电脑共享）
     const knowledgePointOptions = ref<string[]>([])
@@ -5589,19 +5607,19 @@ export default defineComponent({
 
     // ========== 考试发布相关函数 ==========
     
-    // 预览部门用户名单
+    // 预览分组用户名单
     const previewDeptUsers = async () => {
       if (publishForm.targetDepartments.length === 0) {
-        return ElMessage.warning('请先选择目标部门')
+        return ElMessage.warning('请先选择目标分组')
       }
       loadingDeptUsers.value = true
       deptUsersDialogVisible.value = true
       deptUsersList.value = []
       try {
-        const response = await fetchWithAuth(getApiUrl('/api/user/departments/users'), {
+        const response = await fetchWithAuth(getApiUrl('/api/user/groups/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ departments: publishForm.targetDepartments })
+          body: JSON.stringify({ groupIds: publishForm.targetDepartments })
         })
         if (response.ok && response.data?.data?.users) {
           deptUsersList.value = response.data.data.users
@@ -5609,7 +5627,7 @@ export default defineComponent({
           throw new Error(response.data?.message || '获取用户列表失败')
         }
       } catch (error: any) {
-        ElMessage.error('获取部门用户列表失败：' + (error?.message || error))
+        ElMessage.error('获取分组用户列表失败：' + (error?.message || error))
         deptUsersList.value = []
       } finally {
         loadingDeptUsers.value = false
@@ -5640,7 +5658,7 @@ export default defineComponent({
             end_time: publishForm.timeRange[1],
             duration_min: publishForm.durationMin,
             description: publishForm.description,
-            target_departments: publishForm.targetDepartments  // 目标部门
+            target_groups: publishForm.targetDepartments  // 目标分组ID列表
           })
         })
         const data = await response.json()
@@ -5944,6 +5962,7 @@ export default defineComponent({
         loadPublishedExams()
         checkPendingTask()
         loadKnowledgePointOptions()
+        loadGroupOptions()
       }
       if (showAdminTabs.value) {
         loadUsers()
@@ -6012,8 +6031,8 @@ export default defineComponent({
       // 考试发布相关
       publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam, deletingExam,
       publishExam, loadPublishedExams, cancelExam, deleteExam, getExamStatusType, getExamStatusText, Bell, Plus,
-      // 部门相关（使用预设选项）
-      departmentOptions,
+      // 分组相关（从接口动态加载）
+      groupOptions, loadingGroupList,
       // 知识点/考点预设选项
       knowledgePointOptions, editSelectedKnowledgePoints,
       kpManageDialogVisible, newKpName, editingKpIndex, editingKpName,
