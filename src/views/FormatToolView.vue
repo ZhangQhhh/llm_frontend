@@ -475,7 +475,7 @@ const shouldRetry = (
 const doFormatOnce = async (file: File): Promise<any> => {
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('model_id', 'qwen-plus');
+  fd.append('model_id', 'qwen3-32b');
   
   const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
   

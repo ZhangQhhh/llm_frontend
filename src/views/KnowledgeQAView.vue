@@ -594,6 +594,7 @@ export default defineComponent({
     const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
     const STREAM_FLUSH_MS = 16;
     let streamFlushTimer: number | null = null;
+    const postDoneScrollTimers: number[] = [];
 
     const flushStreamBuffers = () => {
       if (pendingThinkingBuffer.value) {
@@ -848,6 +849,7 @@ export default defineComponent({
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
       }
+      clearPostDoneScrollTimers();
       userHasScrolledUp = false;  // 重置滚动状态
       
       // 模拟流式输出思考过程
@@ -1086,6 +1088,7 @@ export default defineComponent({
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
       }
+      clearPostDoneScrollTimers();
       references.value = [];
       subQuestions.value = null;
       keywords.value = null;
@@ -1310,6 +1313,7 @@ export default defineComponent({
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
       }
+      clearPostDoneScrollTimers();
       references.value = [];
       subQuestions.value = null;
       keywords.value = null;
@@ -1426,6 +1430,7 @@ export default defineComponent({
           lastStableText.value = mapReferenceIds(answer.value);
           loading.value = false;
           showProgress.value = false;
+          schedulePostDoneScroll();
           break;
       }
     };
@@ -1514,6 +1519,25 @@ export default defineComponent({
       });
     };
 
+    const schedulePostDoneScroll = () => {
+      const delays = [0, 120, 320];
+      delays.forEach((delay) => {
+        const timerId = window.setTimeout(() => {
+          autoScrollToBottom(true);
+          const index = postDoneScrollTimers.indexOf(timerId);
+          if (index !== -1) {
+            postDoneScrollTimers.splice(index, 1);
+          }
+        }, delay);
+        postDoneScrollTimers.push(timerId);
+      });
+    };
+
+    const clearPostDoneScrollTimers = () => {
+      postDoneScrollTimers.forEach((id) => clearTimeout(id));
+      postDoneScrollTimers.length = 0;
+    };
+
     // 检测用户是否手动向上滚动（ChatGPT/Claude 风格）
     const handleUserScroll = () => {
       // 如果是自动滚动触发的，忽略
@@ -1555,6 +1579,7 @@ export default defineComponent({
         clearTimeout(summaryTimeoutId);
         summaryTimeoutId = null;
       }
+      clearPostDoneScrollTimers();
       if (streamFlushTimer !== null) {
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;

@@ -5,7 +5,14 @@
  */
 
 import { STORAGE_KEYS } from '@/config/api/api'
-import { getQALogsByDate } from '@/utils/chatApi'
+import {
+  getQALogDates,
+  getQALogsByDate,
+  getReportLogs,
+  getWritingLogDates,
+  getWritingLogsByDate
+} from '@/utils/chatApi'
+import { ensureUserCacheLoaded, getAllCachedUsers } from '@/utils/userCache'
 
 export interface UserActivity {
   userId: string
@@ -23,6 +30,8 @@ interface ActivityCache {
 
 // 缓存过期时间：10分钟
 const CACHE_EXPIRY_MS = 10 * 60 * 1000
+const LOOKBACK_DAYS = 30
+const MAX_PAGE_SIZE = 500
 
 // 全局缓存实例
 const cache: ActivityCache = {
@@ -50,6 +59,135 @@ function isValidIP(ip: string | undefined): boolean {
   return /^[\d.:a-fA-F]+$/.test(ip)
 }
 
+
+function normalizeId(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const str = String(value).trim()
+  return str ? str : undefined
+}
+
+function buildLookbackDates(days: number): string[] {
+  const dates: string[] = []
+  const today = new Date()
+  for (let i = 0; i < days; i++) {
+    const date = new Date(today)
+    date.setDate(date.getDate() - i)
+    dates.push(date.toISOString().slice(0, 10))
+  }
+  return dates
+}
+
+function pickFirstString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function extractTimestamp(log: Record<string, any>): string | undefined {
+  return pickFirstString([
+    log.timestamp,
+    log.created_at,
+    log.updated_at,
+    log.createdAt,
+    log.updatedAt,
+    log.time,
+    log.datetime,
+    log.date
+  ])
+}
+
+function extractIP(log: Record<string, any>): string | undefined {
+  return pickFirstString([
+    log.metadata?.ip,
+    log.metadata?.client_ip,
+    log.metadata?.remote_ip,
+    log.ip,
+    log.client_ip,
+    log.remote_ip,
+    log.user_ip
+  ])
+}
+
+function buildUsernameIndex(): Map<string, string> {
+  const index = new Map<string, string>()
+  const users = getAllCachedUsers()
+  for (const user of users) {
+    const username = user.username?.toLowerCase()
+    if (username && !index.has(username)) {
+      index.set(username, user.id)
+    }
+  }
+  return index
+}
+
+function extractUserId(
+  log: Record<string, any>,
+  usernameIndex: Map<string, string>
+): string | undefined {
+  const direct = normalizeId(
+    log.user_id ??
+      log.userId ??
+      log.userid ??
+      log.uid ??
+      log.user?.id ??
+      log.metadata?.user_id ??
+      log.metadata?.userId ??
+      log.metadata?.uid
+  )
+  if (direct) return direct
+
+  const username = pickFirstString([
+    log.username,
+    log.user_name,
+    log.metadata?.username,
+    log.metadata?.user_name
+  ])
+  if (!username) return undefined
+  return usernameIndex.get(username.toLowerCase())
+}
+
+function updateActivityFromLog(
+  activityMap: Map<string, UserActivity>,
+  log: Record<string, any>,
+  usernameIndex: Map<string, string>,
+  options: { countQA?: boolean } = {}
+): void {
+  const userId = extractUserId(log, usernameIndex)
+  const timestamp = extractTimestamp(log)
+  if (!userId || !timestamp) return
+
+  const ip = extractIP(log)
+  const existing = activityMap.get(userId)
+  const shouldCountQA = options.countQA === true
+  const nextQaCount = (existing?.qaCount || 0) + (shouldCountQA ? 1 : 0)
+
+  if (!existing) {
+    activityMap.set(userId, {
+      userId,
+      ip: isValidIP(ip) ? ip! : '',
+      lastLogin: timestamp,
+      qaCount: nextQaCount
+    })
+    return
+  }
+
+  existing.qaCount = nextQaCount
+  const existingTime = Date.parse(existing.lastLogin)
+  const newTime = Date.parse(timestamp)
+  if (!Number.isNaN(newTime) && (Number.isNaN(existingTime) || newTime > existingTime)) {
+    const validIP = isValidIP(ip) ? ip! : (existing.ip || '')
+    activityMap.set(userId, {
+      ...existing,
+      ip: validIP,
+      lastLogin: timestamp,
+      qaCount: existing.qaCount
+    })
+  }
+}
+
 /**
  * 从日志加载用户活动数据
  */
@@ -60,61 +198,75 @@ async function loadActivityFromLogs(): Promise<Map<string, UserActivity>> {
   }
 
   const activityMap = new Map<string, UserActivity>()
-  const today = new Date()
-  
-  // 获取最近30天的日志
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    const dateStr = date.toISOString().slice(0, 10)
-    
+  const lookbackDates = buildLookbackDates(LOOKBACK_DAYS)
+  const lookbackSet = new Set(lookbackDates)
+
+  await ensureUserCacheLoaded()
+  const usernameIndex = buildUsernameIndex()
+
+  // QA logs
+  let qaDates = lookbackDates
+  try {
+    const qaResult = await getQALogDates(token)
+    if (qaResult?.dates?.length) {
+      qaDates = qaResult.dates.filter((date) => lookbackSet.has(date))
+    }
+  } catch (e) {
+    console.log('Failed to load QA log dates, fallback to lookback range')
+  }
+
+  for (const dateStr of qaDates) {
     try {
-      const response = await getQALogsByDate(token, { 
-        date: dateStr, 
-        page_size: 500  // 每天最多500条
+      const response = await getQALogsByDate(token, {
+        date: dateStr,
+        page_size: MAX_PAGE_SIZE
       })
-      
+
       if (response?.logs) {
         for (const log of response.logs) {
-          const userId = log.metadata?.user_id
-          const ip = log.metadata?.ip
-          const timestamp = log.timestamp
-          
-          if (userId) {
-            const existing = activityMap.get(userId)
-            const currentCount = existing?.qaCount || 0
-            
-            // 更新问答次数
-            const newCount = currentCount + 1
-            
-            // 判断是否需要更新（首次或时间更新）
-            if (!existing || new Date(timestamp) > new Date(existing.lastLogin)) {
-              const validIP = isValidIP(ip) ? ip! : (existing?.ip || '')
-              activityMap.set(userId, {
-                userId,
-                ip: validIP,
-                lastLogin: timestamp,
-                qaCount: newCount
-              })
-            } else {
-              // 只更新问答次数
-              existing.qaCount = newCount
-            }
-          }
+          updateActivityFromLog(activityMap, log as Record<string, any>, usernameIndex, {
+            countQA: true
+          })
         }
       }
     } catch (e) {
-      // 某天没有日志，继续
-      console.log(`No logs for ${dateStr}`)
+      console.log(`No QA logs for ${dateStr}`)
     }
   }
-  
+
+  // Writing logs
+  let writingDates = lookbackDates
+  try {
+    const writingResult = await getWritingLogDates(token)
+    if (writingResult?.dates?.length) {
+      writingDates = writingResult.dates.filter((date) => lookbackSet.has(date))
+    }
+  } catch (e) {
+    console.log('Failed to load writing log dates, fallback to lookback range')
+  }
+
+  for (const dateStr of writingDates) {
+    try {
+      const response = await getWritingLogsByDate(token, {
+        date: dateStr,
+        page_size: MAX_PAGE_SIZE
+      })
+
+      if (response?.logs) {
+        for (const log of response.logs) {
+          updateActivityFromLog(activityMap, log as Record<string, any>, usernameIndex, { countQA: false })
+        }
+      }
+    } catch (e) {
+      console.log(`No writing logs for ${dateStr}`)
+    }
+  }
+
+  // 不处理 Report logs，只从 QA 和 Writing 日志提取数据
+
   return activityMap
 }
 
-/**
- * 获取用户活动数据（带缓存）
- */
 export async function getUserActivityMap(): Promise<Map<string, UserActivity>> {
   // 如果缓存有效，直接返回
   if (isCacheValid()) {
@@ -162,7 +314,7 @@ export async function refreshActivityCache(): Promise<Map<string, UserActivity>>
  */
 export async function getQARanking(topN: number = 10): Promise<UserActivity[]> {
   const map = await getUserActivityMap()
-  const list = Array.from(map.values())
+  const list = Array.from(map.values()).filter((item) => item.qaCount > 0)
   list.sort((a, b) => b.qaCount - a.qaCount)
   return list.slice(0, topN)
 }

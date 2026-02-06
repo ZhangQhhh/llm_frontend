@@ -59,7 +59,7 @@
             @change="handleDateChange"
           />
         </div>
-        <div class="filter-item">
+        <div class="filter-item" v-if="!isWritingLogs">
           <label>用户名：</label>
           <el-input
             v-model="filterUserName"
