@@ -371,7 +371,7 @@ export default defineComponent({
     const sessionsTotalPages = ref(1);
 
     // 配置
-    const modelId = ref('qwen3-32b');
+    const modelId = ref('deepseek');
     const rerankTopN = ref(10);
     const thinkingMode = ref(true);
     const insertBlock = ref(false);
