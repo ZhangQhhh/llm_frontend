@@ -618,7 +618,7 @@
               </div>
               <div class="qgrid">
                 <div
-                  v-for="(item, idx) in gradeReport.items"
+                  v-for="(item, idx) in sortedGradeItems"
                   :key="idx"
                   :class="['qcell', getScoreClass(item)]"
                 >
@@ -1177,7 +1177,7 @@ interface Paper {
 interface GradeItem {
   qid: string
   score: number
-  is_correct: boolean
+  is_correct: boolean | 'partial' | null  // true=满分正确, false=错误, 'partial'=部分正确, null=待评分
 }
 
 interface GradeReport {
@@ -1500,7 +1500,8 @@ export default defineComponent({
 
     const correctCount = computed(() => {
       if (!gradeReport.value) return 0
-      return gradeReport.value.items.filter(item => item.is_correct).length
+      // 只有 is_correct === true 才算完全正确（简答题满分才算正确）
+      return gradeReport.value.items.filter(item => item.is_correct === true).length
     })
 
     const correctRate = computed(() => {
@@ -1515,6 +1516,22 @@ export default defineComponent({
       const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, saq: 3 }
       return [...reviewData.value.items].sort((a, b) => {
         return (typeOrder[a.qtype] ?? 99) - (typeOrder[b.qtype] ?? 99)
+      })
+    })
+
+    // 按题型排序的成绩报告项（与考试时的题目显示顺序一致）
+    const sortedGradeItems = computed(() => {
+      if (!gradeReport.value || !reviewData.value) return []
+      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, saq: 3 }
+      // 需要从reviewData获取qtype信息
+      const qtypeMap: Record<string, string> = {}
+      reviewData.value.items.forEach((item: any) => {
+        qtypeMap[item.qid] = item.qtype
+      })
+      return [...gradeReport.value.items].sort((a, b) => {
+        const typeA = qtypeMap[a.qid] || 'single'
+        const typeB = qtypeMap[b.qid] || 'single'
+        return (typeOrder[typeA] ?? 99) - (typeOrder[typeB] ?? 99)
       })
     })
 
@@ -1770,8 +1787,9 @@ export default defineComponent({
     }
 
     const getScoreClass = (item: GradeItem) => {
-      if (item.is_correct) return 'ok'
-      if (item.score > 0) return 'partial'
+      // 只有 is_correct === true 才显示为正确（简答题满分才算正确）
+      if (item.is_correct === true) return 'ok'
+      if (item.is_correct === 'partial' || item.score > 0) return 'partial'
       return 'bad'
     }
 
@@ -2295,7 +2313,7 @@ export default defineComponent({
       const initWidth = initialWindowSize.value.width
       const initHeight = initialWindowSize.value.height
       const areaRatio = (currentWidth * currentHeight) / (initWidth * initHeight)
-      return areaRatio < 0.7  // 面积小于70%视为缩小
+      return areaRatio < 0.95  // 面积小于95%视为缩小
     }
 
     // 启动窗口缩小持续检测定时器
@@ -2360,6 +2378,43 @@ export default defineComponent({
       switchLogs.value = []
       switchWarningVisible.value = false
       lastSwitchTimestamp.value = 0
+    }
+
+    // 检查窗口是否已最大化（面积达到屏幕的95%以上）
+    const isWindowMaximized = () => {
+      const screenWidth = window.screen.availWidth
+      const screenHeight = window.screen.availHeight
+      const currentWidth = window.outerWidth
+      const currentHeight = window.outerHeight
+      const ratio = (currentWidth * currentHeight) / (screenWidth * screenHeight)
+      return ratio >= 0.95
+    }
+
+    // 提示用户最大化窗口（考试开始时调用）
+    const promptMaximizeWindow = async () => {
+      // 循环提示直到用户最大化窗口或取消
+      let verified = false
+      while (!verified) {
+        await ElMessageBox.alert(
+          '为确保考试顺利进行，请将浏览器窗口最大化后再点击"开始答题"。\n\n考试期间缩小窗口或切换页面将被记录为违规行为。',
+          '⚠️ 请最大化窗口',
+          {
+            confirmButtonText: '已最大化，开始答题',
+            type: 'warning',
+            closeOnClickModal: false,
+            closeOnPressEscape: false,
+            showClose: false
+          }
+        )
+        
+        // 验证窗口是否真的最大化了
+        if (isWindowMaximized()) {
+          verified = true  // 已最大化，继续考试
+        } else {
+          // 未最大化，提示并重新弹窗
+          ElMessage.error('检测到窗口未最大化，请先将浏览器窗口最大化！')
+        }
+      }
     }
 
     // 关闭切屏警告弹窗
@@ -2701,7 +2756,11 @@ export default defineComponent({
 
         // 重置防作弊状态
         resetAntiCheat()
-        // 记录初始窗口大小（用于检测窗口缩小）
+        
+        // 提示用户最大化窗口
+        await promptMaximizeWindow()
+        
+        // 记录初始窗口大小（用于检测窗口缩小）- 全屏后记录
         recordInitialWindowSize()
 
         // 启动倒计时和自动保存
@@ -3155,7 +3214,7 @@ export default defineComponent({
           // 绘制圆环图
           await nextTick()
           if (scoreChartRef.value) {
-            const correctCount = data.items.filter((i: any) => i.is_correct).length
+            const correctCount = data.items.filter((i: any) => i.is_correct === true).length
             drawRing(scoreChartRef.value, correctCount, data.items.length)
           }
         } else {
@@ -3373,6 +3432,7 @@ export default defineComponent({
       correctRate,
       reviewData,
       sortedReviewItems,
+      sortedGradeItems,
       wrongQuestions,
       singleQuestions,
       multiQuestions,

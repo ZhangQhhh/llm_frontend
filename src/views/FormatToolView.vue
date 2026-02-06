@@ -408,6 +408,121 @@ const formatFileSize = (bytes: number): string => {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
 };
 
+// 智能重试配置
+const RETRY_CONFIG = {
+  maxRetries: 3,           // 最大重试次数
+  questionDeviationThreshold: 0.2,  // 题目数量偏差阈值 (20%)
+  imageDeviationThreshold: 0.3,     // 图片数量偏差阈值 (30%)
+  minQuestionDiff: 2,      // 最小题目差异（绝对值）
+};
+
+// 计算结果与预估的偏差分数（越小越好）
+const calculateDeviationScore = (
+  result: { count: number; saq_count: number; total_images: number },
+  estimate: { estimated_questions: number; estimated_images: number }
+): number => {
+  const totalQuestions = result.count + result.saq_count;
+  const estQuestions = estimate.estimated_questions;
+  const estImages = estimate.estimated_images;
+  
+  // 计算题目偏差
+  const questionDiff = Math.abs(totalQuestions - estQuestions);
+  const questionScore = estQuestions > 0 ? questionDiff / estQuestions : (questionDiff > 0 ? 1 : 0);
+  
+  // 计算图片偏差
+  const imageDiff = Math.abs(result.total_images - estImages);
+  const imageScore = estImages > 0 ? imageDiff / estImages : (imageDiff > 0 ? 0.5 : 0);
+  
+  // 综合分数（题目权重更高）
+  return questionScore * 0.7 + imageScore * 0.3;
+};
+
+// 判断是否需要重试
+const shouldRetry = (
+  result: { count: number; saq_count: number; total_images: number },
+  estimate: { estimated_questions: number; estimated_images: number }
+): boolean => {
+  const totalQuestions = result.count + result.saq_count;
+  const estQuestions = estimate.estimated_questions;
+  
+  // 如果预估为0，不触发重试
+  if (estQuestions === 0) return false;
+  
+  // 计算偏差
+  const questionDiff = Math.abs(totalQuestions - estQuestions);
+  const questionDeviation = questionDiff / estQuestions;
+  
+  // 偏差超过阈值且差异超过最小值时需要重试
+  if (questionDeviation > RETRY_CONFIG.questionDeviationThreshold && 
+      questionDiff >= RETRY_CONFIG.minQuestionDiff) {
+    return true;
+  }
+  
+  // 图片偏差检查
+  const estImages = estimate.estimated_images;
+  if (estImages > 0) {
+    const imageDiff = Math.abs(result.total_images - estImages);
+    const imageDeviation = imageDiff / estImages;
+    if (imageDeviation > RETRY_CONFIG.imageDeviationThreshold && imageDiff >= 2) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+// 单次格式化调用
+const doFormatOnce = async (file: File): Promise<any> => {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('model_id', 'qwen3-32b');
+  
+  const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
+  
+  if (!r.ok) {
+    if (r.status === 504 || r.status === 502) {
+      throw new Error('LLM处理超时，请尝试上传较小的文件或稍后重试');
+    } else if (r.status === 500) {
+      throw new Error('服务器内部错误，请稍后重试');
+    }
+    throw new Error(`服务器错误（HTTP ${r.status}）`);
+  }
+  
+  let j;
+  try {
+    j = await r.json();
+  } catch (parseErr) {
+    throw new Error('LLM服务响应异常，可能正在处理中或已超时，请稍后重试');
+  }
+  
+  if (!j || j.ok === false) {
+    throw new Error(j?.msg || `格式化失败（HTTP ${r.status})`);
+  }
+  
+  return j;
+};
+
+// 预检：获取源文件预估值
+const doPrecheck = async (file: File): Promise<{ estimated_questions: number; estimated_images: number } | null> => {
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    
+    const r = await fetch(`${MCQ_BASE_URL}/format_precheck`, { method: 'POST', body: fd });
+    if (!r.ok) return null;
+    
+    const j = await r.json();
+    if (!j || !j.ok) return null;
+    
+    return {
+      estimated_questions: j.estimated_questions || 0,
+      estimated_images: j.estimated_images || 0
+    };
+  } catch {
+    return null;
+  }
+};
+
 const handleFormat = async () => {
   if (!selectedFile.value) {
     ElMessage.warning("请先选择文件");
@@ -418,32 +533,73 @@ const handleFormat = async () => {
   formatting.value = true;
 
   try {
-    const fd = new FormData();
-    fd.append('file', selectedFile.value);
-    fd.append('model_id', 'qwen3-32b');  // 使用 qwen32b 模型进行格式化
+    // Step 1: 预检获取预估值
+    const estimate = await doPrecheck(selectedFile.value);
+    console.log('[Format] 预检结果:', estimate);
     
-    const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
+    // Step 2: 执行格式化（带智能重试）
+    const allResults: any[] = [];
+    let bestResult: any = null;
+    let bestScore = Infinity;
+    let retryCount = 0;
     
-    // 检查网关超时等HTTP错误
-    if (!r.ok) {
-      if (r.status === 504 || r.status === 502) {
-        throw new Error('LLM处理超时，请尝试上传较小的文件或稍后重试');
-      } else if (r.status === 500) {
-        throw new Error('服务器内部错误，请稍后重试');
+    while (retryCount < RETRY_CONFIG.maxRetries) {
+      try {
+        console.log(`[Format] 第 ${retryCount + 1} 次格式化...`);
+        const result = await doFormatOnce(selectedFile.value);
+        allResults.push(result);
+        
+        // 计算偏差分数
+        const currentResult = {
+          count: result.count || 0,
+          saq_count: result.saq_count || 0,
+          total_images: result.total_images || 0
+        };
+        
+        if (estimate) {
+          const score = calculateDeviationScore(currentResult, estimate);
+          console.log(`[Format] 第 ${retryCount + 1} 次结果: 题目=${currentResult.count + currentResult.saq_count}, 图片=${currentResult.total_images}, 偏差分数=${score.toFixed(3)}`);
+          
+          // 更新最佳结果
+          if (score < bestScore) {
+            bestScore = score;
+            bestResult = result;
+          }
+          
+          // 检查是否需要重试
+          if (!shouldRetry(currentResult, estimate)) {
+            console.log('[Format] 结果符合预期，无需重试');
+            break;
+          }
+          
+          // 需要重试
+          retryCount++;
+          if (retryCount < RETRY_CONFIG.maxRetries) {
+            console.log(`[Format] 结果偏差较大，正在进行第 ${retryCount + 1} 次优化...`);
+          }
+        } else {
+          // 无预估值，使用第一次结果
+          bestResult = result;
+          break;
+        }
+      } catch (err) {
+        console.error(`[Format] 第 ${retryCount + 1} 次格式化失败:`, err);
+        retryCount++;
+        if (retryCount >= RETRY_CONFIG.maxRetries) {
+          throw err;  // 所有重试都失败
+        }
       }
-      throw new Error(`服务器错误（HTTP ${r.status}）`);
     }
     
-    // 尝试解析JSON，捕获HTML响应的情况
-    let j;
-    try {
-      j = await r.json();
-    } catch (parseErr) {
-      throw new Error('LLM服务响应异常，可能正在处理中或已超时，请稍后重试');
+    // 使用最佳结果
+    const j = bestResult || allResults[allResults.length - 1];
+    if (!j) {
+      throw new Error('格式化失败，请稍后重试');
     }
     
-    if (!j || j.ok === false) {
-      throw new Error(j?.msg || `格式化失败（HTTP ${r.status})`);
+    // 如果进行了多次尝试，显示提示
+    if (allResults.length > 1) {
+      console.log(`[Format] 共进行 ${allResults.length} 次尝试，选择最优结果（偏差分数=${bestScore.toFixed(3)}）`);
     }
     
     // 保存结果
@@ -468,6 +624,9 @@ const handleFormat = async () => {
     }
     if (j.has_images) {
       successMsg += `，含 ${j.total_images} 张图片`;
+    }
+    if (allResults.length > 1) {
+      console.log(`[Format] 共优化了 ${allResults.length} 次`);
     }
     ElMessage.success({
       message: successMsg,

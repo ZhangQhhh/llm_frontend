@@ -63,7 +63,7 @@
               class="question-item"
               :class="{ 
                 active: idx === currentQuestionIndex, 
-                graded: grades[saq.qid]?.is_correct !== undefined 
+                graded: grades[saq.qid]?.is_correct !== undefined
               }"
               @click="goToQuestion(idx)"
             >
@@ -165,7 +165,12 @@
 
       <!-- 右侧面板 - 评分操作 -->
       <div class="grading-panel">
-        <div class="panel-title">评分操作</div>
+        <div class="panel-header">
+          <div class="panel-title">评分操作</div>
+          <div class="sync-status" v-if="lastSyncTime">
+            <span class="sync-text">已同步</span>
+          </div>
+        </div>
         
         <!-- 快速评分 -->
         <div class="quick-grade">
@@ -266,6 +271,15 @@
             {{ currentStudent && currentQuestionIndex >= sortedSaqs.length - 1 ? '完成' : '下一题' }}
             <el-icon><ArrowRight /></el-icon>
           </el-button>
+        </div>
+
+        <!-- 批改信息 -->
+        <div class="grader-info" v-if="currentSaq && getGraderInfo(currentSaq.qid)">
+          <div class="grader-label">本题批改信息</div>
+          <div class="grader-detail">
+            <span class="grader-name">{{ getGraderInfo(currentSaq.qid)?.name }}</span>
+            <span class="grader-time">{{ getGraderInfo(currentSaq.qid)?.time }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -376,12 +390,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Refresh, Back, User, Check, CopyDocument, ArrowLeft, ArrowRight, Search
 } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { fetchMcqWithAuth } from '@/utils/request'
 import { MCQ_BASE_URL } from '@/config/api/api'
 
@@ -469,6 +483,123 @@ const commentTemplates = [
   '理解有偏差，需要复习相关知识',
   '未回答或答案与题目无关'
 ]
+
+// ==================== 多人同步批改相关 ====================
+// 进度同步状态
+const progressSyncTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const PROGRESS_SYNC_INTERVAL = 5000 // 5秒轮询一次
+const lastSyncTime = ref('')
+const syncedProgress = reactive<Record<string, Record<string, { is_graded: boolean; score: number; comment: string; graded_time: string; grader: string }>>>({})
+
+// 启动进度同步轮询
+function startProgressSync() {
+  if (progressSyncTimer.value) {
+    clearInterval(progressSyncTimer.value)
+  }
+  
+  // 立即同步一次
+  syncGradingProgress()
+  
+  // 设置定时轮询
+  progressSyncTimer.value = setInterval(() => {
+    syncGradingProgress()
+  }, PROGRESS_SYNC_INTERVAL)
+}
+
+// 停止进度同步
+function stopProgressSync() {
+  if (progressSyncTimer.value) {
+    clearInterval(progressSyncTimer.value)
+    progressSyncTimer.value = null
+  }
+}
+
+// 同步评分进度
+async function syncGradingProgress() {
+  if (!currentExam.value) return
+  
+  try {
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/grading-progress`, {
+      params: {
+        exam_id: currentExam.value.exam_id
+      }
+    })
+    
+    if (res.data.ok) {
+      const newProgress = res.data.progress || {}
+      const newLastUpdate = res.data.last_update || ''
+      const hasNewUpdate = newLastUpdate && newLastUpdate !== lastSyncTime.value
+      
+      console.log('[ProgressSync] 服务器返回数据:', JSON.stringify(newProgress, null, 2))
+      console.log('[ProgressSync] 同步完成, hasNewUpdate:', hasNewUpdate, 'last_update:', newLastUpdate)
+      
+      if (hasNewUpdate) {
+        lastSyncTime.value = newLastUpdate
+      }
+      
+      // 合并进度数据（始终更新）
+      for (const [attemptId, qidProgress] of Object.entries(newProgress)) {
+        const oldProgress = syncedProgress[attemptId] || {}
+        if (!syncedProgress[attemptId]) {
+          syncedProgress[attemptId] = {} as any
+        }
+        
+        // 检测当前考生的当前题目是否被他人评分（冲突检测）
+        if (hasNewUpdate && currentStudent.value?.attempt_id === attemptId && currentSaq.value) {
+          const currentQid = currentSaq.value.qid
+          const newGrade = (qidProgress as Record<string, any>)[currentQid]
+          const oldGrade = oldProgress[currentQid]
+          
+          // 如果当前题目有新的评分，且本地未评分或评分时间不同
+          if (newGrade?.is_graded && newGrade.grader) {
+            const isNewGrade = !oldGrade?.is_graded || oldGrade.graded_time !== newGrade.graded_time
+            const localGrade = grades[currentQid]
+            const localNotGraded = !localGrade || localGrade.is_correct === undefined
+            
+            if (isNewGrade && localNotGraded) {
+              // 显示冲突提示
+              ElMessage({
+                message: `此题已被 ${newGrade.grader} 于 ${formatGradedTime(newGrade.graded_time)} 评分`,
+                type: 'warning',
+                duration: 5000
+              })
+            }
+          }
+        }
+        
+        Object.assign(syncedProgress[attemptId], qidProgress)
+      }
+      
+      // 始终更新当前考生的grades（从syncedProgress同步）
+      if (currentStudent.value) {
+        const attemptId = currentStudent.value.attempt_id
+        const progress = syncedProgress[attemptId] || {}
+        console.log('[ProgressSync] 当前考生:', attemptId, '进度数据:', Object.keys(progress).length, '条')
+        for (const [qid, serverGrade] of Object.entries(progress)) {
+          const localGrade = grades[qid]
+          console.log('[ProgressSync] 检查题目:', qid, 
+            'server.is_graded:', serverGrade.is_graded,
+            'local.is_correct:', localGrade?.is_correct)
+          // 只更新本地未评分的题目
+          if (serverGrade.is_graded) {
+            if (!localGrade || localGrade.is_correct === undefined) {
+              console.log('[ProgressSync] 更新题目:', qid, '分数:', serverGrade.score)
+              // 确保响应式更新
+              if (!grades[qid]) {
+                grades[qid] = { score: 0, is_correct: undefined, comment: '' }
+              }
+              grades[qid].score = serverGrade.score
+              grades[qid].is_correct = true
+              grades[qid].comment = serverGrade.comment || ''
+            }
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.error('[ProgressSync] 同步失败:', e.message)
+  }
+}
 
 // ==================== 计算属性 ====================
 // 待评考试数（有未评分题目的考试）
@@ -577,8 +708,57 @@ onMounted(() => {
   // 键盘事件已通过模板 @keydown 绑定，无需重复添加
 })
 
+// 浏览器关闭/刷新时的提示
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (hasUnsavedGrades()) {
+    e.preventDefault()
+    e.returnValue = '您有未保存的评分，确定要离开吗？'
+    return e.returnValue
+  }
+}
+
 onUnmounted(() => {
-  // 清理工作（如有需要）
+  // 停止进度同步
+  stopProgressSync()
+  // 移除 beforeunload 事件
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+// 添加 beforeunload 事件监听
+watch(currentStudent, (newStudent) => {
+  if (newStudent) {
+    window.addEventListener('beforeunload', handleBeforeUnload)
+  } else {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+  }
+}, { immediate: true })
+
+// Vue 路由离开时的提示
+onBeforeRouteLeave(async (to, from, next) => {
+  if (hasUnsavedGrades()) {
+    try {
+      await ElMessageBox.confirm(
+        '您有未保存的评分，确定要离开吗？',
+        '提示',
+        { confirmButtonText: '离开', cancelButtonText: '取消', type: 'warning' }
+      )
+      next()
+    } catch {
+      next(false)
+    }
+  } else {
+    next()
+  }
+})
+
+// 监听当前考试变化，启动/停止进度同步
+watch(currentExam, (newExam) => {
+  if (newExam) {
+    console.log('[ProgressSync] 启动同步, exam_id:', newExam.exam_id)
+    startProgressSync()
+  } else {
+    stopProgressSync()
+  }
 })
 
 // ==================== 方法 ====================
@@ -604,9 +784,17 @@ async function loadPendingList() {
   }
 }
 
-function selectExam(exam: ExamData) {
+async function selectExam(exam: ExamData) {
   currentExam.value = exam
   studentPage.value = 1 // 重置分页
+  
+  // 清空旧的同步进度和本地缓存，重新获取最新数据
+  Object.keys(syncedProgress).forEach(key => delete syncedProgress[key])
+  Object.keys(gradesCache).forEach(key => delete gradesCache[key])
+  submittedStudents.clear()
+  lastSyncTime.value = ''
+  await syncGradingProgress()
+  
   // 自动选中第一个考生
   if (exam.students.length > 0) {
     selectStudent(exam.students[0])
@@ -626,20 +814,28 @@ function selectStudent(student: StudentData) {
   // 清空当前评分对象
   Object.keys(grades).forEach(key => delete grades[key])
   
-  // 从缓存恢复或从后端数据初始化评分
+  // 从同步进度/缓存/后端数据初始化评分
   const cached = gradesCache[student.attempt_id]
+  const synced = syncedProgress[student.attempt_id] || {}
+  
   for (const saq of student.pending_saqs) {
-    if (cached && cached[saq.qid]) {
-      // 优先使用本地缓存
+    if (synced[saq.qid]?.is_graded) {
+      // 优先使用同步的进度数据（最新，包含他人评分）
+      grades[saq.qid] = {
+        score: synced[saq.qid].score || 0,
+        is_correct: true,
+        comment: synced[saq.qid].comment || ''
+      }
+    } else if (cached && cached[saq.qid]?.is_correct !== undefined) {
+      // 使用本地缓存（我自己的未提交评分）
       grades[saq.qid] = { ...cached[saq.qid] }
     } else if (saq.is_graded) {
-      // 使用后端返回的已评分数据
+      // 使用初始加载的已评分数据
       grades[saq.qid] = {
         score: saq.score || 0,
-        is_correct: true, // 后端已评分
+        is_correct: true,
         comment: saq.comment || ''
       }
-      // 标记该考生已提交（从后端加载的已评分数据）
       submittedStudents.add(student.attempt_id)
     } else {
       // 初始化为未评分
@@ -652,9 +848,81 @@ function selectStudent(student: StudentData) {
   }
 }
 
-function switchStudent(student: StudentData) {
-  // 直接切换，评分数据会保存在缓存中
-  selectStudent(student)
+// 检查当前考生是否有未提交的评分（与已同步数据比较，只有真正修改过的才算）
+function hasUnsavedGrades(): boolean {
+  if (!currentStudent.value) return false
+  const attemptId = currentStudent.value.attempt_id
+  // 如果已提交过，则认为已保存
+  if (submittedStudents.has(attemptId)) return false
+  
+  // 检查是否有评分与服务器不同的题目
+  const serverProgress = syncedProgress[attemptId] || {}
+  return currentStudent.value.pending_saqs.some(saq => {
+    const localGrade = grades[saq.qid]
+    if (localGrade?.is_correct === undefined) return false // 本地未评分
+    
+    const serverGrade = serverProgress[saq.qid]
+    if (!serverGrade?.is_graded) return true // 服务器未评分，本地已评分
+    
+    // 比较分数和评语是否有变化
+    return localGrade.score !== serverGrade.score || 
+           (localGrade.comment || '') !== (serverGrade.comment || '')
+  })
+}
+
+// 提交当前考生评分后执行回调
+async function saveAndCallback(callback: () => void) {
+  if (!currentStudent.value) {
+    callback()
+    return
+  }
+  
+  const gradeData = currentStudent.value.pending_saqs
+    .filter((saq: SaqItem) => grades[saq.qid]?.is_correct !== undefined)
+    .map((saq: SaqItem) => ({
+      qid: saq.qid,
+      score: grades[saq.qid].score,
+      is_correct: grades[saq.qid].is_correct,
+      comment: grades[saq.qid].comment
+    }))
+  
+  if (gradeData.length === 0) {
+    callback()
+    return
+  }
+  
+  try {
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/grade`, {
+      method: 'POST',
+      data: {
+        attempt_id: currentStudent.value.attempt_id,
+        grades: gradeData
+      }
+    })
+    
+    if (res.data.ok) {
+      ElMessage.success(`已保存 ${gradeData.length} 道题目的评分`)
+      submittedStudents.add(currentStudent.value.attempt_id)
+    } else {
+      ElMessage.error(res.data.detail || res.data.msg || '保存失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('保存失败: ' + (e.message || '网络错误'))
+  }
+  
+  callback()
+}
+
+async function switchStudent(student: StudentData) {
+  // 如果当前考生与目标相同，不需要切换
+  if (currentStudent.value?.attempt_id === student.attempt_id) return
+  
+  // 如果有未保存的评分，自动保存
+  if (hasUnsavedGrades()) {
+    await saveAndCallback(() => selectStudent(student))
+  } else {
+    selectStudent(student)
+  }
 }
 
 function isStudentFullyGraded(student: StudentData): boolean {
@@ -699,6 +967,36 @@ function getStudentPendingCount(student: StudentData): number {
     // 检查后端返回的已评分状态
     return saq.is_graded !== true
   }).length
+}
+
+// 获取题目的批改人信息
+function getGraderInfo(qid: string): { name: string; time: string; score: string } | null {
+  if (!currentStudent.value) return null
+  const attemptId = currentStudent.value.attempt_id
+  const progress = syncedProgress[attemptId]?.[qid]
+  if (progress?.is_graded && progress.grader) {
+    return {
+      name: progress.grader,
+      time: progress.graded_time ? formatGradedTime(progress.graded_time) : '',
+      score: `${progress.score}分`
+    }
+  }
+  return null
+}
+
+// 格式化批改时间
+function formatGradedTime(isoTime: string): string {
+  if (!isoTime) return ''
+  try {
+    const date = new Date(isoTime)
+    const month = date.getMonth() + 1
+    const day = date.getDate()
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `${month}/${day} ${hours}:${minutes}`
+  } catch {
+    return isoTime
+  }
 }
 
 function exitGrading() {
@@ -930,8 +1228,22 @@ function handleKeydown(e: KeyboardEvent) {
 async function submitGrades() {
   if (!currentStudent.value) return
   
+  const attemptId = currentStudent.value.attempt_id
+  const serverProgress = syncedProgress[attemptId] || {}
+  
+  // 只提交用户实际修改的题目（与服务器数据对比）
   const gradeData = currentStudent.value.pending_saqs
-    .filter((saq: SaqItem) => grades[saq.qid]?.is_correct !== undefined)
+    .filter((saq: SaqItem) => {
+      const localGrade = grades[saq.qid]
+      if (!localGrade || localGrade.is_correct === undefined) return false // 本地未评分
+      
+      const serverGrade = serverProgress[saq.qid]
+      if (!serverGrade?.is_graded) return true // 服务器未评分，本地已评分 = 需要提交
+      
+      // 服务器已评分，比较是否有变化
+      return localGrade.score !== serverGrade.score || 
+             (localGrade.comment || '') !== (serverGrade.comment || '')
+    })
     .map((saq: SaqItem) => ({
       qid: saq.qid,
       score: grades[saq.qid].score,
@@ -940,11 +1252,17 @@ async function submitGrades() {
     }))
   
   if (gradeData.length === 0) {
-    ElMessage.warning('请先评分至少一道题目')
+    ElMessage.info('没有需要提交的评分修改')
     return
   }
   
-  const ungradedCount = currentStudent.value.pending_saqs.length - gradeData.length
+  // 统计未评分题目数（用于提示）
+  const ungradedCount = currentStudent.value.pending_saqs.filter((saq: SaqItem) => {
+    const localGrade = grades[saq.qid]
+    const serverGrade = serverProgress[saq.qid]
+    return (!localGrade || localGrade.is_correct === undefined) && !serverGrade?.is_graded
+  }).length
+  
   if (ungradedCount > 0) {
     try {
       await ElMessageBox.confirm(
@@ -958,6 +1276,7 @@ async function submitGrades() {
   }
   
   submitting.value = true
+  console.log('[Submit] 提交评分数据:', JSON.stringify(gradeData, null, 2))
   try {
     const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/grade`, {
       method: 'POST',
@@ -1353,12 +1672,30 @@ function goBack() {
   overflow-y: auto;
 }
 
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.2);
+}
+
 .panel-title {
   font-size: 1.1rem;
   font-weight: 700;
   color: #60a5fa;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: #22c55e;
+}
+
+.sync-text {
+  opacity: 0.8;
 }
 
 .grade-label {
@@ -1446,6 +1783,38 @@ function goBack() {
 .nav-btn { flex: 1; }
 .nav-btn.next { background: #22c55e; border-color: #22c55e; }
 .nav-btn.next:hover { background: #16a34a; }
+
+/* 批改信息 */
+.grader-info {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.grader-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.grader-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.grader-name {
+  font-size: 0.85rem;
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.grader-time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
 
 /* ==================== 列表视图 ==================== */
 .list-view {

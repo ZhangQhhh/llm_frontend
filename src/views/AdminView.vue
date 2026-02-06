@@ -776,7 +776,7 @@
             </div>
             <div v-else class="questions-list">
               <el-card
-                v-for="q in deletedQuestions"
+                v-for="q in pagedDeletedQuestions"
                 :key="q.qid"
                 class="question-card"
               >
@@ -858,6 +858,18 @@
                   </el-button>
                 </div>
               </el-card>
+            </div>
+
+            <!-- 回收站分页 -->
+            <div v-if="deletedQuestions.length" style="display:flex;justify-content:flex-end;margin-top:12px">
+              <el-pagination
+                background
+                layout="prev, pager, next, sizes, jumper, total"
+                :total="deletedQuestions.length"
+                v-model:current-page="recyclePage"
+                v-model:page-size="recyclePageSize"
+                :page-sizes="[20,50,100,200]"
+              />
             </div>
           </div>
         </el-tab-pane>
@@ -1317,10 +1329,10 @@
                 >
                   <div class="preview-header">
                     <span class="preview-num">{{ idx + 1 }}.</span>
-                    <el-tag v-if="item.qtype === 'single'" type="info" size="small">单选</el-tag>
-                    <el-tag v-else-if="item.qtype === 'multi'" type="warning" size="small">多选</el-tag>
+                    <el-tag v-if="item.qtype === 'saq'" type="primary" size="small">简答</el-tag>
                     <el-tag v-else-if="item.qtype === 'indeterminate'" type="success" size="small">不定项</el-tag>
-                    <el-tag v-else-if="item.qtype === 'saq'" type="primary" size="small">简答</el-tag>
+                    <el-tag v-else-if="item.qtype === 'multi' || (!item.qtype && isMultiChoice(item))" type="warning" size="small">多选</el-tag>
+                    <el-tag v-else type="info" size="small">单选</el-tag>
                     <el-tag v-if="item.qtype === 'saq' && item.category" size="small" effect="plain">{{ item.category }}</el-tag>
                     <!-- 简答题自定义分数输入 -->
                     <span v-if="item.qtype === 'saq' && uploadedSaqScoreMode === 'custom'" style="display: flex; align-items: center; gap: 4px; margin-left: 8px;">
@@ -2481,13 +2493,21 @@ export default defineComponent({
     const selectAllDeleted = ref(false)
     const loadingDeleted = ref(false)
     const recycleMessage = ref('')
+    const recyclePage = ref(1)
+    const recyclePageSize = ref(50)
     const restoringQuestion = reactive<Record<string, boolean>>({})
     const permanentDeleting = reactive<Record<string, boolean>>({})
 
-    // 回收站全选切换
+    // 回收站分页计算属性
+    const pagedDeletedQuestions = computed(() => {
+      const start = (recyclePage.value - 1) * recyclePageSize.value
+      return deletedQuestions.value.slice(start, start + recyclePageSize.value)
+    })
+
+    // 回收站全选切换（只选当前页）
     const toggleSelectAllDeleted = () => {
       if (selectAllDeleted.value) {
-        selectedDeleted.value = deletedQuestions.value.map(q => q.qid)
+        selectedDeleted.value = pagedDeletedQuestions.value.map(q => q.qid)
       } else {
         selectedDeleted.value = []
       }
@@ -5956,6 +5976,7 @@ export default defineComponent({
       selectedQuestions, selectAll, toggleSelectAll, batchDelete,
       // 回收站相关
       deletedQuestions, selectedDeleted, selectAllDeleted, toggleSelectAllDeleted, loadingDeleted, recycleMessage,
+      recyclePage, recyclePageSize, pagedDeletedQuestions,
       restoringQuestion, permanentDeleting,
       loadDeletedQuestions, restoreQuestion, batchRestore,
       permanentDelete, batchPermanentDelete, clearRecycleBin,
