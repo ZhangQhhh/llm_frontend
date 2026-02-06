@@ -2218,7 +2218,7 @@ export default defineComponent({
 
     const writeMode = ref<'generate' | 'complete'>('generate');
 
-    const selectedModel = ref<string>('qwen3-32b');
+    const selectedModel = ref<string>('deepseek');
 
     const temperatureValue = ref<number>(0.7);  // temperature 参数，默认 0.7
 
@@ -3916,17 +3916,32 @@ export default defineComponent({
 
 
 
+      // ========== 思考模式控制（根据模型类型区分） ==========
+      // Qwen 模型：通过在 instruction 末尾追加 /no_think 指令来禁用思考
+      // DeepSeek 模型：通过 chat_template_kwargs 参数控制
+      const modelId = selectedModel.value || '';
+      const isQwenModel = modelId.toLowerCase().includes('qwen');
+      const isDeepSeekModel = modelId.toLowerCase().includes('deepseek');
+      const enableThinking = !!thinkingMode.value;
+      
+      // 处理 instruction：Qwen 模型关闭思考时追加 /no_think
+      let finalInstruction = text;
+      if (isQwenModel && !enableThinking) {
+        finalInstruction = `${text} /no_think`;
+        console.log('[SmartOffice] Qwen 模型关闭思考，已追加 /no_think');
+      }
+
       const payload: any = {
 
         session_id: sessionId.value,
 
-        instruction: text,
+        instruction: finalInstruction,
 
         template_content: templateContent.value || '',
 
         model_id: selectedModel.value || undefined,
 
-        enable_thinking: !!thinkingMode.value,
+        enable_thinking: enableThinking,
 
         use_kb: !!useKb.value,
 
@@ -3945,6 +3960,12 @@ export default defineComponent({
         temperature: temperatureValue.value,  // 可选的 temperature 参数
 
       };
+      
+      // DeepSeek 模型：添加 chat_template_kwargs 参数控制思考模式
+      if (isDeepSeekModel) {
+        payload.chat_template_kwargs = { enable_thinking: enableThinking };
+        console.log(`[SmartOffice] DeepSeek 模型思考模式: enable_thinking=${enableThinking}`);
+      }
 
 
 
