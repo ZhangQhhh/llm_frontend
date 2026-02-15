@@ -137,7 +137,12 @@ export const API_ENDPOINTS = {
     TOTAL_FORECAST: `/entryExit/forecast-total`,
     TRAFFIC_TOOLS_FORECAST: `/entryExit/forecast-traffic-tools`,
     TOTAL_FORECAST_HISTORY: `/entryExit/forecast-total/history`,
-    TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`
+    TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`,
+    YEAR_DATA_UPLOAD: `/entryExit/year-data/upload`,
+    YEAR_DATA_FILES: `/entryExit/year-data/files`,
+    YEAR_REPORT_VALIDATE: `/entryExit/year-report/validate`,
+    YEAR_REPORT_GENERATE: `/entryExit/year-report/generate`,
+    YEAR_REPORT_PROGRESS: (jobId: string) => `/entryExit/year-report/progress/${jobId}`
   },
   // 文档管理接口
   DOCUMENTS: {

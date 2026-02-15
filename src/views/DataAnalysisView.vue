@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="research-report-container">
-    <!-- 背景装饰 -->
+    <!-- 鑳屾櫙瑁呴グ -->
     <div class="bg-decoration">
       <div class="gradient-orb orb-1"></div>
       <div class="gradient-orb orb-2"></div>
@@ -8,7 +8,7 @@
     </div>
 
     <div class="main-content">
-      <!-- 顶部标题区 -->
+      <!-- 椤堕儴鏍囬鍖?-->
       <header class="page-header animate-slide-down">
         <div class="header-content">
           <div class="title-section">
@@ -26,10 +26,10 @@
         </div>
       </header>
 
-      <!-- 主工作区 -->
+      <!-- 涓诲伐浣滃尯 -->
       <div class="workspace">
         
-        <!-- 左侧：预测大屏 -->
+        <!-- 宸︿晶锛氶娴嬪ぇ灞?-->
         <section class="forecast-section animate-slide-left">
           <div class="section-card forecast-card">
             <div class="card-header">
@@ -83,7 +83,7 @@
               </div>
             </div>
 
-            <!-- 统计卡片 -->
+            <!-- 缁熻鍗＄墖 -->
             <transition name="el-zoom-in-top">
               <div v-if="hasForecastData" class="stats-grid">
                 <div class="stat-card">
@@ -119,13 +119,13 @@
           </div>
         </section>
 
-        <!-- 右侧：功能区 -->
+        <!-- 鍙充晶锛氬姛鑳藉尯 -->
         <aside class="sidebar animate-slide-right">
           
-          <!-- Tab 切换 -->
+          <!-- Tab 鍒囨崲 -->
           <el-tabs v-model="activeTab" class="function-tabs">
             
-            <!-- Tab 1: 报告生成 -->
+            <!-- Tab 1: 鎶ュ憡鐢熸垚 -->
             <el-tab-pane label="报告生成" name="generate">
               <div class="section-card generate-card">
                 <div class="card-header">
@@ -134,7 +134,7 @@
 
                 <div class="upload-area">
                   
-                  <!-- 分析模式 -->
+                  <!-- 鍒嗘瀽妯″紡 -->
                   <div class="analysis-mode">
                     <label>分析模式</label>
                     <el-radio-group v-model="analysisMode" size="small">
@@ -143,36 +143,190 @@
                     </el-radio-group>
                   </div>
 
-                  <!-- 月份/年份选择 -->
-                  <div class="month-selector-group">
+                  <!-- 鎸夋湀鍙傛暟 -->
+                  <div v-if="analysisMode === 'month'" class="month-selector-group">
                     <div class="selector-item">
-                      <label>{{ analysisMode === 'year' ? '基准期年份' : '基准期月份' }}</label>
+                      <label>基准期月份</label>
                       <el-date-picker
                         v-model="baseMonth"
-                        :type="analysisMode === 'year' ? 'year' : 'month'"
-                        :placeholder="analysisMode === 'year' ? '选择基准期年份' : '选择基准期月份'"
-                        :format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
-                        :value-format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
+                        type="month"
+                        placeholder="选择基准期月份"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
                         size="default"
                         style="width: 100%"
                       />
                     </div>
                     <div class="selector-item">
-                      <label>{{ analysisMode === 'year' ? '对比期年份' : '对比期月份' }}</label>
+                      <label>对比期月份</label>
                       <el-date-picker
                         v-model="compareMonth"
-                        :type="analysisMode === 'year' ? 'year' : 'month'"
-                        :placeholder="analysisMode === 'year' ? '选择对比期年份' : '选择对比期月份'"
-                        :format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
-                        :value-format="analysisMode === 'year' ? 'YYYY' : 'YYYY-MM'"
+                        type="month"
+                        placeholder="选择对比期月份"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
                         size="default"
                         style="width: 100%"
                       />
                     </div>
                   </div>
 
-                  <!-- 人员数据 -->
-                  <div class="upload-group">
+                  <!-- 鎸夊勾鍙傛暟 -->
+                  <div v-else class="month-selector-group year-selector-group">
+                    <div class="selector-item">
+                      <label>开始月份</label>
+                      <el-date-picker
+                        v-model="yearStartMonth"
+                        type="month"
+                        placeholder="YYYY-MM"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        size="default"
+                        style="width: 100%"
+                      />
+                    </div>
+                    <div class="selector-item">
+                      <label>结束月份</label>
+                      <el-date-picker
+                        v-model="yearEndMonth"
+                        type="month"
+                        placeholder="YYYY-MM"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        size="default"
+                        style="width: 100%"
+                      />
+                    </div>
+                    <div class="selector-item selector-item-wide">
+                      <label>报告类型</label>
+                      <el-select v-model="yearReportType" style="width: 100%">
+                        <el-option label="综合报告（人员+航班）" value="comprehensive" />
+                        <el-option label="仅人员报告" value="people_only" />
+                      </el-select>
+                    </div>
+                  </div>
+
+                  <!-- 鎸夊勾锛氭湀琛ㄤ笂浼犱笌宸蹭笂浼犳竻鍗?-->
+                  <div v-if="analysisMode === 'year'" class="year-section">
+                    <div class="year-upload-panel">
+                      <div class="group-title">
+                        <el-icon><Upload /></el-icon>
+                        <span>按月上传年报数据</span>
+                      </div>
+                      <div class="year-upload-grid">
+                        <div class="selector-item">
+                          <label>数据类型</label>
+                          <el-select v-model="yearUploadDatasetType" style="width: 100%">
+                            <el-option label="人员数据（people）" value="people" />
+                            <el-option label="航班数据（traffic）" value="traffic" />
+                          </el-select>
+                        </div>
+                        <div class="selector-item">
+                          <label>月份</label>
+                          <el-date-picker
+                            v-model="yearUploadMonth"
+                            type="month"
+                            placeholder="YYYY-MM"
+                            format="YYYY-MM"
+                            value-format="YYYY-MM"
+                            style="width: 100%"
+                          />
+                        </div>
+                        <div class="selector-item selector-item-wide">
+                          <label>月表文件（.xlsx）</label>
+                          <div
+                            class="file-box year-file-box"
+                            :class="{ active: yearUploadFile }"
+                            @click="triggerUpload('yearUpload')"
+                          >
+                            <input type="file" ref="fileInput_yearUpload" style="display:none" accept=".xlsx" @change="handleYearUploadFileChange" />
+                            <el-icon class="box-icon"><FolderAdd /></el-icon>
+                            <span class="box-label">选择月表文件</span>
+                            <span v-if="yearUploadFile" class="file-name">{{ yearUploadFile.name }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="action-buttons year-upload-actions">
+                        <el-button
+                          type="primary"
+                          plain
+                          :loading="uploadingYearData"
+                          :disabled="!canUploadYearData"
+                          @click="handleUploadYearData"
+                        >
+                          上传当前月表
+                        </el-button>
+                      </div>
+                    </div>
+
+                    <div v-if="yearMissingPeopleMonths.length || yearMissingTrafficMonths.length" class="year-missing-panel">
+                      <div v-if="yearMissingPeopleMonths.length">
+                        人员缺失月份：{{ yearMissingPeopleMonths.join(', ') }}
+                      </div>
+                      <div v-if="yearMissingTrafficMonths.length">
+                        航班缺失月份：{{ yearMissingTrafficMonths.join(', ') }}
+                      </div>
+                    </div>
+
+                    <div class="year-files-panel">
+                      <div class="year-files-header">
+                        <span>已上传月份清单</span>
+                        <el-button text size="small" :loading="loadingYearFiles" @click="loadYearDataFiles">
+                          <el-icon><Refresh /></el-icon>
+                          刷新
+                        </el-button>
+                      </div>
+
+                      <div class="year-files-grid">
+                        <div class="year-files-card">
+                          <div class="year-files-title">人员表（people）</div>
+                          <div class="year-table-wrap">
+                            <el-table
+                              :data="yearPeopleFiles"
+                              v-loading="loadingYearFiles"
+                              size="small"
+                              height="220"
+                              empty-text="暂无上传"
+                            >
+                              <el-table-column prop="monthId" label="月份" width="88" />
+                              <el-table-column prop="version" label="版本" width="64" />
+                              <el-table-column prop="originalName" label="文件名" min-width="120" show-overflow-tooltip />
+                              <el-table-column label="上传时间" width="110" show-overflow-tooltip>
+                                <template #default="{ row }">
+                                  {{ formatDateOnly(row.uploadedAt) }}
+                                </template>
+                              </el-table-column>
+                            </el-table>
+                          </div>
+                        </div>
+
+                        <div class="year-files-card">
+                          <div class="year-files-title">航班表（traffic）</div>
+                          <div class="year-table-wrap">
+                            <el-table
+                              :data="yearTrafficFiles"
+                              v-loading="loadingYearFiles"
+                              size="small"
+                              height="220"
+                              empty-text="暂无上传"
+                            >
+                              <el-table-column prop="monthId" label="月份" width="88" />
+                              <el-table-column prop="version" label="版本" width="64" />
+                              <el-table-column prop="originalName" label="文件名" min-width="120" show-overflow-tooltip />
+                              <el-table-column label="上传时间" width="110" show-overflow-tooltip>
+                                <template #default="{ row }">
+                                  {{ formatDateOnly(row.uploadedAt) }}
+                                </template>
+                              </el-table-column>
+                            </el-table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 浜哄憳鏁版嵁 -->
+                  <div v-if="analysisMode === 'month'" class="upload-group">
                     <div class="group-title">
                       <el-icon><User /></el-icon>
                       <span>{{ peopleGroupTitle }}</span>
@@ -201,8 +355,8 @@
                     </div>
                   </div>
 
-                  <!-- 航班数据 -->
-                  <div class="upload-group">
+                  <!-- 鑸彮鏁版嵁 -->
+                  <div v-if="analysisMode === 'month'" class="upload-group">
                     <div class="group-title">
                       <el-icon><Ship /></el-icon>
                       <span>{{ trafficGroupTitle }}</span>
@@ -231,7 +385,7 @@
                     </div>
                   </div>
 
-                  <!-- 模板区 -->
+                  <!-- 妯℃澘鍖?-->
                   <div class="template-panel">
                     <div class="template-header">
                       <el-icon><Collection /></el-icon>
@@ -239,7 +393,7 @@
                     </div>
                     <div class="template-tip">
                       <el-icon><InfoFilled /></el-icon>
-                      <span>“更新历史csv”请严格按照示意文件.csv的字段顺序与格式填写。</span>
+                      <span>“更新历史CSV”请严格按照示意文件.csv的字段顺序与格式填写。</span>
                     </div>
                     <div class="template-grid">
                       <div v-for="item in templateFiles" :key="item.filename" class="template-item">
@@ -266,7 +420,7 @@
                     </div>
                   </div>
 
-                  <!-- 操作按钮 -->
+                  <!-- 鎿嶄綔鎸夐挳 -->
                   <div class="action-buttons">
                     <el-button 
                       type="primary" 
@@ -286,7 +440,7 @@
                     </el-button>
                   </div>
 
-                  <!-- 进度条 -->
+                  <!-- 杩涘害鏉?-->
                   <transition name="el-fade-in">
                     <div v-if="generating" class="progress-wrapper">
                       <div class="progress-label">
@@ -306,7 +460,7 @@
               </div>
             </el-tab-pane>
 
-            <!-- Tab 2: 文档上传 -->
+            <!-- Tab 2: 鏂囨。涓婁紶 -->
             <el-tab-pane label="文档上传" name="upload">
               <div class="section-card upload-card">
                 <div class="card-header">
@@ -370,7 +524,7 @@
               </div>
             </el-tab-pane>
 
-            <!-- Tab 3: 文档管理 -->
+            <!-- Tab 3: 鏂囨。绠＄悊 -->
             <el-tab-pane label="文档管理" name="docs">
               <div class="section-card docs-card">
                 <div class="card-header">
@@ -441,7 +595,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
@@ -471,10 +625,22 @@ const forecastUploadRef = ref();
 const forecastHistoryFile = ref<File | null>(null);
 const uploadingForecastHistory = ref(false);
 
-// 月份选择
+// 鏈堜唤閫夋嫨
 const baseMonth = ref('');
 const compareMonth = ref('');
 const analysisMode = ref<'month' | 'year'>('month');
+type YearReportType = 'comprehensive' | 'people_only';
+type YearDatasetType = 'people' | 'traffic';
+const yearStartMonth = ref('');
+const yearEndMonth = ref('');
+const yearReportType = ref<YearReportType>('comprehensive');
+const yearUploadDatasetType = ref<YearDatasetType>('people');
+const yearUploadMonth = ref('');
+const yearUploadFile = ref<File | null>(null);
+const uploadingYearData = ref(false);
+const yearMissingPeopleMonths = ref<string[]>([]);
+const yearMissingTrafficMonths = ref<string[]>([]);
+const yearApiUseCompatPrefix = ref(false);
 
 const files = reactive({
   basePeriod: null as File | null,
@@ -485,13 +651,14 @@ const files = reactive({
 
 const generating = ref(false);
 const progressPercent = ref(0);
-const progressStep = ref('准备中...');
+const progressStep = ref('鍑嗗涓?..');
 const progressStatus = ref('');
 
 const fileInput_basePeriod = ref();
 const fileInput_comparePeriod = ref();
 const fileInput_prevTraffic = ref();
 const fileInput_currTraffic = ref();
+const fileInput_yearUpload = ref();
 
 const stats = reactive({
   max: '0',
@@ -500,13 +667,13 @@ const stats = reactive({
   growth: '0'
 });
 
-// 文档上传
+// 鏂囨。涓婁紶
 const uploadDocFile = ref<File | null>(null);
 const overwriteDoc = ref(false);
 const uploading = ref(false);
 const uploadRef = ref();
 
-// 文档管理
+// 鏂囨。绠＄悊
 interface DocumentItem {
   name: string;
   size: number;
@@ -523,14 +690,31 @@ interface TemplateFile {
   url: string;
 }
 
+interface YearDataFileItem {
+  id?: string;
+  datasetType?: 'people' | 'traffic';
+  year?: number;
+  month?: number;
+  monthId?: string;
+  originalName?: string;
+  storedName?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+  version?: number;
+  isActive?: boolean;
+}
+
 const documents = ref<DocumentItem[]>([]);
 const loadingDocs = ref(false);
+const loadingYearFiles = ref(false);
+const yearPeopleFiles = ref<YearDataFileItem[]>([]);
+const yearTrafficFiles = ref<YearDataFileItem[]>([]);
 const store = useStore();
 const templateFiles: TemplateFile[] = [
   {
     title: '更新历史CSV示意',
     filename: '示意文件.csv',
-    desc: '用于“更新历史csv”上传，字段顺序与格式请与示意文件保持一致。',
+    desc: '用于“更新历史CSV”上传，字段顺序和格式请与示意文件保持一致。',
     url: templateHistoryCsv
   },
   {
@@ -549,14 +733,21 @@ const templateFiles: TemplateFile[] = [
 
 // --- Computed ---
 const canGenerate = computed(() => {
-  if (!files.basePeriod || !files.comparePeriod || !files.prevTraffic || !files.currTraffic) {
+  if (analysisMode.value === 'month') {
+    if (!files.basePeriod || !files.comparePeriod || !files.prevTraffic || !files.currTraffic) {
+      return false;
+    }
+    return Boolean(baseMonth.value && compareMonth.value && compareMonth.value >= baseMonth.value);
+  }
+  if (!yearStartMonth.value || !yearEndMonth.value) {
     return false;
   }
-  if (analysisMode.value === 'month') {
-    return Boolean(baseMonth.value && compareMonth.value);
-  }
-  return true;
+  return yearEndMonth.value >= yearStartMonth.value;
 });
+
+const canUploadYearData = computed(() =>
+  Boolean(yearUploadFile.value && yearUploadMonth.value && !uploadingYearData.value)
+);
 
 const forecastTitle = computed(() =>
   forecastType.value === 'traffic' ? '交通工具预测' : '出入境总人数预测'
@@ -591,11 +782,92 @@ const parseCount = (value: any) => {
   return Number.isFinite(num) ? num : null;
 };
 
+const normalizeYearFileList = (payload: any): YearDataFileItem[] => {
+  const data = payload?.data ?? payload;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.records)
+        ? data.records
+        : [];
+
+  return list
+    .map((item: any) => ({
+      id: item?.id,
+      datasetType: item?.datasetType,
+      year: Number(item?.year),
+      month: Number(item?.month),
+      monthId: item?.monthId || (item?.year && item?.month ? String(item.year) + '-' + String(item.month).padStart(2, '0') : ''),
+      originalName: item?.originalName || item?.storedName || '',
+      storedName: item?.storedName || '',
+      uploadedBy: item?.uploadedBy || '',
+      uploadedAt: item?.uploadedAt || '',
+      version: Number(item?.version || 0),
+      isActive: Boolean(item?.isActive)
+    }))
+    .sort((a, b) => (b.monthId || '').localeCompare(a.monthId || ''));
+};
+
+const switchYearApiPrefix = (path: string): string => {
+  if (path.includes('/entryExit/')) {
+    return path.replace('/entryExit/', '/entry-exit/');
+  }
+  if (path.includes('/entry-exit/')) {
+    return path.replace('/entry-exit/', '/entryExit/');
+  }
+  return path;
+};
+
+const requestYearApi = async (config: any): Promise<any> => {
+  const primaryUrl = yearApiUseCompatPrefix.value ? switchYearApiPrefix(config.url) : config.url;
+
+  try {
+    const res = await davHttp.request({ ...config, url: primaryUrl });
+    return res;
+  } catch (error: any) {
+    if (error?.response?.status !== 404) {
+      throw error;
+    }
+
+    const fallbackUrl = switchYearApiPrefix(primaryUrl);
+    if (fallbackUrl === primaryUrl) {
+      throw error;
+    }
+
+    console.warn('[year-api] 404 fallback: ' + primaryUrl + ' -> ' + fallbackUrl);
+    const fallbackRes = await davHttp.request({ ...config, url: fallbackUrl });
+    yearApiUseCompatPrefix.value = fallbackUrl.includes('/entry-exit/');
+    return fallbackRes;
+  }
+};
+
+const loadYearDataFiles = async () => {
+  loadingYearFiles.value = true;
+  try {
+    const [peopleRes, trafficRes] = await Promise.all([
+      requestYearApi({ method: 'get', url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_FILES, params: { datasetType: 'people' } }),
+      requestYearApi({ method: 'get', url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_FILES, params: { datasetType: 'traffic' } }),
+    ]);
+
+    yearPeopleFiles.value = normalizeYearFileList(peopleRes.data);
+    yearTrafficFiles.value = normalizeYearFileList(trafficRes.data);
+  } catch (error) {
+    console.error('加载按年月表清单失败:', error);
+    ElMessage.error('加载已上传月份清单失败');
+  } finally {
+    loadingYearFiles.value = false;
+  }
+};
+
 // --- Lifecycle ---
 onMounted(() => {
   window.addEventListener('resize', handleResize);
   initChart();
   loadDocuments();
+  if (analysisMode.value === 'year') {
+    loadYearDataFiles();
+  }
 });
 
 onUnmounted(() => {
@@ -608,6 +880,15 @@ onUnmounted(() => {
 const handleResize = () => {
   chartInstance?.resize();
 };
+
+watch(
+  () => analysisMode.value,
+  (mode) => {
+    if (mode === 'year') {
+      loadYearDataFiles();
+    }
+  }
+);
 
 const initChart = () => {
   if (!chartRef.value) return;
@@ -690,16 +971,16 @@ const uploadForecastHistory = async () => {
       const inserted = parseCount(payload?.inserted);
       const updated = parseCount(payload?.updated);
       if (inserted !== null || updated !== null) {
-        ElMessage.success(`历史数据更新成功：新增 ${inserted ?? 0}，覆盖 ${updated ?? 0}`);
+        ElMessage.success('历史数据更新成功：新增 ' + (inserted ?? 0) + '，覆盖 ' + (updated ?? 0));
       } else {
-        ElMessage.success('历史数据更新成功');
+        ElMessage.success('鍘嗗彶鏁版嵁鏇存柊鎴愬姛');
       }
     } else {
-      ElMessage.error(res.data?.message || '历史数据更新失败');
+      ElMessage.error(res.data?.message || '鍘嗗彶鏁版嵁鏇存柊澶辫触');
     }
   } catch (error) {
     console.error(error);
-    ElMessage.error('历史数据更新失败');
+    ElMessage.error('鍘嗗彶鏁版嵁鏇存柊澶辫触');
   } finally {
     uploadingForecastHistory.value = false;
     forecastHistoryFile.value = null;
@@ -710,7 +991,7 @@ const uploadForecastHistory = async () => {
 const formatLabel = (item: any) => {
   if (item && Number.isFinite(item.year) && Number.isFinite(item.month)) {
     const month = String(item.month).padStart(2, '0');
-    return `${item.year}-${month}`;
+    return String(item.year) + '-' + month;
   }
   if (item && Number.isFinite(item.month)) {
     return String(item.month);
@@ -831,10 +1112,11 @@ const calculateStats = (history: any[], forecast: any[]) => {
 // --- File Upload ---
 const triggerUpload = (key: string) => {
   switch(key) {
-    case 'basePeriod': fileInput_basePeriod.value.click(); break;
-    case 'comparePeriod': fileInput_comparePeriod.value.click(); break;
-    case 'prevTraffic': fileInput_prevTraffic.value.click(); break;
-    case 'currTraffic': fileInput_currTraffic.value.click(); break;
+    case 'basePeriod': fileInput_basePeriod.value?.click(); break;
+    case 'comparePeriod': fileInput_comparePeriod.value?.click(); break;
+    case 'prevTraffic': fileInput_prevTraffic.value?.click(); break;
+    case 'currTraffic': fileInput_currTraffic.value?.click(); break;
+    case 'yearUpload': fileInput_yearUpload.value?.click(); break;
   }
 };
 
@@ -842,7 +1124,136 @@ const handleFileChange = (event: Event, key: keyof typeof files) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     files[key] = target.files[0];
-    ElMessage.success(`已选择: ${target.files[0].name}`);
+    ElMessage.success('已选择: ' + target.files[0].name);
+  }
+};
+
+const handleYearUploadFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    yearUploadFile.value = target.files[0];
+    ElMessage.success('已选择月表: ' + target.files[0].name);
+  }
+};
+
+const getCurrentUsername = (): string => {
+  return (
+    store.state.user?.username ||
+    (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('multi_turn_chat_user') || '{}');
+        return user.username || '';
+      } catch {
+        return '';
+      }
+    })()
+  );
+};
+
+const getFilenameFromHeaders = (headers: any, fallbackName: string): string => {
+  const contentDisposition = headers?.['content-disposition'] || headers?.['Content-Disposition'];
+  if (!contentDisposition) return fallbackName;
+  const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?(.+)/);
+  if (!match) return fallbackName;
+  try {
+    return decodeURIComponent(match[1].replace(/['"]/g, ''));
+  } catch {
+    return fallbackName;
+  }
+};
+
+const downloadReportBlob = (blobData: any, headers: any, fallbackName: string) => {
+  const blob = new Blob([blobData]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', getFilenameFromHeaders(headers, fallbackName));
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+const parseGenerateErrorMessage = async (error: any): Promise<string | null> => {
+  const blobData = error?.response?.data;
+  if (blobData instanceof Blob) {
+    const text = await blobData.text();
+    try {
+      const payload = JSON.parse(text);
+      const data = payload?.data || {};
+      if (Array.isArray(data.missingPeopleMonths)) {
+        yearMissingPeopleMonths.value = data.missingPeopleMonths;
+      }
+      if (Array.isArray(data.missingTrafficMonths)) {
+        yearMissingTrafficMonths.value = data.missingTrafficMonths;
+      }
+      return payload?.message || data?.message || text;
+    } catch {
+      return text || null;
+    }
+  }
+
+  const payload = error?.response?.data;
+  if (payload && typeof payload === 'object') {
+    const data = payload?.data || {};
+    if (Array.isArray(data.missingPeopleMonths)) {
+      yearMissingPeopleMonths.value = data.missingPeopleMonths;
+    }
+    if (Array.isArray(data.missingTrafficMonths)) {
+      yearMissingTrafficMonths.value = data.missingTrafficMonths;
+    }
+    return payload?.message || data?.message || null;
+  }
+
+  return error?.message || null;
+};
+
+const handleUploadYearData = async () => {
+  if (!canUploadYearData.value || !yearUploadFile.value) {
+    ElMessage.warning('璇峰厛閫夋嫨鏁版嵁绫诲瀷銆佹湀浠藉拰涓婁紶鏂囦欢');
+    return;
+  }
+
+  const [year, month] = yearUploadMonth.value.split('-');
+  if (!year || !month) {
+    ElMessage.warning('鏈堜唤鏍煎紡搴斾负 YYYY-MM');
+    return;
+  }
+
+  uploadingYearData.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', yearUploadFile.value);
+    formData.append('datasetType', yearUploadDatasetType.value);
+    formData.append('year', year);
+    formData.append('month', String(Number(month)));
+    const username = getCurrentUsername();
+    if (username) formData.append('username', username);
+
+    const res: any = await requestYearApi({
+      method: 'post',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_UPLOAD,
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    if (!res.data?.success) {
+      ElMessage.error(res.data?.message || '鏈堣〃涓婁紶澶辫触');
+      return;
+    }
+
+    yearUploadFile.value = null;
+    if (fileInput_yearUpload.value) fileInput_yearUpload.value.value = '';
+
+    const version = res.data?.data?.record?.version;
+    ElMessage.success(version ? ('月表上传成功（version ' + version + '）') : '月表上传成功');
+    loadYearDataFiles();
+  } catch (error: any) {
+    console.error(error);
+    const msg = await parseGenerateErrorMessage(error);
+    ElMessage.error(msg || '鏈堣〃涓婁紶澶辫触');
+  } finally {
+    uploadingYearData.value = false;
   }
 };
 
@@ -853,21 +1264,67 @@ const resetForm = () => {
   files.currTraffic = null;
   baseMonth.value = '';
   compareMonth.value = '';
+  yearStartMonth.value = '';
+  yearEndMonth.value = '';
+  yearReportType.value = 'comprehensive';
+  yearUploadDatasetType.value = 'people';
+  yearUploadMonth.value = '';
+  yearUploadFile.value = null;
+  yearMissingPeopleMonths.value = [];
+  yearMissingTrafficMonths.value = [];
   analysisMode.value = 'month';
   if(fileInput_basePeriod.value) fileInput_basePeriod.value.value = '';
   if(fileInput_comparePeriod.value) fileInput_comparePeriod.value.value = '';
   if(fileInput_prevTraffic.value) fileInput_prevTraffic.value.value = '';
   if(fileInput_currTraffic.value) fileInput_currTraffic.value.value = '';
+  if(fileInput_yearUpload.value) fileInput_yearUpload.value.value = '';
   ElMessage.info('已重置');
 };
 
 // --- Generate Report ---
-const handleGenerate = async () => {
-  if (!canGenerate.value) {
-    ElMessage.warning('请上传所有必要文件并选择月份');
-    return;
-  }
-  
+const getProgressStepFromStage = (stage: string): string => {
+  const mapping: Record<string, string> = {
+    start: '任务已开始',
+    load_people: '正在加载人员数据',
+    load_flights: '正在加载航班数据',
+    compute_metrics: '正在计算指标',
+    llm_basic: '正在进行基础分析',
+    llm_extended: '正在进行深度分析',
+    charts: '正在生成图表',
+    render: '正在渲染报告',
+    done: '报告已完成'
+  };
+  return mapping[stage] || '正在生成报告...';
+};
+
+const startYearProgressPolling = (jobId: string): (() => void) => {
+  const timer = window.setInterval(async () => {
+    try {
+      const res: any = await requestYearApi({
+        method: 'get',
+        url: API_ENDPOINTS.LLM_SUMMARY.YEAR_REPORT_PROGRESS(jobId)
+      });
+      const data = res?.data;
+      if (!data) return;
+      if (Number.isFinite(data.percent)) {
+        progressPercent.value = Math.max(progressPercent.value, Number(data.percent));
+      }
+      if (typeof data.stage === 'string') {
+        progressStep.value = getProgressStepFromStage(data.stage);
+      }
+      if (data.done) {
+        progressPercent.value = 100;
+        progressStep.value = '报告已完成';
+      }
+    } catch (error) {
+      // ignore polling error
+    }
+  }, 2000);
+
+  return () => window.clearInterval(timer);
+};
+
+const handleGenerateMonthReport = async () => {
   generating.value = true;
   progressPercent.value = 0;
   progressStatus.value = '';
@@ -876,8 +1333,8 @@ const handleGenerate = async () => {
   const progressTimer = setInterval(() => {
     if (progressPercent.value < 90) {
       progressPercent.value += 5;
-      if (progressPercent.value > 30) progressStep.value = '正在时间序列分析...';
-      if (progressPercent.value > 60) progressStep.value = '正在生成 Word 报告...';
+      if (progressPercent.value > 30) progressStep.value = '姝ｅ湪鏃堕棿搴忓垪鍒嗘瀽...';
+      if (progressPercent.value > 60) progressStep.value = '姝ｅ湪鐢熸垚 Word 鎶ュ憡...';
     }
   }, 800);
 
@@ -888,16 +1345,7 @@ const handleGenerate = async () => {
     formData.append('previousYearTrafficFile', files.prevTraffic!);
     formData.append('currentYearTrafficFile', files.currTraffic!);
 
-    const username =
-      store.state.user?.username ||
-      (() => {
-        try {
-          const user = JSON.parse(localStorage.getItem('multi_turn_chat_user') || '{}');
-          return user.username;
-        } catch {
-          return '';
-        }
-      })();
+    const username = getCurrentUsername();
     if (username) {
       formData.append('username', username);
     }
@@ -926,26 +1374,9 @@ const handleGenerate = async () => {
 
     clearInterval(progressTimer);
     progressPercent.value = 100;
-    progressStep.value = '完成！';
+    progressStep.value = '完成';
     progressStatus.value = 'success';
-
-    const blob = new Blob([response.data]);
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = '数研分析报告.docx';
-    if (contentDisposition) {
-       const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?(.+)/);
-       if (match) filename = decodeURIComponent(match[1].replace(/['"]/g, ''));
-    }
-    
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    downloadReportBlob(response.data, response.headers, '数据分析报告.docx');
 
     ElNotification({
       title: '生成成功',
@@ -970,6 +1401,117 @@ const handleGenerate = async () => {
   }
 };
 
+const handleGenerateYearReport = async () => {
+  generating.value = true;
+  progressPercent.value = 0;
+  progressStatus.value = '';
+  progressStep.value = '姝ｅ湪鏍￠獙绐楀彛瀹屾暣鎬?..';
+  yearMissingPeopleMonths.value = [];
+  yearMissingTrafficMonths.value = [];
+
+  let stopPolling = () => {};
+
+  try {
+    const validateRes: any = await requestYearApi({
+      method: 'post',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_REPORT_VALIDATE,
+      data: {
+        startMonth: yearStartMonth.value,
+        endMonth: yearEndMonth.value,
+        reportType: yearReportType.value
+      },
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!validateRes.data?.success) {
+      ElMessage.error(validateRes.data?.message || '鏍￠獙澶辫触');
+      return;
+    }
+
+    const validateData = validateRes.data.data || {};
+    yearMissingPeopleMonths.value = Array.isArray(validateData.missingPeopleMonths)
+      ? validateData.missingPeopleMonths
+      : [];
+    yearMissingTrafficMonths.value = Array.isArray(validateData.missingTrafficMonths)
+      ? validateData.missingTrafficMonths
+      : [];
+
+    if (!validateData.ready) {
+      progressPercent.value = 100;
+      progressStatus.value = 'exception';
+      progressStep.value = '数据不完整，无法生成';
+      ElMessage.warning('校验未通过，请先补齐缺失月份后再生成');
+      return;
+    }
+
+    progressPercent.value = 10;
+    progressStep.value = '校验通过，正在生成报告...';
+    const username = getCurrentUsername();
+    const clientJobId = 'year-report-' + Date.now();
+    stopPolling = startYearProgressPolling(clientJobId);
+
+    const response = await requestYearApi({
+      method: 'post',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_REPORT_GENERATE,
+      data: {
+        startMonth: yearStartMonth.value,
+        endMonth: yearEndMonth.value,
+        reportType: yearReportType.value,
+        chartEngine: 'plotly',
+        jobId: clientJobId,
+        username: username || undefined
+      },
+      responseType: 'blob',
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 600000
+    });
+
+    stopPolling();
+    progressPercent.value = 100;
+    progressStep.value = '报告生成完成';
+    progressStatus.value = 'success';
+
+    downloadReportBlob(response.data, response.headers, '年度分析报告.docx');
+    ElNotification({
+      title: '生成成功',
+      message: '年度报告已自动下载',
+      type: 'success',
+    });
+
+    setTimeout(() => {
+      loadDocuments();
+    }, 1000);
+  } catch (error: any) {
+    stopPolling();
+    progressStatus.value = 'exception';
+    progressStep.value = '生成失败';
+    console.error(error);
+    const msg = await parseGenerateErrorMessage(error);
+    ElMessage.error(msg || '年度报告生成失败，请检查数据或稍后重试');
+  } finally {
+    setTimeout(() => {
+      generating.value = false;
+    }, 1500);
+  }
+};
+
+const handleGenerate = async () => {
+  if (!canGenerate.value) {
+    const message = analysisMode.value === 'month'
+      ? '璇蜂笂浼犳墍鏈夊繀瑕佹枃浠跺苟閫夋嫨鏈堜唤鑼冨洿'
+      : '璇烽€夋嫨姝ｇ‘鐨勫紑濮?缁撴潫鏈堜唤';
+    ElMessage.warning(message);
+    return;
+  }
+
+  if (analysisMode.value === 'year') {
+    await handleGenerateYearReport();
+    return;
+  }
+
+  await handleGenerateMonthReport();
+};
+
 // --- Document Upload ---
 const handleDocFileChange = (uploadFile: UploadFile) => {
   const file = uploadFile.raw;
@@ -986,7 +1528,7 @@ const clearUploadDoc = () => {
 
 const handleUploadDoc = async () => {
   if (!uploadDocFile.value) {
-    ElMessage.warning('请先选择文件');
+    ElMessage.warning('璇峰厛閫夋嫨鏂囦欢');
     return;
   }
 
@@ -1001,16 +1543,16 @@ const handleUploadDoc = async () => {
     });
 
     if (res.data && res.data.success) {
-      ElMessage.success('上传成功');
+      ElMessage.success('涓婁紶鎴愬姛');
       clearUploadDoc();
       loadDocuments();
       activeTab.value = 'docs';
     } else {
-      ElMessage.error('上传失败');
+      ElMessage.error('涓婁紶澶辫触');
     }
   } catch (error) {
-    console.error('上传失败:', error);
-    ElMessage.error('上传失败，请重试');
+    console.error('涓婁紶澶辫触:', error);
+    ElMessage.error('涓婁紶澶辫触锛岃閲嶈瘯');
   } finally {
     uploading.value = false;
   }
@@ -1025,19 +1567,19 @@ const loadDocuments = async () => {
       documents.value = res.data.data || [];
     }
   } catch (error) {
-    console.error('加载文档列表失败:', error);
+    console.error('鍔犺浇鏂囨。鍒楄〃澶辫触:', error);
   } finally {
     loadingDocs.value = false;
   }
 };
 
 const previewDocument = (doc: DocumentItem) => {
-  const url = `${LLM_BASE_URL}${doc.previewUrl}`;
+  const url = LLM_BASE_URL + doc.previewUrl;
   window.open(url, '_blank');
 };
 
 const downloadDocument = (doc: DocumentItem) => {
-  const url = `${LLM_BASE_URL}${doc.downloadUrl}`;
+  const url = LLM_BASE_URL + doc.downloadUrl;
   const link = document.createElement('a');
   link.href = url;
   link.download = doc.name;
@@ -1057,7 +1599,7 @@ const downloadTemplate = (item: TemplateFile) => {
 const deleteDocument = async (doc: DocumentItem) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除文档 "${doc.name}" 吗？`,
+      '确定要删除文档 "' + doc.name + '" 吗？',
       '确认删除',
       {
         confirmButtonText: '删除',
@@ -1085,6 +1627,17 @@ const formatFileSize = (bytes: number): string => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };
 
+const formatDateOnly = (dateStr?: string): string => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('zh-CN', {
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit'
+  });
+};
+
 const formatDate = (dateStr: string): string => {
   const date = new Date(dateStr);
   const now = new Date();
@@ -1093,14 +1646,14 @@ const formatDate = (dateStr: string): string => {
   
   if (days === 0) return '今天';
   if (days === 1) return '昨天';
-  if (days < 7) return `${days}天前`;
+  if (days < 7) return days + '天前';
   
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 };
 </script>
 
 <style scoped>
-/* === 基础布局 === */
+/* === 鍩虹甯冨眬 === */
 .research-report-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 50%, #e0e7ff 100%);
@@ -1109,7 +1662,7 @@ const formatDate = (dateStr: string): string => {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 背景装饰 */
+/* 鑳屾櫙瑁呴グ */
 .bg-decoration {
   position: fixed;
   top: 0;
@@ -1168,7 +1721,7 @@ const formatDate = (dateStr: string): string => {
   padding: 32px;
 }
 
-/* === 页面头部 === */
+/* === 椤甸潰澶撮儴 === */
 .page-header {
   margin-bottom: 32px;
 }
@@ -1229,7 +1782,7 @@ const formatDate = (dateStr: string): string => {
   padding: 8px 16px;
 }
 
-/* === 工作区布局 === */
+/* === 宸ヤ綔鍖哄竷灞€ === */
 .workspace {
   display: grid;
   grid-template-columns: 1fr 480px;
@@ -1242,7 +1795,7 @@ const formatDate = (dateStr: string): string => {
   }
 }
 
-/* === 卡片样式 === */
+/* === 鍗＄墖鏍峰紡 === */
 .section-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -1277,7 +1830,7 @@ const formatDate = (dateStr: string): string => {
   gap: 8px;
 }
 
-/* === 预测卡片 === */
+/* === 棰勬祴鍗＄墖 === */
 .forecast-card {
   min-height: 600px;
   display: flex;
@@ -1349,7 +1902,7 @@ const formatDate = (dateStr: string): string => {
   font-size: 14px;
 }
 
-/* 统计卡片 */
+/* 缁熻鍗＄墖 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1447,13 +2000,13 @@ const formatDate = (dateStr: string): string => {
   color: white !important;
 }
 
-/* === 侧边栏 === */
+/* === 渚ц竟鏍?=== */
 .sidebar {
   display: flex;
   flex-direction: column;
 }
 
-/* Tab 样式 */
+/* Tab 鏍峰紡 */
 .function-tabs {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -1480,7 +2033,7 @@ const formatDate = (dateStr: string): string => {
   background-color: #14b8a6;
 }
 
-/* === 生成卡片 === */
+/* === 鐢熸垚鍗＄墖 === */
 .upload-area {
   display: flex;
   flex-direction: column;
@@ -1525,6 +2078,101 @@ const formatDate = (dateStr: string): string => {
   color: #0f766e;
 }
 
+.year-selector-group {
+  grid-template-columns: 1fr 1fr;
+}
+
+.selector-item-wide {
+  grid-column: 1 / -1;
+}
+
+.year-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.year-upload-panel {
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #99f6e4;
+  background: #f0fdfa;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.year-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.year-file-box {
+  min-height: 100px;
+}
+
+.year-upload-actions {
+  margin-top: 0;
+}
+
+.year-missing-panel {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.year-files-panel {
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1px solid #d1fae5;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.year-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f766e;
+  margin-bottom: 10px;
+}
+
+.year-files-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.year-files-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.year-files-title {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.year-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.year-table-wrap :deep(.el-table) {
+  width: 100% !important;
+}
+
 .upload-group {
   display: flex;
   flex-direction: column;
@@ -1544,6 +2192,14 @@ const formatDate = (dateStr: string): string => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .month-selector-group,
+  .year-upload-grid,
+  .file-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .file-box {
@@ -1714,7 +2370,7 @@ const formatDate = (dateStr: string): string => {
   font-weight: 500;
 }
 
-/* === 文档上传卡片 === */
+/* === 鏂囨。涓婁紶鍗＄墖 === */
 .upload-doc-area {
   display: flex;
   flex-direction: column;
@@ -1812,7 +2468,7 @@ const formatDate = (dateStr: string): string => {
   box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
 }
 
-/* === 文档管理 === */
+/* === 鏂囨。绠＄悊 === */
 .docs-card {
   max-height: 600px;
   display: flex;
@@ -1895,7 +2551,7 @@ const formatDate = (dateStr: string): string => {
   flex-shrink: 0;
 }
 
-/* === 动画 === */
+/* === 鍔ㄧ敾 === */
 .animate-slide-down {
   animation: slideDown 0.6s ease-out;
 }
@@ -1941,7 +2597,7 @@ const formatDate = (dateStr: string): string => {
   }
 }
 
-/* 滚动条美化 */
+/* 婊氬姩鏉＄編鍖?*/
 .docs-list::-webkit-scrollbar {
   width: 6px;
 }
@@ -1964,3 +2620,5 @@ const formatDate = (dateStr: string): string => {
   margin-right: 4px;
 }
 </style>
+
+
