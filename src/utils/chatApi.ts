@@ -98,6 +98,7 @@ export interface ReferenceMetadata {
   bm25_rank?: number;
   vector_score?: number;
   bm25_score?: number;
+  key_passage?: string;
 }
 
 /**

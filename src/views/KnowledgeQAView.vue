@@ -385,7 +385,7 @@
                     <div class="references-list">
                       <div
                         v-for="(ref, idx) in filteredReferences"
-                        :key="idx"
+                        :key="`${String(ref.id ?? ref.fileName ?? 'ref')}-${idx}`"
                         class="reference-item"
                         :class="{ 'is-selected': ref.canAnswer }"
                       >
@@ -444,13 +444,13 @@
 
                         <!-- 片段内容（所有模式都显示） -->
                         <div class="ref-content-wrapper">
-                          <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ ref.content }}</div>
+                          <div class="ref-content" :class="{ 'expanded': ref.expanded }">{{ getReferenceContent(ref) }}</div>
                           <el-button
                             text
                             type="primary"
                             size="small"
                             class="expand-btn"
-                            @click="toggleRefExpand(idx)"
+                            @click.stop="toggleRefExpand(ref)"
                           >
                             {{ ref.expanded ? '收起' : '展开全文' }}
                           </el-button>
@@ -827,12 +827,24 @@ export default defineComponent({
     });
 
     // 模拟流式输出效果
-    const simulateStreamOutput = async (text: string, targetRef: typeof answer | typeof thinking, delay = 30) => {
+    const simulateStreamOutput = async (
+      text: string,
+      targetRef: typeof answer | typeof thinking,
+      delay = 30,
+      onChunk?: () => void
+    ) => {
       const chars = text.split('');
       for (let i = 0; i < chars.length; i++) {
         targetRef.value += chars[i];
-        await new Promise(resolve => setTimeout(resolve, delay));
+        onChunk?.();
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
+    };
+
+    const normalizeMockThinking = (text: string): string => {
+      if (!text) return '';
+      // 仅去掉 think 标签本身，保留内部正文，避免最终“有正文没思考”
+      return text.replace(/<\/?think>/gi, '');
     };
 
     const applyReferenceMocks = async () => {
@@ -853,7 +865,7 @@ export default defineComponent({
       userHasScrolledUp = false;  // 重置滚动状态
       
       // 模拟流式输出思考过程
-      const mockThinking = getMockThinking();
+      const mockThinking = normalizeMockThinking(getMockThinking());
       if (thinkingMode.value && mockThinking) {
         await simulateStreamOutput(mockThinking, thinking, 15);
       }
@@ -861,7 +873,12 @@ export default defineComponent({
       // 模拟流式输出回答
       const mockAnswer = getMockAnswer();
       if (mockAnswer) {
-        await simulateStreamOutput(mockAnswer, answer, 20);
+        await simulateStreamOutput(mockAnswer, answer, 20, () => {
+          if (loading.value) {
+            updateStreamingRender();
+          }
+        });
+        updateStreamingRender();
       }
       
       // 设置参考文献
@@ -1072,7 +1089,7 @@ export default defineComponent({
       if (!question.value.trim() || loading.value) return;
 
       if (mockReferencesEnabled) {
-        applyReferenceMocks();
+        await applyReferenceMocks();
         return;
       }
 
@@ -1389,7 +1406,17 @@ export default defineComponent({
 
         case 'SOURCE':
           try {
-            const source = JSON.parse(message.data) as ReferenceSource;
+            const source = JSON.parse(message.data) as ReferenceSource & Record<string, unknown>;
+            if (!source.content || !String(source.content).trim()) {
+              const fallbackContent = [
+                source.keyPassage,
+                source.content_preview,
+                source.snippet,
+                source.text,
+                source.node?.metadata?.key_passage
+              ].find((value) => typeof value === 'string' && value.trim()) as string | undefined;
+              source.content = fallbackContent || '';
+            }
             references.value.push(source);
           } catch (e) {
             console.error('解析SOURCE失败', e);
@@ -1481,11 +1508,28 @@ export default defineComponent({
     };
 
     // 切换参考来源展开/收起
-    const toggleRefExpand = (index: number) => {
-      const ref = references.value[index];
-      if (ref) {
-        ref.expanded = !ref.expanded;
+    const toggleRefExpand = (reference: ReferenceSource) => {
+      reference.expanded = !reference.expanded;
+    };
+
+    const getReferenceContent = (reference: ReferenceSource): string => {
+      const ref = reference as ReferenceSource & Record<string, unknown>;
+      const candidates: unknown[] = [
+        reference.content,
+        reference.keyPassage,
+        ref.content_preview,
+        ref.snippet,
+        ref.text,
+        reference.node?.metadata?.key_passage
+      ];
+
+      for (const value of candidates) {
+        if (typeof value === 'string' && value.trim()) {
+          return value;
+        }
       }
+
+      return '';
     };
 
     // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 节流
@@ -1652,7 +1696,7 @@ export default defineComponent({
       // 答案归纳相关
       summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
-      renderMarkdown, copyAnswer, toggleRefExpand, handleMcqModeChange,
+      renderMarkdown, copyAnswer, toggleRefExpand, getReferenceContent, handleMcqModeChange,
       liteMode, toggleLiteMode,
       // Debug模式
       isDebugMode

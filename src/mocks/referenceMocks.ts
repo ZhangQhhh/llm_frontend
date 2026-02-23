@@ -350,6 +350,12 @@ export const shouldUseReferenceMocks = (): boolean => {
     return true;
   }
 
+  // 兼容全局 mock 开关
+  if (process.env.VUE_APP_ENABLE_MOCK === 'true') {
+    cachedToggle = true;
+    return true;
+  }
+
   if (typeof window === 'undefined') {
     cachedToggle = false;
     return false;
@@ -360,11 +366,18 @@ export const shouldUseReferenceMocks = (): boolean => {
       cachedToggle = true;
       return true;
     }
+
+    // 兼容全局 mock 本地开关
+    if (window.localStorage?.getItem('ENABLE_MOCK_DATA') === 'true') {
+      cachedToggle = true;
+      return true;
+    }
   } catch {
     // 忽略 localStorage 访问异常
   }
 
   const params = new URLSearchParams(window.location.search);
-  cachedToggle = params.get('mockReferences') === '1';
+  // 兼容 ?mock=1 与 ?mockReferences=1
+  cachedToggle = params.get('mockReferences') === '1' || params.get('mock') === '1';
   return cachedToggle;
 };
