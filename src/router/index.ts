@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import KnowledgeQAView from '../views/KnowledgeQAView.vue'
+import KnowledgeQAViewBeta from '../views/KnowledgeQAViewBeta.vue'
 import ConversationView from '../views/ConversationView.vue'
 import SmartOfficeView from '../views/SmartOfficeView.vue'
 import Immigration12367View from '../views/Immigration12367View.vue'
@@ -95,6 +96,16 @@ const routes: Array<RouteRecordRaw> = [
       requiresAuth: true,
       title: '知识问答 (Debug模式)',
       pageCode: 'PAGE_004'
+    }
+  },
+  {
+    path: '/knowledge-qa/beta',
+    name: 'knowledge-qa-beta',
+    component: KnowledgeQAViewBeta,
+    meta: {
+      requiresAuth: true,
+      title: '知识问答 Beta',
+      publicAccess: true
     }
   },
   {
