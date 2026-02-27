@@ -299,6 +299,19 @@ export default defineComponent({
     });
     const forgetLoading = ref(false);
 
+    const syncLoginIp = async () => {
+      try {
+        const response = await http.post(API_ENDPOINTS.USER.SYNC_LOGIN_IP, {});
+        const data = response.data || {};
+        const isSuccess = data.success || data.code === 200 || response.status === 204;
+        if (!isSuccess) {
+          console.warn('[LoginView] 同步登录IP失败:', response.status, data);
+        }
+      } catch (error) {
+        console.warn('[LoginView] 同步登录IP异常:', error);
+      }
+    };
+
     // 处理登录
     const handleLogin = () => {
       loginError.value = '';
@@ -320,6 +333,7 @@ export default defineComponent({
           // 获取用户信息
           store.dispatch('getinfo', {
             success: () => {
+              void syncLoginIp();
               const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
               if (token) {
                 initSessionWatch(token, (store.state as any).user?.id);

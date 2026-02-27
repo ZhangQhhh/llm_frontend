@@ -375,6 +375,95 @@
               </el-form-item>
             </el-form>
           </el-card>
+
+          <!-- IP黑名单管理 -->
+          <el-card class="card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>IP黑名单管理</span>
+                <div class="card-actions">
+                  <el-button type="primary" plain size="small" :icon="Refresh" :loading="loadingIpBlacklist" @click="loadIpBlacklist">
+                    刷新
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-alert
+              title="用于阻止指定IP访问系统（支持IPv4 / IPv6 / CIDR）"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            />
+
+            <el-form :model="ipBlacklistForm" label-width="80px" class="ip-blacklist-form">
+              <el-form-item label="IP地址" class="ip-form-item">
+                <el-input
+                  v-model="ipBlacklistForm.ip"
+                  placeholder="例如：53.21.18.98 或 53.21.16.0/22"
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item label="备注" class="ip-form-item ip-remark-item">
+                <el-input
+                  v-model="ipBlacklistForm.remark"
+                  placeholder="例如：异常流量来源 / 非授权出口地址"
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-space>
+                  <el-button type="danger" :icon="CirclePlus" :loading="addingIpBlacklist" @click="handleAddIpBlacklist">
+                    加入黑名单
+                  </el-button>
+                  <el-button :disabled="addingIpBlacklist" @click="resetIpBlacklistForm">
+                    清空
+                  </el-button>
+                </el-space>
+              </el-form-item>
+            </el-form>
+
+            <el-table
+              :data="ipBlacklist"
+              border
+              size="small"
+              stripe
+              v-loading="loadingIpBlacklist"
+              empty-text="暂无黑名单记录"
+            >
+              <el-table-column prop="ip" label="IP/CIDR" min-width="180" />
+              <el-table-column label="备注" min-width="220">
+                <template #default="scope">
+                  {{ scope.row.remark || scope.row.reason || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="创建时间" min-width="170">
+                <template #default="scope">
+                  {{ formatDate(scope.row.created_at || scope.row.createdAt || scope.row.updated_at) || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作人" min-width="120">
+                <template #default="scope">
+                  {{ scope.row.operator || scope.row.created_by || scope.row.updated_by || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="scope">
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :icon="Delete"
+                    :loading="deletingIpIdentifier === (scope.row.id || scope.row.ip)"
+                    @click="handleRemoveIpBlacklist(scope.row)"
+                  >
+                    删除
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
         </el-col>
 
         <el-col :xs="24" :md="8">
@@ -497,7 +586,7 @@
 import { defineComponent, reactive, ref, computed, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CirclePlus, RefreshRight, User, Message, Lock, ArrowDownBold, Refresh, Search, Postcard, CreditCard, Top } from '@element-plus/icons-vue'
+import { CirclePlus, RefreshRight, User, Message, Lock, ArrowDownBold, Refresh, Search, Postcard, CreditCard, Top, Delete } from '@element-plus/icons-vue'
 import { API_ENDPOINTS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
 
@@ -519,6 +608,19 @@ interface AdminUser {
   createAt?: string
   status?: string
   isBjzxAdmin?: boolean
+}
+
+interface IpBlacklistItem {
+  id?: string | number
+  ip: string
+  remark?: string
+  reason?: string
+  created_at?: string
+  createdAt?: string
+  updated_at?: string
+  operator?: string
+  created_by?: string
+  updated_by?: string
 }
 
 export default defineComponent({
@@ -565,6 +667,15 @@ export default defineComponent({
     const bjzxUpgrading = ref(false)
     const bjzxUpgradeForm = reactive({
       username: ''
+    })
+
+    const ipBlacklist = ref<IpBlacklistItem[]>([])
+    const loadingIpBlacklist = ref(false)
+    const addingIpBlacklist = ref(false)
+    const deletingIpIdentifier = ref<string | number | null>(null)
+    const ipBlacklistForm = reactive({
+      ip: '',
+      remark: ''
     })
 
     const rules = reactive<FormRules<CreateAdminPayload>>({
@@ -887,6 +998,162 @@ export default defineComponent({
       bjzxUpgradeFormRef.value?.resetFields()
     }
 
+    const normalizeIpBlacklistItems = (raw: any): IpBlacklistItem[] => {
+      if (Array.isArray(raw)) {
+        return raw as IpBlacklistItem[]
+      }
+      if (raw && Array.isArray(raw.items)) {
+        return raw.items as IpBlacklistItem[]
+      }
+      if (raw && Array.isArray(raw.list)) {
+        return raw.list as IpBlacklistItem[]
+      }
+      if (raw && typeof raw === 'object') {
+        return Object.entries(raw as Record<string, unknown>).map(([ip, item]) => {
+          if (item && typeof item === 'object') {
+            const source = item as Record<string, unknown>
+            const normalized: IpBlacklistItem = {
+              ip: String(source.ip ?? ip).trim()
+            }
+            if (source.id !== undefined) normalized.id = source.id as string | number
+            if (source.remark !== undefined) normalized.remark = String(source.remark)
+            if (source.reason !== undefined) normalized.reason = String(source.reason)
+            if (source.created_at !== undefined) normalized.created_at = String(source.created_at)
+            if (source.createdAt !== undefined) normalized.createdAt = String(source.createdAt)
+            if (source.updated_at !== undefined) normalized.updated_at = String(source.updated_at)
+            if (source.operator !== undefined) normalized.operator = String(source.operator)
+            if (source.created_by !== undefined) normalized.created_by = String(source.created_by)
+            if (source.updated_by !== undefined) normalized.updated_by = String(source.updated_by)
+            return {
+              ...normalized
+            }
+          }
+          return {
+            ip,
+            remark: String(item ?? '').trim()
+          }
+        })
+      }
+      return []
+    }
+
+    const loadIpBlacklist = async () => {
+      loadingIpBlacklist.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.IP_BLACKLIST_LIST))
+        const bizCode = Number(response.data?.code)
+        const isBizOk = response.ok
+          && response.data?.success !== false
+          && (Number.isNaN(bizCode) || bizCode === 200)
+        if (!isBizOk) {
+          throw new Error(response.data?.message || '加载IP黑名单失败')
+        }
+        const payload = response.data?.data?.list
+          || response.data?.data?.items
+          || response.data?.data
+          || response.data?.list
+          || response.data
+          || []
+        const list = normalizeIpBlacklistItems(payload)
+          .map((item) => ({ ...item, ip: String(item.ip || '').trim() }))
+          .filter((item) => item.ip)
+        ipBlacklist.value = list
+      } catch (error: any) {
+        ipBlacklist.value = []
+        ElMessage.error(error?.message || '加载IP黑名单失败')
+      } finally {
+        loadingIpBlacklist.value = false
+      }
+    }
+
+    const resetIpBlacklistForm = () => {
+      ipBlacklistForm.ip = ''
+      ipBlacklistForm.remark = ''
+    }
+
+    const isValidIpValue = (value: string) => {
+      const ip = value.trim()
+      if (!ip) return false
+
+      const ipv4Seg = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)'
+      const ipv4 = new RegExp(`^(?:${ipv4Seg}\\.){3}${ipv4Seg}$`)
+      const ipv4Cidr = new RegExp(`^(?:${ipv4Seg}\\.){3}${ipv4Seg}\\/(?:3[0-2]|[12]?\\d)$`)
+      const hasColon = ip.includes(':')
+      const ipv6 = hasColon && /^[0-9a-fA-F:]+$/.test(ip)
+      const ipv6Cidr = hasColon && /^[0-9a-fA-F:]+\/(?:12[0-8]|1[01]\d|[1-9]?\d)$/.test(ip)
+      return ipv4.test(ip) || ipv4Cidr.test(ip) || ipv6 || ipv6Cidr
+    }
+
+    const handleAddIpBlacklist = async () => {
+      const ip = ipBlacklistForm.ip.trim()
+      const remark = ipBlacklistForm.remark.trim()
+      if (!ip) {
+        ElMessage.warning('请输入IP地址')
+        return
+      }
+      if (!isValidIpValue(ip)) {
+        ElMessage.warning('IP格式不正确，请输入合法的IPv4/IPv6/CIDR')
+        return
+      }
+      if (ipBlacklist.value.some((item) => item.ip === ip)) {
+        ElMessage.warning('该IP已在黑名单中')
+        return
+      }
+
+      addingIpBlacklist.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.IP_BLACKLIST_ADD), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip, remark })
+        })
+        if (response.ok && (response.data?.success || response.data?.code === 200 || response.status === 204)) {
+          ElMessage.success('IP已加入黑名单')
+          resetIpBlacklistForm()
+          await loadIpBlacklist()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '新增IP黑名单失败')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '新增IP黑名单失败')
+      } finally {
+        addingIpBlacklist.value = false
+      }
+    }
+
+    const handleRemoveIpBlacklist = async (item: IpBlacklistItem) => {
+      const identifier = item.id || item.ip
+      if (!identifier) return
+      try {
+        await ElMessageBox.confirm(
+          `确定要移除黑名单IP【${item.ip}】吗？`,
+          '确认操作',
+          {
+            type: 'warning',
+            confirmButtonText: '确定',
+            cancelButtonText: '取消'
+          }
+        )
+        deletingIpIdentifier.value = identifier
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.IP_BLACKLIST_DELETE(identifier)), {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id, ip: item.ip })
+        })
+        if (response.ok && (response.data?.success || response.data?.code === 200 || response.status === 204)) {
+          ElMessage.success('已移除IP黑名单')
+          await loadIpBlacklist()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '删除IP黑名单失败')
+        }
+      } catch (error: any) {
+        if (error === 'cancel') return
+        ElMessage.error(error?.message || '删除IP黑名单失败')
+      } finally {
+        deletingIpIdentifier.value = null
+      }
+    }
+
     const handleBjzxUpgrade = async () => {
       if (!bjzxUpgradeFormRef.value) return
       const valid = await bjzxUpgradeFormRef.value.validate().catch(() => false)
@@ -993,6 +1260,7 @@ export default defineComponent({
     onMounted(() => {
       loadAdmins()
       loadPendingUsers()
+      loadIpBlacklist()
     })
 
     return {
@@ -1030,6 +1298,7 @@ export default defineComponent({
       Postcard,
       CreditCard,
       Top,
+      Delete,
       handleCreate,
       resetForm,
       loadAdmins,
@@ -1045,6 +1314,15 @@ export default defineComponent({
       resetUpgradeForm,
       formatDate,
       maskIdCard,
+      ipBlacklist,
+      loadingIpBlacklist,
+      addingIpBlacklist,
+      deletingIpIdentifier,
+      ipBlacklistForm,
+      loadIpBlacklist,
+      resetIpBlacklistForm,
+      handleAddIpBlacklist,
+      handleRemoveIpBlacklist,
       // 边检智学管理员相关
       bjzxUpgradeFormRef,
       bjzxUpgradeForm,
@@ -1257,5 +1535,17 @@ export default defineComponent({
 
 .approval-body {
   min-height: 200px;
+}
+
+.ip-blacklist-form {
+  margin-top: 0.5rem;
+}
+
+.ip-form-item {
+  margin-bottom: 12px;
+}
+
+.ip-remark-item {
+  width: 100%;
 }
 </style>
