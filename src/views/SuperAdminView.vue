@@ -17,7 +17,7 @@
       </header>
 
       <el-row :gutter="20">
-        <el-col :xs="24" :md="16">
+        <el-col :xs="24" :md="16" class="primary-column">
           <!-- 账号审核 -->
           <el-card class="card approval-card" shadow="hover">
             <template #header>
@@ -258,6 +258,95 @@
                 </div>
               </div>
             </div>
+          </el-card>
+
+          <el-card class="card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>任意用户密码重置</span>
+                <div class="card-actions">
+                  <el-input
+                    v-model="userResetKeyword"
+                    size="small"
+                    placeholder="搜索用户ID / 用户名 / 警号 / 邮箱"
+                    clearable
+                    @clear="applyUserResetSearch"
+                    @keyup.enter="applyUserResetSearch"
+                  >
+                    <template #prefix>
+                      <el-icon><Search /></el-icon>
+                    </template>
+                  </el-input>
+                  <el-button type="primary" plain @click="loadAllUsers" :loading="loadingAllUsers" :icon="Refresh" size="small">
+                    刷新
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-alert
+              title="超级管理员可直接为任意用户重置密码，请确认目标用户身份后再操作。"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            />
+
+            <div v-if="loadingAllUsers" class="list-loading">
+              <el-skeleton :rows="4" animated />
+            </div>
+            <el-empty v-else-if="filteredResetUsers.length === 0" description="暂无可操作用户">
+              <el-button type="primary" plain @click="loadAllUsers">刷新数据</el-button>
+            </el-empty>
+            <el-table
+              v-else
+              :data="filteredResetUsers"
+              border
+              stripe
+              size="small"
+              max-height="360"
+              class="user-reset-table"
+            >
+              <el-table-column prop="id" label="用户ID" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="username" label="用户名" min-width="140" show-overflow-tooltip />
+              <el-table-column label="警号" min-width="120" show-overflow-tooltip>
+                <template #default="scope">
+                  {{ scope.row.policeId || scope.row.police_id || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="角色" width="120">
+                <template #default="scope">
+                  <el-tag :type="getUserRoleTagType(scope.row.role)" size="small">
+                    {{ getUserRoleText(scope.row.role) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="120">
+                <template #default="scope">
+                  <el-tag :type="getUserStatusTagType(scope.row.status)" size="small">
+                    {{ getUserStatusText(scope.row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip>
+                <template #default="scope">
+                  {{ scope.row.email || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="130" fixed="right">
+                <template #default="scope">
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :icon="Lock"
+                    @click="openResetPasswordDialog(scope.row)"
+                  >
+                    重置密码
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
           </el-card>
 
           <!-- 提升用户为管理员 -->
@@ -511,7 +600,7 @@
     <!-- 重置密码对话框 -->
     <el-dialog
       v-model="resetPasswordDialogVisible"
-      title="重置管理员密码"
+      title="重置用户密码"
       width="500px"
       :close-on-click-modal="false"
       @close="handleResetDialogClose"
@@ -523,7 +612,7 @@
         show-icon
         style="margin-bottom: 1.5rem"
       >
-        重置后请立即通知管理员修改密码
+        重置后请立即通过安全渠道通知目标用户修改密码
       </el-alert>
       
       <el-form
@@ -533,12 +622,15 @@
         label-width="100px"
         status-icon
       >
-        <el-form-item label="管理员">
+        <el-form-item label="目标用户">
           <el-input :value="currentResetAdmin?.username" disabled>
             <template #prefix>
               <el-icon><User /></el-icon>
             </template>
           </el-input>
+        </el-form-item>
+        <el-form-item label="用户ID">
+          <el-input :value="currentResetAdmin?.id || '—'" disabled />
         </el-form-item>
         <el-form-item label="新密码" prop="newPassword">
           <el-input
@@ -601,12 +693,14 @@ interface CreateAdminPayload {
 interface AdminUser {
   id?: string
   username: string
+  policeId?: string
+  police_id?: string
   email?: string
   role?: string
   created_at?: string
   create_at?: string
   createAt?: string
-  status?: string
+  status?: string | number
   isBjzxAdmin?: boolean
 }
 
@@ -640,6 +734,9 @@ export default defineComponent({
     const adminList = ref<AdminUser[]>([])
     const loadingAdmins = ref(false)
     const searchKeyword = ref('')
+    const allUsers = ref<AdminUser[]>([])
+    const loadingAllUsers = ref(false)
+    const userResetKeyword = ref('')
     const pendingUsers = ref<AdminUser[]>([])
     const loadingPending = ref(false)
     const approvalLoadingId = ref<string | null>(null)
@@ -818,6 +915,25 @@ export default defineComponent({
       }
     }
 
+    const loadAllUsers = async () => {
+      loadingAllUsers.value = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_LIST))
+        if (response.ok) {
+          const raw = response.data?.data?.list || response.data?.data?.users || response.data || []
+          const list = Array.isArray(raw) ? raw : (raw.items || [])
+          allUsers.value = list
+        } else {
+          throw new Error(response.data?.message || '加载用户列表失败')
+        }
+      } catch (error: any) {
+        allUsers.value = []
+        ElMessage.error(error?.message || '加载用户列表失败')
+      } finally {
+        loadingAllUsers.value = false
+      }
+    }
+
     const handleDowngrade = async (admin: AdminUser) => {
       try {
         await ElMessageBox.confirm(
@@ -863,8 +979,24 @@ export default defineComponent({
       })
     })
 
+    const filteredResetUsers = computed(() => {
+      const keyword = userResetKeyword.value.trim().toLowerCase()
+      if (!keyword) return allUsers.value
+      return allUsers.value.filter((user) => {
+        const id = String(user.id || '').toLowerCase()
+        const username = user.username?.toLowerCase() || ''
+        const policeId = String(user.policeId || user.police_id || '').toLowerCase()
+        const email = user.email?.toLowerCase() || ''
+        return id.includes(keyword) || username.includes(keyword) || policeId.includes(keyword) || email.includes(keyword)
+      })
+    })
+
     const applySearch = () => {
       searchKeyword.value = searchKeyword.value.trim()
+    }
+
+    const applyUserResetSearch = () => {
+      userResetKeyword.value = userResetKeyword.value.trim()
     }
 
     const loadPendingUsers = async () => {
@@ -959,6 +1091,10 @@ export default defineComponent({
 
     const handleResetPassword = async () => {
       if (!resetPasswordFormRef.value || !currentResetAdmin.value) return
+      if (!currentResetAdmin.value.id) {
+        ElMessage.error('目标用户缺少用户ID，无法重置密码')
+        return
+      }
       
       const valid = await resetPasswordFormRef.value.validate().catch(() => false)
       if (!valid) return
@@ -970,14 +1106,12 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: currentResetAdmin.value.id,
-            username: currentResetAdmin.value.username,
-            newPassword: resetPasswordForm.newPassword,
-            // rawPassword: "NONE" // 这里不需要填写原密码
+            newPassword: resetPasswordForm.newPassword
           })
         })
 
         if (response.ok && response.data?.code === 200) {
-          ElMessage.success(`已成功重置管理员【${currentResetAdmin.value.username}】的密码`)
+          ElMessage.success(`已成功重置用户【${currentResetAdmin.value.username}】的密码`)
           resetPasswordDialogVisible.value = false
           handleResetDialogClose()
         } else {
@@ -1257,8 +1391,41 @@ export default defineComponent({
       return idCard.slice(0, 6) + '********' + idCard.slice(-4)
     }
 
+    const getUserRoleText = (role?: string) => {
+      const normalized = String(role || '').toLowerCase()
+      if (normalized === 'super_admin') return '超级管理员'
+      if (normalized === 'admin') return '管理员'
+      return '普通用户'
+    }
+
+    const getUserRoleTagType = (role?: string) => {
+      const normalized = String(role || '').toLowerCase()
+      if (normalized === 'super_admin') return 'danger'
+      if (normalized === 'admin') return 'success'
+      return 'info'
+    }
+
+    const getUserStatusText = (status?: string | number) => {
+      const normalized = String(status ?? '')
+      if (normalized === '1') return '正常'
+      if (normalized === '0') return '待审核'
+      if (normalized === '-1') return '已封禁'
+      if (normalized === '-2') return '已拒绝'
+      return normalized || '未知'
+    }
+
+    const getUserStatusTagType = (status?: string | number) => {
+      const normalized = String(status ?? '')
+      if (normalized === '1') return 'success'
+      if (normalized === '0') return 'warning'
+      if (normalized === '-1') return 'danger'
+      if (normalized === '-2') return 'info'
+      return 'info'
+    }
+
     onMounted(() => {
       loadAdmins()
+      loadAllUsers()
       loadPendingUsers()
       loadIpBlacklist()
     })
@@ -1272,7 +1439,11 @@ export default defineComponent({
       adminList,
       loadingAdmins,
       searchKeyword,
+      allUsers,
+      loadingAllUsers,
+      userResetKeyword,
       filteredAdmins,
+      filteredResetUsers,
       pendingUsers,
       loadingPending,
       approvalLoadingId,
@@ -1302,8 +1473,10 @@ export default defineComponent({
       handleCreate,
       resetForm,
       loadAdmins,
+      loadAllUsers,
       handleDowngrade,
       applySearch,
+      applyUserResetSearch,
       loadPendingUsers,
       approveUser,
       rejectUser,
@@ -1314,6 +1487,10 @@ export default defineComponent({
       resetUpgradeForm,
       formatDate,
       maskIdCard,
+      getUserRoleText,
+      getUserRoleTagType,
+      getUserStatusText,
+      getUserStatusTagType,
       ipBlacklist,
       loadingIpBlacklist,
       addingIpBlacklist,
@@ -1529,8 +1706,8 @@ export default defineComponent({
   opacity: 0;
 }
 
-.approval-card {
-  margin-bottom: 1.5rem;
+.primary-column :deep(.card + .card) {
+  margin-top: 1.75rem;
 }
 
 .approval-body {
@@ -1547,5 +1724,9 @@ export default defineComponent({
 
 .ip-remark-item {
   width: 100%;
+}
+
+.user-reset-table {
+  margin-top: 0.5rem;
 }
 </style>
