@@ -22,6 +22,10 @@ import {
   mockGetWritingLogDates,
   mockGetWritingLogStatistics,
 } from '@/mocks/writingLogsMocks';
+import {
+  mockGetReportLogs,
+  mockGetReportLogDetail,
+} from '@/mocks/reportLogsMocks';
 
 /**
  * SSE流式响应处理器
@@ -827,6 +831,10 @@ export async function getReportLogs(
   token: string,
   params: ReportLogListParams = {}
 ): Promise<ReportLogListResponse> {
+  if (isMockEnabled()) {
+    return mockGetReportLogs(token, params) as Promise<ReportLogListResponse>;
+  }
+
   const queryParams = new URLSearchParams();
   if (params.page) queryParams.append('page', String(params.page));
   if (params.page_size) queryParams.append('page_size', String(params.page_size));
@@ -850,6 +858,10 @@ export async function getReportLogDetail(
   token: string,
   jobId: string
 ): Promise<ReportLogDetail> {
+  if (isMockEnabled()) {
+    return mockGetReportLogDetail(token, jobId) as Promise<ReportLogDetail>;
+  }
+
   const response = await davHttp.get(API_ENDPOINTS.REPORT_LOGS.DETAIL(jobId), {
     headers: {
       'Authorization': `Bearer ${token}`

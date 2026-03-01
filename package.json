@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "preserve": "node scripts/patch-compat-deps.js",
     "serve": "vue-cli-service serve",
+    "preserve:vm": "node scripts/patch-compat-deps.js",
     "serve:vm": "vue-cli-service serve --mode vm",
+    "prebuild": "node scripts/patch-compat-deps.js",
     "build": "vue-cli-service build",
+    "prebuild:vm": "node scripts/patch-compat-deps.js",
     "build:vm": "vue-cli-service build --mode vm",
     "lint": "vue-cli-service lint"
   },
