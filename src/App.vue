@@ -2,10 +2,10 @@
   <div id="app">
     <NavBar v-if="showNavBar" />
     <router-view />
-    <TourGuideButton />
-    <FirstTimeGuide />
-    <ChangeNameDialog @completed="onNameChanged" />
-    <DepartmentDialog />
+    <TourGuideButton v-if="showAppChrome" />
+    <FirstTimeGuide v-if="showAppChrome" />
+    <ChangeNameDialog v-if="showAppChrome" @completed="onNameChanged" />
+    <DepartmentDialog v-if="showAppChrome" />
   </div>
 </template>
 
@@ -35,8 +35,9 @@ export default defineComponent({
     const store = useStore();
 
     // 在登录页面隐藏导航栏
+    const showAppChrome = computed(() => !route.meta.hideAppChrome);
     const showNavBar = computed(() => {
-      return route.name !== 'login';
+      return route.name !== 'login' && showAppChrome.value;
     });
 
     // 改名完成回调
@@ -95,6 +96,7 @@ export default defineComponent({
 
     return {
       showNavBar,
+      showAppChrome,
       onNameChanged
     };
   }

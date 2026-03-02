@@ -21,6 +21,7 @@ declare module 'vue-router' {
     title?: string
     pageCode?: string
     publicAccess?: boolean
+    hideAppChrome?: boolean
   }
 }
 
@@ -97,6 +98,12 @@ const routes: Array<RouteRecordRaw> = [
       title: '知识问答 (Debug模式)',
       publicAccess: true
     }
+  },
+  {
+    path: '/403',
+    name: 'ip-blocked',
+    component: () => import('../views/IpBlockedView.vue'),
+    meta: { title: '403 禁止访问', publicAccess: true, hideAppChrome: true }
   },
   {
     path: '/knowledge-qa/beta',

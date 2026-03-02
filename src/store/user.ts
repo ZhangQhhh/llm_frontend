@@ -1,6 +1,7 @@
 import router from "@/router";
 import { API_ENDPOINTS } from "@/config/api/api";
 import http from "@/config/api/http";
+import { isIpBlockedError, redirectToIpBlockedPage } from "@/utils/errorHandler";
 import { stopSessionWatch } from "@/utils/sessionWatcher";
 import { Module, ActionContext } from "vuex"; // [1] 导入 Vuex 类型
 import { UserRole, hasPermission, isAdmin, isSuperAdmin } from "@/config/permissions";
@@ -230,6 +231,10 @@ export default {
           });
         }
       } catch (error: any) {
+        const backendMessage = error.response?.data?.message || error.message;
+        if (isIpBlockedError(error)) {
+          redirectToIpBlockedPage(backendMessage);
+        }
         // 捕获HTTP错误，如403等
         data.error({
           success: false,
