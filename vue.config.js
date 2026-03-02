@@ -11,7 +11,7 @@ module.exports = defineConfig({
     port: 8080,
     allowedHosts: 'all',
     proxy: {
-      '/ws': {
+      '/ws/session': {
         target: 'ws://127.0.0.1:3000',
         ws: true,
         changeOrigin: true
