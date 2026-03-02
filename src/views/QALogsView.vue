@@ -393,6 +393,7 @@ import {
 import { renderMarkdown } from '@/utils/markdown';
 import { ensureUserCacheLoaded, getUserNameById } from '@/utils/userCache';
 import { isMockEnabled } from '@/mocks/mockService';
+import { getLatestMockReportLogDate, getMockReportLogDates } from '@/mocks/reportLogsMocks';
 
 const store = useStore();
 
@@ -530,11 +531,18 @@ async function loadAvailableDates(options: { setDefault?: boolean } = {}) {
     } else if (isWritingLogs.value) {
       const result = await getWritingLogDates(token);
       availableDates.value = result.dates || [];
+    } else if (isMockMode.value) {
+      availableDates.value = getMockReportLogDates();
     } else {
       availableDates.value = [];
     }
 
-    if (setDefault) {
+    if (isReportLogs.value && isMockMode.value) {
+      const latestDate = getLatestMockReportLogDate();
+      if (latestDate && (setDefault || !availableDates.value.includes(selectedDate.value))) {
+        selectedDate.value = latestDate;
+      }
+    } else if (setDefault) {
       selectedDate.value = availableDates.value[0] || getTodayDate();
     }
   } catch (err: any) {

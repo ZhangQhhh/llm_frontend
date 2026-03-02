@@ -224,6 +224,20 @@ const sortByDateDesc = (logs: MockReportLogItem[]): MockReportLogItem[] =>
     return bTime - aTime;
   });
 
+const toDateOnly = (value?: string): string => String(value || '').split('T')[0];
+
+export const getMockReportLogDates = (): string[] => {
+  const dates = sortByDateDesc(REPORT_LOGS)
+    .map((log) => toDateOnly(log.created_at || log.updated_at))
+    .filter(Boolean);
+
+  return Array.from(new Set(dates));
+};
+
+export const getLatestMockReportLogDate = (): string => {
+  return getMockReportLogDates()[0] || '';
+};
+
 const matchesDateRange = (log: MockReportLogItem, startDate?: string, endDate?: string): boolean => {
   const createdAt = log.created_at || log.updated_at;
   if (!createdAt) return false;
