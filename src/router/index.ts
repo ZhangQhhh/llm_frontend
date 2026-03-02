@@ -90,12 +90,12 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/knowledge-qa/debug',
+    alias: '/debug',
     name: 'knowledge-qa-debug',
     component: KnowledgeQAView,
     meta: {
-      requiresAuth: true,
       title: '知识问答 (Debug模式)',
-      pageCode: 'PAGE_004'
+      publicAccess: true
     }
   },
   {
