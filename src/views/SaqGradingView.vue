@@ -149,6 +149,27 @@
             </div>
           </div>
 
+          <!-- 知识条款 -->
+          <div v-if="hasClauseGrading" class="section clause-section">
+            <div class="section-header">
+              <span class="section-title">📑 知识条款（{{ currentSaq.knowledge_clauses!.length }}条）</span>
+              <span class="clause-total-hint">满分 {{ saqFullScore }} 分</span>
+            </div>
+            <div class="section-body">
+              <div 
+                v-for="(clause, ci) in currentSaq.knowledge_clauses" 
+                :key="ci" 
+                class="clause-item"
+              >
+                <div class="clause-header">
+                  <span class="clause-label">条款{{ ci + 1 }}</span>
+                  <span class="clause-max-score" v-if="currentClauseScores[ci]">（{{ currentClauseScores[ci] }}分）</span>
+                </div>
+                <div class="clause-text">{{ clause }}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 学生答案 -->
           <div class="section student-section">
             <div class="section-header">
@@ -167,13 +188,71 @@
       <div class="grading-panel">
         <div class="panel-header">
           <div class="panel-title">评分操作</div>
-          <div class="sync-status" v-if="lastSyncTime">
-            <span class="sync-text">已同步</span>
+          <div class="panel-header-actions">
+            <el-button 
+              size="small" 
+              type="warning" 
+              @click="openAiGradeDialog"
+              :disabled="!currentExam"
+            >
+              🤖 AI自动评分
+            </el-button>
+            <el-button
+              size="small"
+              :type="aiGrading ? 'danger' : 'info'"
+              @click="aiProgressVisible = true"
+              plain
+            >
+              📋 任务
+              <span v-if="aiGrading" class="task-badge running">{{ aiProgress.completedStudents }}/{{ aiProgress.totalStudents }}</span>
+            </el-button>
+            <div class="sync-status" v-if="lastSyncTime">
+              <span class="sync-text">已同步</span>
+            </div>
           </div>
         </div>
         
-        <!-- 快速评分 -->
-        <div class="quick-grade">
+        <!-- 按条款评分（有知识条款时显示） -->
+        <div v-if="hasClauseGrading && currentGrade" class="clause-grading">
+          <div class="grade-label">
+            按条款评分
+            <div class="clause-quick-actions">
+              <el-button size="small" link type="success" @click="clauseQuickFull">全满分</el-button>
+              <el-button size="small" link type="danger" @click="clauseQuickZero">全零分</el-button>
+            </div>
+          </div>
+          <div class="clause-grade-list">
+            <div 
+              v-for="(clause, ci) in currentSaq!.knowledge_clauses" 
+              :key="ci" 
+              class="clause-grade-row"
+            >
+              <div class="clause-grade-info">
+                <span class="clause-grade-label">条款{{ ci + 1 }}</span>
+                <span class="clause-grade-text" :title="clause">{{ clause.length > 20 ? clause.slice(0, 20) + '…' : clause }}</span>
+              </div>
+              <div class="clause-grade-input">
+                <el-input-number
+                  v-model="currentGrade.clause_grades![ci]"
+                  :min="0"
+                  :max="currentClauseScores[ci] ?? saqFullScore"
+                  :step="1"
+                  size="small"
+                  controls-position="right"
+                  style="width: 90px;"
+                  @change="onClauseScoreChange"
+                />
+                <span class="clause-grade-max">/ {{ currentClauseScores[ci] ?? '?' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="clause-grade-total">
+            总分：<span class="total-num">{{ currentGrade.score }}</span> / {{ saqFullScore }}
+          </div>
+        </div>
+
+        <!-- 快速评分（无知识条款时显示） -->
+        <div v-else class="quick-grade">
           <div class="grade-label">快速评分</div>
           <div class="grade-buttons">
             <button 
@@ -217,8 +296,8 @@
           </div>
         </div>
 
-        <!-- 自定义分数 -->
-        <div class="custom-score" v-if="currentGrade">
+        <!-- 自定义分数（无知识条款时显示，有条款时总分由条款自动汇总） -->
+        <div class="custom-score" v-if="currentGrade && !hasClauseGrading">
           <div class="grade-label">自定义分数</div>
           <div class="score-input-row">
             <el-input-number 
@@ -289,6 +368,21 @@
       <div class="list-header">
         <h1>📝 简答题评分</h1>
         <div class="header-actions">
+          <el-button 
+            type="warning" 
+            @click="openAiGradeDialog"
+            :disabled="examList.length === 0"
+          >
+            🤖 AI自动评分
+          </el-button>
+          <el-button 
+            :type="aiGrading ? 'danger' : 'info'"
+            @click="aiProgressVisible = true"
+            plain
+          >
+            📋 评分任务
+            <span v-if="aiGrading" class="task-badge running">{{ aiProgress.completedStudents }}/{{ aiProgress.totalStudents }}</span>
+          </el-button>
           <el-button @click="loadPendingList" :loading="loading" type="primary">
             <el-icon><Refresh /></el-icon>
             刷新
@@ -354,8 +448,8 @@
           <div class="paper-left">
             <div class="exam-icon">📋</div>
             <div class="paper-info">
-              <div class="paper-student">{{ exam.paper_title }}</div>
-              <div class="paper-meta">考试ID: {{ exam.exam_id.slice(0, 8) }}...</div>
+              <div class="paper-student">{{ exam.exam_name || exam.paper_title }}</div>
+              <div class="paper-meta">{{ formatExamDate(exam.exam_start_time) }} | {{ exam.paper_title }}</div>
             </div>
           </div>
           <div class="paper-right">
@@ -380,6 +474,135 @@
       </div>
     </div>
 
+    <!-- AI自动评分 - 配置弹窗 -->
+    <el-dialog 
+      v-model="aiConfigVisible" 
+      title="🤖 AI自动评分配置" 
+      width="520px" 
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px" class="ai-config-form">
+        <el-form-item label="目标考试">
+          <el-select 
+            v-model="aiConfig.examId" 
+            placeholder="选择考试" 
+            style="width: 100%"
+            :disabled="!!currentExam"
+          >
+            <el-option 
+              v-for="exam in examList" 
+              :key="exam.exam_id" 
+              :label="`${exam.exam_name || exam.paper_title}（${exam.student_count}人 / ${exam.total_pending}题）`" 
+              :value="exam.exam_id" 
+            />
+          </el-select>
+          <div class="ai-config-tip" v-if="currentExam">已在评分界面，固定为当前考试</div>
+        </el-form-item>
+        <el-form-item label="AI模型">
+          <el-select v-model="aiConfig.modelId" placeholder="选择模型" style="width: 100%">
+            <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="评分范围">
+          <el-radio-group v-model="aiConfig.scope">
+            <el-radio value="ungraded">所有未评分考生</el-radio>
+            <el-radio value="all">全部考生（覆盖已有评分）</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="自动提交">
+          <el-switch v-model="aiConfig.autoSubmit" />
+          <span class="ai-config-tip">评分完成后自动提交到服务器</span>
+        </el-form-item>
+      </el-form>
+      <div class="ai-config-summary" v-if="aiConfig.examId">
+        <el-icon style="color: #e6a23c; margin-right: 4px"><Warning /></el-icon>
+        将评分 <b>{{ aiScopeSummary.studentCount }}</b> 位考生的约 <b>{{ aiScopeSummary.questionCount }}</b> 道题目
+      </div>
+      <div class="ai-config-summary" v-else style="border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06);">
+        <el-icon style="color: #ef4444; margin-right: 4px"><Warning /></el-icon>
+        请先选择目标考试
+      </div>
+      <template #footer>
+        <el-button @click="aiConfigVisible = false">取消</el-button>
+        <el-button type="warning" @click="startBatchAiGrade" :disabled="!aiConfig.examId || aiScopeSummary.studentCount === 0">
+          开始评分
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI评分任务 - 进度弹窗 -->
+    <el-dialog 
+      v-model="aiProgressVisible" 
+      :title="aiGrading ? '🤖 AI评分任务 - 进行中' : (aiProgress.totalStudents > 0 ? '🤖 AI评分任务 - 已完成' : '🤖 AI评分任务')" 
+      width="520px" 
+      :close-on-click-modal="false"
+      :close-on-press-escape="!aiGrading"
+      :show-close="true"
+    >
+      <!-- 无任务状态 -->
+      <div v-if="!aiGrading && aiProgress.totalStudents === 0" class="ai-task-empty">
+        <div class="ai-task-empty-icon">📋</div>
+        <div class="ai-task-empty-text">暂无评分任务</div>
+        <div class="ai-task-empty-hint">点击「AI自动评分」按钮开始新的评分任务</div>
+      </div>
+
+      <!-- 有任务状态（进行中或已完成） -->
+      <div v-else class="ai-progress-content">
+        <!-- 状态标签 -->
+        <div class="ai-task-status">
+          <el-tag v-if="aiGrading" type="danger" effect="dark" round>⏳ 进行中</el-tag>
+          <el-tag v-else-if="aiProgress.completedStudents < aiProgress.totalStudents && aiProgress.totalStudents > 0" type="info" effect="dark" round>⏹ 已停止</el-tag>
+          <el-tag v-else-if="aiProgress.errorCount > 0" type="warning" effect="dark" round>⚠ 已完成（有失败）</el-tag>
+          <el-tag v-else type="success" effect="dark" round>✅ 已完成</el-tag>
+        </div>
+        <div class="ai-progress-overview">
+          <el-progress 
+            :percentage="aiProgressPercent" 
+            :stroke-width="20"
+            :status="!aiGrading && aiProgress.errorCount === 0 ? 'success' : undefined"
+            :format="() => `${aiProgress.completedStudents}/${aiProgress.totalStudents}`"
+          />
+        </div>
+        <div class="ai-progress-detail">
+          <div class="ai-progress-row" v-if="aiProgress.currentStudentName">
+            <span class="ai-progress-label">当前考生：</span>
+            <span class="ai-progress-value">{{ aiProgress.currentStudentName }}</span>
+          </div>
+          <div class="ai-progress-row">
+            <span class="ai-progress-label">考生进度：</span>
+            <span class="ai-progress-value">{{ aiProgress.completedStudents }} / {{ aiProgress.totalStudents }}</span>
+          </div>
+          <div class="ai-progress-row">
+            <span class="ai-progress-label">成功评分：</span>
+            <span class="ai-progress-value success">{{ aiProgress.successCount }} 题</span>
+            <template v-if="aiProgress.errorCount > 0">
+              <span class="ai-progress-label" style="margin-left: 12px;">失败：</span>
+              <span class="ai-progress-value error">{{ aiProgress.errorCount }} 题</span>
+            </template>
+          </div>
+        </div>
+        <div class="ai-progress-log" v-if="aiProgress.logs.length > 0">
+          <div 
+            class="ai-log-item" 
+            v-for="(log, i) in aiProgress.logs.slice(-10)" 
+            :key="i"
+            :class="log.type"
+          >
+            {{ log.msg }}
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <template v-if="aiGrading">
+          <el-button @click="aiProgressVisible = false">最小化</el-button>
+          <el-button type="danger" @click="cancelAiGrade">取消评分</el-button>
+        </template>
+        <template v-else>
+          <el-button type="primary" @click="aiProgressVisible = false">关闭</el-button>
+        </template>
+      </template>
+    </el-dialog>
+
     <!-- 图片预览 -->
     <el-image-viewer
       v-if="previewVisible"
@@ -393,11 +616,12 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Refresh, Back, User, Check, CopyDocument, ArrowLeft, ArrowRight, Search
+  Refresh, Back, User, Check, CopyDocument, ArrowLeft, ArrowRight, Search, Warning
 } from '@element-plus/icons-vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { fetchMcqWithAuth } from '@/utils/request'
 import { MCQ_BASE_URL } from '@/config/api/api'
+import { useAiGrading } from '@/composables/useAiGrading'
 
 const router = useRouter()
 
@@ -411,9 +635,13 @@ interface SaqItem {
   stem_images?: Array<{ content_type: string; base64: string }>
   is_graded?: boolean
   score?: number
+  is_correct?: boolean | string
   full_score?: number  // 该题满分（支持自定义分数）
   comment?: string
   category?: string  // 岗位分类标签
+  knowledge_clauses?: string[]  // 知识条款列表
+  clause_scores?: number[]  // 每条款配置分数 [分1, 分2, ...]
+  clause_grades?: number[]  // AI评分的每条款实际得分
 }
 
 interface StudentData {
@@ -429,6 +657,8 @@ interface ExamData {
   exam_id: string
   paper_id: string
   paper_title: string
+  exam_name?: string
+  exam_start_time?: string
   students: StudentData[]
   total_pending: number
   student_count: number
@@ -438,8 +668,9 @@ interface ExamData {
 
 interface GradeInfo {
   score: number
-  is_correct?: boolean
+  is_correct?: boolean | string
   comment: string
+  clause_grades?: number[]  // 每条款实际得分
 }
 
 // ==================== 状态定义 ====================
@@ -489,7 +720,7 @@ const commentTemplates = [
 const progressSyncTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const PROGRESS_SYNC_INTERVAL = 5000 // 5秒轮询一次
 const lastSyncTime = ref('')
-const syncedProgress = reactive<Record<string, Record<string, { is_graded: boolean; score: number; comment: string; graded_time: string; grader: string }>>>({})
+const syncedProgress = reactive<Record<string, Record<string, { is_graded: boolean; score: number; is_correct?: boolean | string; comment: string; graded_time: string; grader: string; clause_grades?: number[] }>>>({})
 
 // 启动进度同步轮询
 function startProgressSync() {
@@ -580,17 +811,24 @@ async function syncGradingProgress() {
           console.log('[ProgressSync] 检查题目:', qid, 
             'server.is_graded:', serverGrade.is_graded,
             'local.is_correct:', localGrade?.is_correct)
-          // 只更新本地未评分的题目
+          // 更新本地评分：AI任务运行中始终覆盖，否则只更新未评分的题目
           if (serverGrade.is_graded) {
-            if (!localGrade || localGrade.is_correct === undefined) {
+            if (!localGrade || localGrade.is_correct === undefined || aiGrading.value) {
               console.log('[ProgressSync] 更新题目:', qid, '分数:', serverGrade.score)
               // 确保响应式更新
               if (!grades[qid]) {
                 grades[qid] = { score: 0, is_correct: undefined, comment: '' }
               }
               grades[qid].score = serverGrade.score
-              grades[qid].is_correct = true
+              grades[qid].is_correct = serverGrade.is_correct ?? true
               grades[qid].comment = serverGrade.comment || ''
+              // clause_grades优先从server取，其次从AI任务结果取
+              const aiClause = latestGradedResults.value?.[attemptId]?.[qid]?.clause_grades
+              if (serverGrade.clause_grades) {
+                grades[qid].clause_grades = serverGrade.clause_grades
+              } else if (aiClause) {
+                grades[qid].clause_grades = aiClause
+              }
             }
           }
         }
@@ -678,6 +916,52 @@ const currentGrade = computed(() => {
   return grades[currentSaq.value.qid]
 })
 
+// 当前题目是否有知识条款（用于按条款打分模式）
+const hasClauseGrading = computed(() => {
+  if (!currentSaq.value) return false
+  const clauses = currentSaq.value.knowledge_clauses
+  return clauses && clauses.length > 0
+})
+
+// 当前题目的知识条款配置分数（每条款满分）
+const currentClauseScores = computed(() => {
+  if (!currentSaq.value) return []
+  return currentSaq.value.clause_scores || []
+})
+
+// 当知识条款小分变化时，自动汇总到总分
+function onClauseScoreChange() {
+  if (!currentSaq.value || !currentGrade.value) return
+  const qid = currentSaq.value.qid
+  const cg = grades[qid].clause_grades
+  if (!cg) return
+  const total = cg.reduce((sum, s) => sum + (s || 0), 0)
+  grades[qid].score = total
+  // 自动标记评分状态
+  grades[qid].is_correct = total >= saqFullScore.value * 0.6
+}
+
+// 快速按条款全部满分
+function clauseQuickFull() {
+  if (!currentSaq.value || !currentGrade.value) return
+  const qid = currentSaq.value.qid
+  const clauseMax = currentClauseScores.value
+  const clauses = currentSaq.value.knowledge_clauses || []
+  if (clauses.length === 0) return
+  grades[qid].clause_grades = clauses.map((_, i) => clauseMax[i] ?? Math.round(saqFullScore.value / clauses.length))
+  onClauseScoreChange()
+}
+
+// 快速按条款全部零分
+function clauseQuickZero() {
+  if (!currentSaq.value || !currentGrade.value) return
+  const qid = currentSaq.value.qid
+  const clauses = currentSaq.value.knowledge_clauses || []
+  if (clauses.length === 0) return
+  grades[qid].clause_grades = new Array(clauses.length).fill(0)
+  onClauseScoreChange()
+}
+
 const gradedCount = computed(() => {
   if (!currentStudent.value) return 0
   return currentStudent.value.pending_saqs.filter(
@@ -705,7 +989,8 @@ const totalStudents = computed(() => {
 // ==================== 生命周期 ====================
 onMounted(() => {
   loadPendingList()
-  // 键盘事件已通过模板 @keydown 绑定，无需重复添加
+  // 检查是否有进行中或已完成的评分任务
+  checkPendingTask()
 })
 
 // 浏览器关闭/刷新时的提示
@@ -819,30 +1104,53 @@ function selectStudent(student: StudentData) {
   const synced = syncedProgress[student.attempt_id] || {}
   
   for (const saq of student.pending_saqs) {
+    // 初始化知识条款分数数组
+    const initClauseGrades = (): number[] | undefined => {
+      if (!saq.knowledge_clauses || saq.knowledge_clauses.length === 0) return undefined
+      return new Array(saq.knowledge_clauses.length).fill(0)
+    }
+    
     if (synced[saq.qid]?.is_graded) {
-      // 优先使用同步的进度数据（最新，包含他人评分）
+      // 优先使用同步的进度数据（最新，包含他人评分/AI评分）
+      // 如果synced没有clause_grades，从AI任务结果中补充
+      const aiResult = latestGradedResults.value?.[student.attempt_id]?.[saq.qid]
       grades[saq.qid] = {
         score: synced[saq.qid].score || 0,
-        is_correct: true,
-        comment: synced[saq.qid].comment || ''
+        is_correct: synced[saq.qid].is_correct ?? true,
+        comment: synced[saq.qid].comment || '',
+        clause_grades: synced[saq.qid].clause_grades || aiResult?.clause_grades || initClauseGrades()
       }
     } else if (cached && cached[saq.qid]?.is_correct !== undefined) {
       // 使用本地缓存（我自己的未提交评分）
       grades[saq.qid] = { ...cached[saq.qid] }
     } else if (saq.is_graded) {
-      // 使用初始加载的已评分数据
+      // 使用初始加载的已评分数据（服务器数据优先于AI原始结果）
+      const aiResult = latestGradedResults.value?.[student.attempt_id]?.[saq.qid]
       grades[saq.qid] = {
         score: saq.score || 0,
-        is_correct: true,
-        comment: saq.comment || ''
+        is_correct: saq.is_correct ?? true,
+        comment: saq.comment || '',
+        clause_grades: saq.clause_grades || aiResult?.clause_grades || initClauseGrades()
       }
       submittedStudents.add(student.attempt_id)
     } else {
-      // 初始化为未评分
-      grades[saq.qid] = {
-        score: 0,
-        is_correct: undefined,
-        comment: ''
+      // 检查任务中是否有AI结果（评分已完成但尚未同步到saq数据）
+      const aiResult = latestGradedResults.value?.[student.attempt_id]?.[saq.qid]
+      if (aiResult) {
+        grades[saq.qid] = {
+          score: aiResult.score ?? 0,
+          is_correct: aiResult.is_correct ?? true,
+          comment: aiResult.comment || '',
+          clause_grades: aiResult.clause_grades || initClauseGrades()
+        }
+      } else {
+        // 初始化为未评分
+        grades[saq.qid] = {
+          score: 0,
+          is_correct: undefined,
+          comment: '',
+          clause_grades: initClauseGrades()
+        }
       }
     }
   }
@@ -982,6 +1290,23 @@ function getGraderInfo(qid: string): { name: string; time: string; score: string
     }
   }
   return null
+}
+
+// 格式化考试日期
+function formatExamDate(dateStr?: string): string {
+  if (!dateStr) return ''
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return dateStr
+    const y = date.getFullYear()
+    const m = (date.getMonth() + 1).toString().padStart(2, '0')
+    const d = date.getDate().toString().padStart(2, '0')
+    const h = date.getHours().toString().padStart(2, '0')
+    const min = date.getMinutes().toString().padStart(2, '0')
+    return `${y}-${m}-${d} ${h}:${min}`
+  } catch {
+    return dateStr || ''
+  }
 }
 
 // 格式化批改时间
@@ -1244,12 +1569,18 @@ async function submitGrades() {
       return localGrade.score !== serverGrade.score || 
              (localGrade.comment || '') !== (serverGrade.comment || '')
     })
-    .map((saq: SaqItem) => ({
-      qid: saq.qid,
-      score: grades[saq.qid].score,
-      is_correct: grades[saq.qid].is_correct,
-      comment: grades[saq.qid].comment
-    }))
+    .map((saq: SaqItem) => {
+      const g: any = {
+        qid: saq.qid,
+        score: grades[saq.qid].score,
+        is_correct: grades[saq.qid].is_correct,
+        comment: grades[saq.qid].comment
+      }
+      if (grades[saq.qid].clause_grades) {
+        g.clause_grades = grades[saq.qid].clause_grades
+      }
+      return g
+    })
   
   if (gradeData.length === 0) {
     ElMessage.info('没有需要提交的评分修改')
@@ -1313,6 +1644,128 @@ async function submitGrades() {
     ElMessage.error('请求失败: ' + (e.message || '网络错误'))
   } finally {
     submitting.value = false
+  }
+}
+
+// ==================== AI自动评分（使用全局composable） ====================
+const {
+  aiConfigVisible,
+  aiProgressVisible,
+  aiGrading,
+  aiConfig,
+  aiProgress,
+  aiProgressPercent,
+  cancelAiGrade,
+  startGradeTask,
+  checkPendingTask,
+  onProgressChange,
+  latestGradedResults,
+} = useAiGrading()
+
+// AI模型选项配置（可直接在此修改）
+const llmOptions = ref([
+  { value: 'qwen3-32b', label: 'Qwen (通用)' },
+  { value: 'qwen2025', label: 'Qwen (增强)' },
+  { value: 'deepseek', label: 'DeepSeekv3.1' },
+  // { value: 'qwen-plus', label: 'Qwen (云端)' },
+])
+
+// 当后台评分有新进展时，刷新评分数据到UI
+onProgressChange((gradedResults, wasRunning) => {
+  // 直接将AI结果（含clause_grades）写入当前考生的grades
+  if (currentStudent.value && gradedResults) {
+    const attemptId = currentStudent.value.attempt_id
+    const studentResults = gradedResults[attemptId]
+    if (studentResults) {
+      for (const [qid, result] of Object.entries(studentResults)) {
+        if (!grades[qid]) continue
+        // wasRunning=true：任务运行中或刚完成，始终覆盖（用户主动发起了AI评分）
+        // wasRunning=false：恢复旧结果（如页面加载），只更新未评分的题目
+        if (wasRunning || grades[qid].is_correct === undefined) {
+          grades[qid].score = result.score ?? grades[qid].score
+          grades[qid].is_correct = result.is_correct ?? grades[qid].is_correct
+          grades[qid].comment = result.comment || grades[qid].comment
+          if (result.clause_grades) {
+            grades[qid].clause_grades = result.clause_grades
+          }
+        }
+      }
+    }
+  }
+  // 同时也同步服务器进度数据（更新其他考生的状态）
+  syncGradingProgress()
+})
+
+// 根据aiConfig.examId查找目标考试
+const aiTargetExam = computed(() => {
+  if (!aiConfig.examId) return null
+  if (currentExam.value?.exam_id === aiConfig.examId) return currentExam.value
+  return examList.value.find(e => e.exam_id === aiConfig.examId) || null
+})
+
+// 配置弹窗中的范围摘要
+const aiScopeSummary = computed(() => {
+  const exam = aiTargetExam.value
+  if (!exam) return { studentCount: 0, questionCount: 0 }
+
+  const hasStudentDetail = exam.students && exam.students.length > 0
+  if (!hasStudentDetail) {
+    return { studentCount: exam.student_count || 0, questionCount: exam.total_pending || 0 }
+  }
+
+  const students = exam.students
+  let targetStudents: StudentData[] = []
+
+  if (aiConfig.scope === 'ungraded') {
+    targetStudents = students.filter(s => s.pending_saqs.some(saq => !saq.is_graded))
+  } else {
+    targetStudents = [...students]
+  }
+
+  let questionCount = 0
+  for (const s of targetStudents) {
+    if (aiConfig.scope === 'all') {
+      questionCount += s.pending_saqs.length
+    } else {
+      questionCount += s.pending_saqs.filter(saq => !saq.is_graded).length
+    }
+  }
+
+  return { studentCount: targetStudents.length, questionCount }
+})
+
+// 打开配置弹窗
+function openAiGradeDialog() {
+  if (currentExam.value) {
+    aiConfig.examId = currentExam.value.exam_id
+  } else if (examList.value.length === 0) {
+    ElMessage.warning('暂无考试数据，请先刷新')
+    return
+  } else {
+    if (!aiConfig.examId) {
+      aiConfig.examId = examList.value[0]?.exam_id || ''
+    }
+  }
+  // 后台任务不支持'current'单考生模式
+  if (aiConfig.scope === 'current') {
+    aiConfig.scope = 'ungraded'
+  }
+  aiConfigVisible.value = true
+}
+
+// 启动批量AI评分（提交后台任务）
+async function startBatchAiGrade() {
+  if (!aiConfig.examId) {
+    ElMessage.warning('请先选择目标考试')
+    return
+  }
+  aiConfigVisible.value = false
+
+  try {
+    await startGradeTask(aiConfig.examId, aiConfig.modelId, aiConfig.scope, aiConfig.autoSubmit)
+    ElMessage.success('评分任务已提交，后台运行中...')
+  } catch (e: any) {
+    ElMessage.error(e.message || '创建评分任务失败')
   }
 }
 
@@ -1639,7 +2092,49 @@ function goBack() {
 
 .reference-section .section-header { border-left: 3px solid #22c55e; }
 .analysis-section .section-header { border-left: 3px solid #f59e0b; }
+.clause-section .section-header { border-left: 3px solid #a855f7; }
 .student-section .section-header { border-left: 3px solid #60a5fa; }
+
+/* 知识条款显示 */
+.clause-total-hint {
+  font-size: 0.75rem;
+  color: #a855f7;
+  font-weight: 500;
+}
+
+.clause-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.08);
+}
+
+.clause-item:last-child { border-bottom: none; }
+
+.clause-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.clause-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.clause-max-score {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.clause-text {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
 
 .answer-body {
   min-height: 100px;
@@ -1684,6 +2179,12 @@ function goBack() {
   font-size: 1.1rem;
   font-weight: 700;
   color: #60a5fa;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .sync-status {
@@ -1758,6 +2259,83 @@ function goBack() {
   border-radius: 4px;
   color: #60a5fa;
   margin-right: 4px;
+}
+
+/* 按条款评分 */
+.clause-grading .grade-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clause-quick-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.clause-grade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clause-grade-row {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.clause-grade-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.clause-grade-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.clause-grade-text {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clause-grade-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clause-grade-max {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.clause-grade-total {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.clause-grade-total .total-num {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #60a5fa;
 }
 
 /* 自定义分数 */
@@ -2009,4 +2587,148 @@ function goBack() {
 :deep(.el-progress__outer) { background: rgba(96, 165, 250, 0.2); }
 :deep(.el-avatar) { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
 :deep(.el-empty__description p) { color: #94a3b8; }
+
+/* ==================== AI自动评分弹窗 ==================== */
+.ai-config-form {
+  margin-bottom: 12px;
+}
+
+.ai-config-form :deep(.el-form-item__label) {
+  color: #cbd5e1;
+}
+
+.ai-config-form :deep(.el-radio) {
+  margin-right: 16px;
+}
+
+.ai-config-tip {
+  margin-left: 10px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.ai-config-summary {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(230, 162, 60, 0.08);
+  border: 1px solid rgba(230, 162, 60, 0.25);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.ai-config-summary b {
+  color: #e6a23c;
+  margin: 0 2px;
+}
+
+/* ==================== AI进度弹窗 ==================== */
+.ai-progress-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-progress-overview {
+  padding: 0 8px;
+}
+
+.ai-progress-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 8px;
+}
+
+.ai-progress-row {
+  display: flex;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.ai-progress-label {
+  color: #94a3b8;
+  min-width: 90px;
+}
+
+.ai-progress-value {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ai-progress-value.success { color: #22c55e; }
+.ai-progress-value.error { color: #ef4444; }
+
+.ai-progress-log {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.1);
+}
+
+.ai-log-item {
+  font-size: 0.8rem;
+  padding: 3px 0;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.ai-log-item.success { color: #22c55e; }
+.ai-log-item.error { color: #ef4444; }
+.ai-log-item.info { color: #60a5fa; }
+
+/* ==================== AI任务空状态 ==================== */
+.ai-task-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px;
+  gap: 8px;
+}
+
+.ai-task-empty-icon {
+  font-size: 2.5rem;
+  opacity: 0.5;
+}
+
+.ai-task-empty-text {
+  font-size: 1rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.ai-task-empty-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.ai-task-status {
+  display: flex;
+  align-items: center;
+}
+
+/* 按钮上的任务进度小标签 */
+.task-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.task-badge.running {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  animation: task-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes task-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 </style>

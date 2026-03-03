@@ -7,7 +7,7 @@
         <p class="subtitle">{{ username }} ({{ roleText }})</p>
       </header>
 
-      <el-tabs v-model="activeTab" type="border-card">
+      <el-tabs v-model="activeTab" type="border-card" :before-leave="beforeTabLeave">
         <!-- 账号审核 -->
         <el-tab-pane v-if="showAdminTabs" label="账号审核" name="approval">
           <div class="tab-content">
@@ -73,20 +73,44 @@
           </div>
         </el-tab-pane>
 
-        <!-- 密码管理 -->
+        <!-- 密码管理（管理员为普通用户重置密码） -->
         <el-tab-pane v-if="showAdminTabs" label="密码管理" name="password">
           <div class="tab-content">
-            <el-form label-width="100px">
-              <el-form-item label="修改密码">
-                <el-input v-model="myOldPassword" type="password" placeholder="旧密码" style="width: 200px" />
-                <el-input v-model="myNewPassword" type="password" placeholder="新密码" style="width: 200px; margin-left: 10px" />
-                <el-button @click="changeMyPassword" :loading="changingPassword" style="margin-left: 10px">修改</el-button>
+            <el-alert
+              title="此功能用于管理员帮助普通用户重置密码，重置后请及时通知用户新密码。"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            />
+            <el-form label-width="100px" style="max-width: 600px">
+              <el-form-item label="选择用户">
+                <el-select
+                  v-model="selectedResetUserId"
+                  filterable
+                  placeholder="搜索或选择用户"
+                  style="width: 100%"
+                  @change="onResetUserChange"
+                >
+                  <el-option
+                    v-for="u in resetUserOptions"
+                    :key="u.id"
+                    :label="u.username"
+                    :value="u.id"
+                  />
+                </el-select>
               </el-form-item>
-              <!-- <el-form-item label="重置密码"> -->
-                <!-- <el-input v-model="resetUsername" placeholder="用户名" style="width: 200px" /> -->
-                <!-- <el-input v-model="resetPassword" type="password" placeholder="新密码" style="width: 200px; margin-left: 10px" /> -->
-                <!-- <el-button @click="resetUserPassword" :loading="resettingPassword" style="margin-left: 10px">重置</el-button> -->
-              <!-- </el-form-item> -->
+              <el-form-item label="新密码">
+                <el-input v-model="resetPassword" type="password" show-password placeholder="请输入新密码（至少6位）" />
+              </el-form-item>
+              <el-form-item label="确认密码">
+                <el-input v-model="resetPasswordConfirm" type="password" show-password placeholder="请再次输入新密码" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="resetUserPassword" :loading="resettingPassword">
+                  重置密码
+                </el-button>
+              </el-form-item>
             </el-form>
           </div>
         </el-tab-pane>
@@ -481,7 +505,7 @@
                           >
                             + 添加选项
                           </el-button>
-                          <span class="opt-hint">（支持 A-H，最少1个选项）</span>
+                          <span class="opt-hint">（支持 A-H，删除所有选项将变为简答题）</span>
                         </div>
                       </div>
                       <!-- 选项图片上传input -->
@@ -494,11 +518,53 @@
                       />
                     </el-form-item>
 
+                    <!-- 2.5 知识条款（简答题时显示） -->
+                    <el-form-item v-if="editingQtype === 'saq'" label="知识条款">
+                      <div class="opts-grid">
+                        <div
+                          v-for="(clause, idx) in editBuf.knowledge_clauses"
+                          :key="idx"
+                          class="opt-row-wrapper"
+                        >
+                          <div class="opt-row">
+                            <span class="opt-label" style="min-width: 80px;">知识条款{{ chineseNumber(idx + 1) }}</span>
+                            <el-input
+                              class="opt-input"
+                              v-model="editBuf.knowledge_clauses[idx]"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 6 }"
+                            />
+                            <el-button
+                              type="danger"
+                              :icon="Close"
+                              circle
+                              size="small"
+                              class="opt-remove-btn"
+                              @click="removeKnowledgeClause(Number(idx))"
+                              title="删除此知识条款"
+                            />
+                          </div>
+                        </div>
+                        <div class="opt-actions">
+                          <el-button
+                            type="primary"
+                            plain
+                            size="small"
+                            @click="addKnowledgeClause"
+                          >
+                            + 添加知识条款
+                          </el-button>
+                        </div>
+                      </div>
+                    </el-form-item>
+
                     <!-- 3. 答案 -->
                     <el-form-item label="答案">
                       <el-input
                         v-model="editBuf.answer"
-                        placeholder="如 A 或 AC"
+                        type="textarea"
+                        :autosize="{ minRows: 3, maxRows: 10 }"
+                        placeholder="如 A 或 AC（简答题填写参考答案）"
                       />
                     </el-form-item>
 
@@ -934,6 +1000,7 @@
                       placeholder="选择知识点（可多选，不选则为全部）"
                       clearable
                       filterable
+                      autocomplete="off"
                       style="width: 500px;"
                       size="default"
                     >
@@ -1017,6 +1084,22 @@
                       <span style="margin-left: 8px;">题（随机抽取）</span>
                     </template>
                   </template>
+                </el-form-item>
+                
+                <!-- 密码保护 -->
+                <el-form-item label="密码保护" style="margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-input
+                      v-model="generatePaperPassword"
+                      placeholder="留空则不设密码"
+                      style="width: 200px;"
+                      size="default"
+                      show-password
+                      clearable
+                      autocomplete="new-password"
+                    />
+                    <span style="color: #909399; font-size: 12px;">（用于查看/编辑/下载）</span>
+                  </div>
                 </el-form-item>
                 
                 <!-- 生成按钮 -->
@@ -1105,18 +1188,21 @@
                         🤖 AI答案待校对
                       </el-tag>
                       <!-- 简答题自定义分数输入 -->
-                      <span v-if="q.qtype === 'saq' && saqScoreMode === 'custom'" style="display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;">
-                        <el-input-number 
-                          v-model="saqCustomScores[q.qid]" 
-                          :min="0" 
-                          :max="100" 
-                          :precision="1" 
-                          size="small" 
-                          style="width: 90px;" 
-                          @click.stop
-                        />
-                        <span style="color: #909399; font-size: 12px;">分</span>
-                      </span>
+                      <template v-if="q.qtype === 'saq' && saqScoreMode === 'custom'">
+                        <!-- 有知识条款：显示总分（条款小分之和） -->
+                        <span v-if="q.knowledge_clauses && q.knowledge_clauses.length > 0 && saqClauseScores[q.qid]" style="display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;">
+                          <span style="color: #409eff; font-size: 12px;">{{ getSaqClauseTotal(q.qid) }}分</span>
+                        </span>
+                        <!-- 无知识条款：保持原有单分数输入 -->
+                        <span v-else style="display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;">
+                          <el-input-number
+                            v-model="saqCustomScores[q.qid]"
+                            :min="0" :max="100" :precision="1" size="small" style="width: 90px;"
+                            @click.stop
+                          />
+                          <span style="color: #909399; font-size: 12px;">分</span>
+                        </span>
+                      </template>
                       <span>{{ idx + 1 }}. {{ q.stem }}</span>
                     </div>
                     <!-- 题干图片 -->
@@ -1146,6 +1232,22 @@
                             />
                           </template>
                         </template>
+                      </div>
+                    </div>
+                    <!-- 知识条款列表（有知识条款的简答题） -->
+                    <div v-if="q.qtype === 'saq' && q.knowledge_clauses && q.knowledge_clauses.length > 0" style="margin: 4px 0; padding-left: 8px; border-left: 2px solid #e4e7ed;">
+                      <div v-for="(clause, ci) in q.knowledge_clauses" :key="ci" style="display: flex; align-items: flex-start; gap: 6px; margin: 3px 0; font-size: 13px; line-height: 1.5;">
+                        <template v-if="saqScoreMode === 'custom' && saqClauseScores[q.qid]">
+                          <el-input-number
+                            v-model="saqClauseScores[q.qid][ci]"
+                            :min="0" :max="100" :precision="1" controls-position="right" size="small" style="width: 80px; flex-shrink: 0;"
+                            @click.stop
+                            @change="saqCustomScores[q.qid] = getSaqClauseTotal(q.qid)"
+                          />
+                          <span style="color: #909399; flex-shrink: 0;">分</span>
+                        </template>
+                        <span v-else style="color: #409eff; flex-shrink: 0; min-width: 30px;">{{ distributeScore(saqScore, q.knowledge_clauses.length)[ci] }}分</span>
+                        <span style="color: #606266;">知识条款{{ chineseNumber(ci + 1) }}：{{ clause }}</span>
                       </div>
                     </div>
                     <div class="paper-question-answer" :class="{ 'no-answer': !q.answer || !q.answer.trim() }">
@@ -1188,7 +1290,7 @@
                 </el-select>
                 <el-button
                   type="primary"
-                  @click="loadPaperForEdit"
+                  @click="editPaperWithPasswordCheck"
                   :loading="loadingPaperDetail"
                   :disabled="!editPaperSelected"
                   :icon="Edit"
@@ -1211,9 +1313,16 @@
                     />
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="200" fixed="right">
+                <el-table-column label="密码" width="80" align="center">
+                  <template #default="{ row }">
+                    <el-tag v-if="row.has_password" type="warning" size="small">已设</el-tag>
+                    <span v-else style="color: #c0c4cc; font-size: 12px;">无</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" :width="isSuperAdminUser ? 280 : 200" fixed="right">
                   <template #default="{ row }">
                     <el-button size="small" @click="downloadPaper(row.paper_id)">下载</el-button>
+                    <el-button v-if="isSuperAdminUser" size="small" type="warning" @click="openPasswordManage(row.paper_id, row.title)">密码</el-button>
                     <el-button size="small" type="danger" @click="deletePaper(row.paper_id, row.title)" :loading="deletingPaper[row.paper_id]">删除</el-button>
                   </template>
                 </el-table-column>
@@ -1335,10 +1444,17 @@
                     <el-tag v-else type="info" size="small">单选</el-tag>
                     <el-tag v-if="item.qtype === 'saq' && item.category" size="small" effect="plain">{{ item.category }}</el-tag>
                     <!-- 简答题自定义分数输入 -->
-                    <span v-if="item.qtype === 'saq' && uploadedSaqScoreMode === 'custom'" style="display: flex; align-items: center; gap: 4px; margin-left: 8px;">
-                      <el-input-number v-model="item.score" :min="0" :max="100" :precision="1" size="small" style="width: 90px;" placeholder="分数" />
-                      <span style="color: #909399; font-size: 12px;">分</span>
-                    </span>
+                    <template v-if="item.qtype === 'saq' && uploadedSaqScoreMode === 'custom'">
+                      <!-- 有知识条款：显示总分（条款小分之和） -->
+                      <span v-if="item.knowledge_clauses && item.knowledge_clauses.length > 0 && item.clause_scores" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 8px;">
+                        <span style="color: #409eff; font-size: 12px;">{{ item.score || 0 }}分</span>
+                      </span>
+                      <!-- 无知识条款：保持原有单分数输入 -->
+                      <span v-else style="display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+                        <el-input-number v-model="item.score" :min="0" :max="100" :precision="1" size="small" style="width: 90px;" placeholder="分数" />
+                        <span style="color: #909399; font-size: 12px;">分</span>
+                      </span>
+                    </template>
                     <el-tag v-if="hasParseIssue(item) && item.qtype !== 'saq'" type="danger" size="small">需检查</el-tag>
                     <el-tag v-if="!item.answer && item.qtype !== 'saq'" type="warning" size="small">缺少答案</el-tag>
                     <el-tag v-if="getOptionsCount(item) < 2 && item.qtype !== 'saq'" type="warning" size="small">选项不足</el-tag>
@@ -1414,6 +1530,21 @@
                     <div v-if="item.qtype !== 'saq'" class="preview-answer" :class="{ 'no-answer': !item.answer }">
                       {{ item.answer ? `答案：${item.answer}` : '⚠️ 缺少答案' }}
                     </div>
+                    <!-- 知识条款列表（有知识条款的简答题） -->
+                    <div v-if="item.qtype === 'saq' && item.knowledge_clauses && item.knowledge_clauses.length > 0" style="margin: 4px 0; padding-left: 8px; border-left: 2px solid #e4e7ed;">
+                      <div v-for="(clause, ci) in item.knowledge_clauses" :key="ci" style="display: flex; align-items: flex-start; gap: 6px; margin: 3px 0; font-size: 13px; line-height: 1.5;">
+                        <template v-if="uploadedSaqScoreMode === 'custom' && item.clause_scores">
+                          <el-input-number
+                            v-model="item.clause_scores[ci]"
+                            :min="0" :max="100" :precision="1" controls-position="right" size="small" style="width: 80px; flex-shrink: 0;"
+                            @change="item.score = item.clause_scores.reduce((s, v) => s + (v || 0), 0)"
+                          />
+                          <span style="color: #909399; flex-shrink: 0;">分</span>
+                        </template>
+                        <span v-else style="color: #409eff; flex-shrink: 0; min-width: 30px;">{{ distributeScore(uploadedSaqScore, item.knowledge_clauses.length)[ci] }}分</span>
+                        <span style="color: #606266;">知识条款{{ chineseNumber(ci + 1) }}：{{ clause }}</span>
+                      </div>
+                    </div>
                     <!-- 简答题显示答案和解析 -->
                     <div v-if="item.qtype === 'saq' && item.answer" class="preview-answer" style="white-space: pre-wrap; color: #409eff;">
                       答案：{{ item.answer }}
@@ -1471,7 +1602,7 @@
                         </div>
                       </el-form-item>
                       <el-form-item label="答案">
-                        <el-input v-model="item.answer" placeholder="如 A 或 ABC" style="width: 200px;" />
+                        <el-input v-model="item.answer" type="textarea" :autosize="{ minRows: 1, maxRows: 6 }" placeholder="如 A 或 ABC（简答题填写参考答案）" />
                       </el-form-item>
                       <el-form-item label="解析">
                         <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
@@ -1492,15 +1623,136 @@
                           </div>
                         </div>
                       </el-form-item>
+                      <!-- 知识条款（简答题时显示） -->
+                      <el-form-item v-if="item.qtype === 'saq'" label="知识条款">
+                        <div style="width: 100%;">
+                          <div
+                            v-for="(clause, cIdx) in (item.knowledge_clauses || [])"
+                            :key="cIdx"
+                            style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px;"
+                          >
+                            <span style="min-width: 72px; color: #606266; font-size: 13px; line-height: 32px; flex-shrink: 0;">知识条款{{ chineseNumber(cIdx + 1) }}</span>
+                            <el-input
+                              v-model="item.knowledge_clauses[cIdx]"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 6 }"
+                              style="flex: 1;"
+                            />
+                            <el-button
+                              type="danger"
+                              :icon="Close"
+                              circle
+                              size="small"
+                              @click="removePaperItemClause(item, cIdx)"
+                              title="删除此知识条款"
+                            />
+                          </div>
+                          <el-button
+                            type="primary"
+                            plain
+                            size="small"
+                            @click="addPaperItemClause(item)"
+                          >
+                            + 添加知识条款
+                          </el-button>
+                        </div>
+                      </el-form-item>
                     </el-form>
                   </div>
                 </div>
               </div>
               
               <template #footer>
-                <el-button @click="paperPreviewVisible = false">取消</el-button>
-                <el-button type="primary" @click="saveUploadedPaper" :loading="savingUploadedPaper">
-                  保存试卷
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #606266; font-size: 13px; white-space: nowrap;">🔒 密码保护：</span>
+                    <el-input
+                      v-model="paperPassword"
+                      placeholder="留空则不设密码"
+                      style="width: 200px;"
+                      size="default"
+                      show-password
+                      clearable
+                      autocomplete="new-password"
+                    />
+                    <span style="color: #909399; font-size: 12px;">（用于查看/编辑/下载）</span>
+                  </div>
+                  <div>
+                    <el-button @click="paperPreviewVisible = false">取消</el-button>
+                    <el-button type="primary" @click="saveUploadedPaper" :loading="savingUploadedPaper">
+                      保存试卷
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+            </el-dialog>
+
+            <!-- 密码验证对话框 -->
+            <el-dialog
+              v-model="paperPasswordDialogVisible"
+              title="试卷密码验证"
+              width="400px"
+              :close-on-click-modal="false"
+              append-to-body
+            >
+              <div style="padding: 10px 0;">
+                <p style="margin-bottom: 12px; color: #606266;">
+                  该试卷已设置密码保护，请输入密码以{{ paperPasswordAction === 'download' ? '下载' : paperPasswordAction === 'edit' ? '编辑' : '删除' }}试卷：
+                </p>
+                <el-input
+                  v-model="paperPasswordInput"
+                  placeholder="请输入试卷密码"
+                  show-password
+                  autocomplete="new-password"
+                  @keyup.enter="verifyPaperPassword"
+                />
+              </div>
+              <template #footer>
+                <el-button @click="paperPasswordDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="verifyPaperPassword" :loading="verifyingPassword">
+                  确认
+                </el-button>
+              </template>
+            </el-dialog>
+
+            <!-- 超级管理员密码管理对话框 -->
+            <el-dialog
+              v-model="passwordManageDialogVisible"
+              :title="'密码管理 - ' + passwordManageTargetTitle"
+              width="450px"
+              :close-on-click-modal="false"
+              append-to-body
+            >
+              <div style="padding: 10px 0;">
+                <el-form label-width="80px">
+                  <el-form-item label="当前密码">
+                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                      <el-input
+                        v-model="passwordManageValue"
+                        :type="passwordManageShowPwd ? 'text' : 'password'"
+                        placeholder="留空则清除密码"
+                        :loading="passwordManageLoading"
+                        clearable
+                        style="flex: 1;"
+                      />
+                      <el-button
+                        :icon="passwordManageShowPwd ? Close : Search"
+                        @click="passwordManageShowPwd = !passwordManageShowPwd"
+                        size="default"
+                        circle
+                        :title="passwordManageShowPwd ? '隐藏密码' : '查看密码'"
+                      />
+                    </div>
+                  </el-form-item>
+                </el-form>
+                <p style="color: #909399; font-size: 12px; margin-top: 8px;">
+                  提示：留空并保存将清除该试卷的密码保护。
+                </p>
+              </div>
+              <template #footer>
+                <el-button @click="passwordManageDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="savePasswordManage" :loading="passwordManageLoading">
+                  保存
                 </el-button>
               </template>
             </el-dialog>
@@ -1703,6 +1955,20 @@
                   </el-table-column>
                   <el-table-column prop="correct_count" label="正确题数" width="100" />
                   <el-table-column prop="submit_time" label="交卷时间" min-width="160" />
+                  <el-table-column prop="cheat_count" label="作弊次数" width="110" sortable>
+                    <template #default="scope">
+                      <span v-if="!scope.row.cheat_count || scope.row.cheat_count === 0" style="color: #67c23a;">0</span>
+                      <span v-else style="color: #f56c6c; font-weight: 600;">{{ scope.row.cheat_count }}</span>
+                      <el-button
+                        v-if="scope.row.cheat_count > 0"
+                        size="small"
+                        link
+                        type="primary"
+                        style="margin-left: 4px;"
+                        @click="viewCheatDetail(scope.row)"
+                      >详情</el-button>
+                    </template>
+                  </el-table-column>
                 </el-table>
               </el-card>
             </div>
@@ -1755,32 +2021,40 @@
                 </el-form-item>
                 
                 <el-form-item label="目标分组">
-                  <div style="display: flex; gap: 10px; width: 100%;">
-                    <el-select
-                      v-model="publishForm.targetDepartments"
-                      multiple
-                      filterable
-                      clearable
-                      placeholder="可多选，不选择表示对所有人可见"
-                      style="flex: 1"
-                      :loading="loadingGroupList"
-                    >
-                      <el-option
-                        v-for="group in groupOptions"
-                        :key="group.id"
-                        :label="group.name"
-                        :value="group.id"
-                      />
-                    </el-select>
-                    <el-button 
-                      type="primary" 
-                      plain 
-                      :disabled="publishForm.targetDepartments.length === 0"
-                      :loading="loadingDeptUsers"
-                      @click="previewDeptUsers"
-                    >
-                      查看名单
-                    </el-button>
+                  <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                      <el-select
+                        v-model="publishForm.targetDepartments"
+                        multiple
+                        filterable
+                        clearable
+                        placeholder="可多选，不选择表示对所有人可见"
+                        style="flex: 1"
+                        :loading="loadingGroupList"
+                        @change="onGroupSelectionChange"
+                      >
+                        <el-option
+                          v-for="group in groupOptions"
+                          :key="group.id"
+                          :label="group.name"
+                          :value="group.id"
+                        />
+                      </el-select>
+                      <el-button 
+                        type="primary" 
+                        plain 
+                        :disabled="publishForm.targetDepartments.length === 0"
+                        :loading="loadingPersonTree"
+                        @click="openPersonSelectDialog"
+                      >
+                        选择人员
+                      </el-button>
+                    </div>
+                    <div v-if="publishForm.targetUsers.length > 0" style="display: flex; align-items: center; gap: 8px;">
+                      <el-tag type="success" size="small">已选择 {{ publishForm.targetUsers.length }} 人</el-tag>
+                      <el-button link type="primary" size="small" @click="openPersonSelectDialog" :disabled="publishForm.targetDepartments.length === 0">修改人员</el-button>
+                      <el-button link type="primary" size="small" @click="previewDeptUsers" :disabled="publishForm.targetUsers.length === 0">查看名单</el-button>
+                    </div>
                   </div>
                 </el-form-item>
                 
@@ -1867,6 +2141,122 @@
                   </template>
                 </el-table-column>
               </el-table>
+            </el-card>
+          </div>
+        </el-tab-pane>
+
+        <!-- 考试设置 -->
+        <el-tab-pane v-if="showBjzxTabs" label="考试设置" name="exam-settings">
+          <div class="tab-content">
+            <el-card shadow="never">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600;">🛡️ 防作弊设置</span>
+                  <el-button size="small" @click="loadAntiCheatConfig" :loading="loadingAntiCheat" :icon="Refresh">刷新</el-button>
+                </div>
+              </template>
+
+              <el-form label-width="160px" style="max-width: 700px;">
+                <!-- 总开关 -->
+                <el-form-item label="防作弊总开关">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch
+                      v-model="antiCheatConfig.enabled"
+                      active-text="开启"
+                      inactive-text="关闭"
+                      inline-prompt
+                      style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+                    />
+                    <el-tag :type="antiCheatConfig.enabled ? 'success' : 'danger'" size="small" effect="plain">
+                      {{ antiCheatConfig.enabled ? '防作弊已启用' : '防作弊已关闭' }}
+                    </el-tag>
+                  </div>
+                  <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                    关闭后，以下所有防作弊检测机制将在考试中停用
+                  </div>
+                </el-form-item>
+
+                <el-divider content-position="left">检测项目（总开关开启时生效）</el-divider>
+
+                <!-- 切屏检测 -->
+                <el-form-item label="切屏检测">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.tab_switch_detection" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">检测标签页切换、窗口最小化</span>
+                  </div>
+                </el-form-item>
+
+                <!-- 窗口失焦检测 -->
+                <el-form-item label="窗口失焦检测">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.window_blur_detection" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">检测点击其他窗口（5秒防抖，避免输入法误判）</span>
+                  </div>
+                </el-form-item>
+
+                <!-- 窗口缩小检测 -->
+                <el-form-item label="窗口缩小检测">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.window_resize_detection" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">检测浏览器窗口面积缩小至95%以下</span>
+                  </div>
+                </el-form-item>
+
+                <!-- 强制最大化窗口 -->
+                <el-form-item label="强制最大化窗口">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.force_maximize" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">开始考试前要求浏览器窗口最大化</span>
+                  </div>
+                </el-form-item>
+
+                <!-- 页面关闭警告 -->
+                <el-form-item label="页面关闭警告">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.beforeunload_warning" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">关闭/刷新页面时弹出确认提示</span>
+                  </div>
+                </el-form-item>
+
+                <el-divider content-position="left">切屏限制</el-divider>
+
+                <!-- 最大切屏次数 -->
+                <el-form-item label="最大切屏次数">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-input-number
+                      v-model="antiCheatConfig.max_switch_count"
+                      :min="1"
+                      :max="20"
+                      :disabled="!antiCheatConfig.enabled"
+                      size="default"
+                      style="width: 120px"
+                    />
+                    <span style="color: #606266; font-size: 13px;">次（达到后自动提交试卷）</span>
+                  </div>
+                </el-form-item>
+
+                <!-- 保存按钮 -->
+                <el-form-item>
+                  <el-button type="primary" @click="saveAntiCheatConfig" :loading="savingAntiCheat">
+                    保存设置
+                  </el-button>
+                  <span class="status-msg" v-if="antiCheatMessage">{{ antiCheatMessage }}</span>
+                </el-form-item>
+              </el-form>
+
+              <!-- 功能说明 -->
+              <el-collapse style="margin-top: 20px;">
+                <el-collapse-item title="📖 防作弊功能说明" name="help">
+                  <div style="font-size: 13px; color: #606266; line-height: 1.8;">
+                    <p><strong>切屏检测：</strong>通过 <code>visibilitychange</code> 事件监听标签页切换和窗口最小化。</p>
+                    <p><strong>窗口失焦检测：</strong>通过 <code>blur/focus</code> 事件监听窗口焦点变化，设有5秒延迟防抖以避免输入法等短暂失焦的误判。</p>
+                    <p><strong>窗口缩小检测：</strong>通过 <code>resize</code> 事件监听窗口大小变化，当窗口面积缩小至初始面积的95%以下时触发。</p>
+                    <p><strong>强制最大化窗口：</strong>考试开始前弹窗要求考生将浏览器窗口最大化，未最大化则无法进入考试。</p>
+                    <p><strong>页面关闭警告：</strong>考试进行中关闭或刷新页面时弹出浏览器原生确认对话框。</p>
+                    <p><strong>最大切屏次数：</strong>超过设定次数后系统将自动提交试卷，每次切屏会弹出警告并记录。</p>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
             </el-card>
           </div>
         </el-tab-pane>
@@ -2049,15 +2439,66 @@
             已选分组：<el-tag v-for="groupId in publishForm.targetDepartments" :key="groupId" size="small" style="margin-right: 5px;">{{ groupOptions.find(g => g.id === groupId)?.name || groupId }}</el-tag>
           </div>
           <div style="margin-bottom: 10px; font-weight: 500;">共 {{ deptUsersList.length }} 人</div>
-          <el-table :data="deptUsersList" border stripe max-height="400" size="small">
-            <el-table-column type="index" label="序号" width="60" />
+          <el-table :data="pagedDeptUsersList" border stripe max-height="400" size="small">
+            <el-table-column type="index" label="序号" width="60" :index="(idx: number) => (deptUsersPage - 1) * deptUsersPageSize + idx + 1" />
             <el-table-column prop="username" label="姓名" min-width="120" />
             <el-table-column prop="policeId" label="警号" min-width="120" />
-            <el-table-column prop="department" label="部门" min-width="100" />
+            <el-table-column prop="groupName" label="分组" min-width="100" />
           </el-table>
+          <div v-if="deptUsersList.length > deptUsersPageSize" style="margin-top: 12px; display: flex; justify-content: center;">
+            <el-pagination
+              v-model:current-page="deptUsersPage"
+              v-model:page-size="deptUsersPageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="deptUsersList.length"
+              layout="total, sizes, prev, pager, next"
+              small
+            />
+          </div>
         </template>
         <template #footer>
           <el-button @click="deptUsersDialogVisible = false">关闭</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 人员选择对话框 -->
+      <el-dialog v-model="personSelectDialogVisible" title="选择目标人员" width="650px" :close-on-click-modal="false">
+        <div v-if="loadingPersonTree" style="text-align: center; padding: 20px;">
+          <el-skeleton :rows="6" animated />
+        </div>
+        <template v-else>
+          <el-input
+            v-model="personTreeFilterText"
+            placeholder="搜索姓名或警号"
+            clearable
+            style="margin-bottom: 12px;"
+            :prefix-icon="Search"
+          />
+          <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 14px; color: #606266;">
+              已勾选 <b style="color: #409EFF;">{{ personTreeCheckedCount }}</b> 人
+            </span>
+            <div style="display: flex; gap: 8px;">
+              <el-button size="small" @click="checkAllPersonTree">全选</el-button>
+              <el-button size="small" @click="uncheckAllPersonTree">全不选</el-button>
+            </div>
+          </div>
+          <div style="max-height: 420px; overflow-y: auto; border: 1px solid #EBEEF5; border-radius: 4px; padding: 8px;">
+            <el-tree
+              ref="personTreeRef"
+              :data="personTreeData"
+              show-checkbox
+              node-key="nodeId"
+              default-expand-all
+              :props="{ label: 'label', children: 'children' }"
+              :filter-node-method="filterPersonTreeNode"
+              @check="onPersonTreeCheck"
+            />
+          </div>
+        </template>
+        <template #footer>
+          <el-button @click="personSelectDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmPersonSelection">确认选择</el-button>
         </template>
       </el-dialog>
 
@@ -2163,16 +2604,51 @@
           <el-button @click="questionDetailDialogVisible = false">关闭</el-button>
         </template>
       </el-dialog>
+
+      <!-- 作弊详情对话框 -->
+      <el-dialog
+        v-model="cheatDetailDialogVisible"
+        :title="`作弊记录详情 — ${cheatDetailData?.student_name || ''}`"
+        width="500px"
+      >
+        <template v-if="cheatDetailData">
+          <div class="detail-summary" style="margin-bottom: 16px;">
+            <div class="detail-stat">
+              <span class="stat-label">学号/警号</span>
+              <span class="stat-value">{{ cheatDetailData.student_id }}</span>
+            </div>
+            <div class="detail-stat">
+              <span class="stat-label">作弊次数</span>
+              <span class="stat-value error">{{ cheatDetailData.cheat_count }}</span>
+            </div>
+          </div>
+          <el-divider content-position="left">触发记录</el-divider>
+          <div v-if="cheatDetailData.cheat_events && cheatDetailData.cheat_events.length > 0">
+            <el-table :data="cheatDetailData.cheat_events" border size="small" style="width: 100%">
+              <el-table-column type="index" label="#" width="50" />
+              <el-table-column prop="time" label="触发时间" min-width="120" />
+              <el-table-column prop="type" label="触发类型" min-width="160" />
+            </el-table>
+          </div>
+          <div v-else style="color: #909399; text-align: center; padding: 16px;">
+            暂无详细触发记录（考试期间未同步事件数据）
+          </div>
+        </template>
+        <template #footer>
+          <el-button @click="cheatDetailDialogVisible = false">关闭</el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, reactive, watch } from 'vue'
+import { defineComponent, ref, computed, onMounted, onUnmounted, reactive, watch, nextTick } from 'vue'
 import { useStore } from 'vuex'
+import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, Warning, Delete, Failed } from '@element-plus/icons-vue'
-import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs } from '@/config/permissions'
+import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs, isSuperAdmin } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
 import { renderMarkdown } from '@/utils/markdown'
@@ -2200,11 +2676,15 @@ interface Question {
   has_images?: boolean  // 是否包含图片
   stem_images?: QuestionImage[]  // 题干图片
   analysis_images?: QuestionImage[]  // 解析图片
+  knowledge_clauses?: string[]  // 知识条款
+  knowledge_points?: string[]  // 结构化知识点列表
 }
 
 interface Paper {
   paper_id: string
   title: string
+  visible?: boolean
+  has_password?: boolean
 }
 
 export default defineComponent({
@@ -2244,6 +2724,8 @@ export default defineComponent({
     const myNewPassword = ref('')
     const resetUsername = ref('')
     const resetPassword = ref('')
+    const resetPasswordConfirm = ref('')
+    const selectedResetUserId = ref<string | number | null>(null)
     const changingPassword = ref(false)
     const resettingPassword = ref(false)
 
@@ -2481,7 +2963,7 @@ export default defineComponent({
     const rowRegenLoading = reactive<Record<string, boolean>>({})
     const deletingQuestion = reactive<Record<string, boolean>>({})
     const editingId = ref<string | null>(null)
-    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{}, stem_images: [], option_images: {}, analysis_images: [], knowledge_point: '' })
+    const editBuf = reactive<any>({ stem:'', answer:'', explain:'', options:{}, stem_images: [], option_images: {}, analysis_images: [], knowledge_point: '', knowledge_clauses: [] })
     const counterMsg = ref('')
 
     // 批量选择相关
@@ -2537,6 +3019,7 @@ export default defineComponent({
     const paperTitle = ref('')
     const creatingPaper = ref(false)
     const paperMessage = ref('')
+    const generatePaperPassword = ref('')  // 从题库生成试卷时的密码
 
     // 分数设置
     const singleScore = ref(1)       // 单选题分数
@@ -2545,13 +3028,37 @@ export default defineComponent({
     const saqScore = ref(10)         // 简答题分数
     const saqScoreMode = ref<'uniform' | 'custom'>('uniform')  // 简答题分数模式
     const saqCustomScores = reactive<Record<string, number>>({})  // 简答题自定义分数 {qid: score}
+    const saqClauseScores = reactive<Record<string, number[]>>({})  // 简答题知识条款分数 {qid: [分1, 分2, ...]}
+
+    // 均匀分配分数（保证总和等于total），例: distributeScore(10, 3) => [3, 3, 4]
+    const distributeScore = (total: number, count: number): number[] => {
+      if (count <= 0) return []
+      const base = Math.floor(total / count)
+      const remainder = total - base * count
+      return Array.from({ length: count }, (_, i) => base + (i >= count - remainder ? 1 : 0))
+    }
+
+    // 获取某题知识条款分数之和
+    const getSaqClauseTotal = (qid: string): number => {
+      const scores = saqClauseScores[qid]
+      if (!scores || scores.length === 0) return 0
+      return scores.reduce((sum, s) => sum + (s || 0), 0)
+    }
 
     // 切换到自定义分数模式时，为简答题初始化默认分数
     watch(saqScoreMode, (newMode) => {
       if (newMode === 'custom') {
         approvedQuestions.value.forEach(q => {
-          if (q.qtype === 'saq' && saqCustomScores[q.qid] === undefined) {
-            saqCustomScores[q.qid] = saqScore.value
+          if (q.qtype === 'saq') {
+            if (q.knowledge_clauses && q.knowledge_clauses.length > 0) {
+              // 有知识条款：按条款数量分配分数
+              if (!saqClauseScores[q.qid] || saqClauseScores[q.qid].length !== q.knowledge_clauses.length) {
+                saqClauseScores[q.qid] = distributeScore(saqScore.value, q.knowledge_clauses.length)
+              }
+              saqCustomScores[q.qid] = getSaqClauseTotal(q.qid)
+            } else if (saqCustomScores[q.qid] === undefined) {
+              saqCustomScores[q.qid] = saqScore.value
+            }
           }
         })
       }
@@ -2637,8 +3144,16 @@ export default defineComponent({
     watch(uploadedSaqScoreMode, (newMode) => {
       if (newMode === 'custom') {
         uploadedPaperItems.value.forEach(item => {
-          if (item.qtype === 'saq' && (item.score === undefined || item.score === null)) {
-            item.score = uploadedSaqScore.value  // 使用当前统一分数作为默认值
+          if (item.qtype === 'saq') {
+            if (item.knowledge_clauses && item.knowledge_clauses.length > 0) {
+              // 有知识条款：按条款数量分配分数
+              if (!item.clause_scores || item.clause_scores.length !== item.knowledge_clauses.length) {
+                item.clause_scores = distributeScore(uploadedSaqScore.value, item.knowledge_clauses.length)
+              }
+              item.score = item.clause_scores.reduce((s: number, v: number) => s + (v || 0), 0)
+            } else if (item.score === undefined || item.score === null) {
+              item.score = uploadedSaqScore.value
+            }
           }
         })
       }
@@ -2650,6 +3165,22 @@ export default defineComponent({
     const isEditingExistingPaper = ref(false)
     const editPaperOriginalId = ref('')
     
+    // 试卷密码保护相关
+    const paperPassword = ref('')  // 保存试卷时设置的密码
+    const paperPasswordDialogVisible = ref(false)  // 密码验证对话框
+    const paperPasswordInput = ref('')  // 用户输入的密码
+    const paperPasswordAction = ref<'download' | 'edit' | 'view'>('download')  // 当前操作类型
+    const paperPasswordTargetId = ref('')  // 当前操作的试卷ID
+    const verifyingPassword = ref(false)
+    const isSuperAdminUser = computed(() => isSuperAdmin(userRole.value))
+    // 超级管理员密码管理对话框
+    const passwordManageDialogVisible = ref(false)
+    const passwordManageTargetId = ref('')
+    const passwordManageTargetTitle = ref('')
+    const passwordManageValue = ref('')
+    const passwordManageLoading = ref(false)
+    const passwordManageShowPwd = ref(false)
+
     // 试卷解析相关
     const paperExplaining = ref(false)
     const paperExplainMsg = ref('')
@@ -2665,7 +3196,8 @@ export default defineComponent({
       timeRange: [] as string[],
       durationMin: 60,
       description: '',
-      targetDepartments: [] as string[]  // 目标部门列表
+      targetDepartments: [] as string[],  // 目标部门列表
+      targetUsers: [] as number[]  // 细化到个人的用户ID列表
     })
     const publishing = ref(false)
     const publishMessage = ref('')
@@ -2673,6 +3205,70 @@ export default defineComponent({
     const loadingPublished = ref(false)
     const cancelingExam = reactive<Record<string, boolean>>({})
     const deletingExam = reactive<Record<string, boolean>>({})
+
+    // ======= 防作弊配置相关 =======
+    const antiCheatConfig = reactive({
+      enabled: true,
+      tab_switch_detection: true,
+      window_blur_detection: true,
+      window_resize_detection: true,
+      force_maximize: true,
+      beforeunload_warning: true,
+      max_switch_count: 3,
+    })
+    const loadingAntiCheat = ref(false)
+    const savingAntiCheat = ref(false)
+    const antiCheatMessage = ref('')
+    const antiCheatSnapshot = ref('')  // 用于检测未保存修改
+
+    const isAntiCheatDirty = computed(() => {
+      return antiCheatSnapshot.value !== '' && antiCheatSnapshot.value !== JSON.stringify(antiCheatConfig)
+    })
+
+    const loadAntiCheatConfig = async () => {
+      loadingAntiCheat.value = true
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`)
+        const data = await resp.json()
+        if (data?.ok && data.config) {
+          Object.assign(antiCheatConfig, data.config)
+          antiCheatSnapshot.value = JSON.stringify(antiCheatConfig)
+        }
+      } catch (e: any) {
+        console.error('加载防作弊配置失败:', e)
+      } finally {
+        loadingAntiCheat.value = false
+      }
+    }
+
+    const saveAntiCheatConfig = async () => {
+      savingAntiCheat.value = true
+      antiCheatMessage.value = ''
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: { ...antiCheatConfig } })
+        })
+        const data = await resp.json()
+        if (data?.ok) {
+          antiCheatMessage.value = '保存成功'
+          ElMessage.success('防作弊配置已保存')
+          if (data.config) {
+            Object.assign(antiCheatConfig, data.config)
+          }
+          antiCheatSnapshot.value = JSON.stringify(antiCheatConfig)
+        } else {
+          antiCheatMessage.value = '保存失败：' + (data?.msg || '未知错误')
+          ElMessage.error('保存失败：' + (data?.msg || '未知错误'))
+        }
+      } catch (e: any) {
+        antiCheatMessage.value = '保存失败：' + (e.message || '网络错误')
+        ElMessage.error('保存失败：' + (e.message || '网络错误'))
+      } finally {
+        savingAntiCheat.value = false
+      }
+    }
 
     // 分组列表 - 从接口动态加载
     const loadingGroupList = ref(false)
@@ -2832,6 +3428,17 @@ export default defineComponent({
     const loadingDeptUsers = ref(false)
     const deptUsersList = ref<any[]>([])
 
+    // 人员选择树相关
+    const personSelectDialogVisible = ref(false)
+    const loadingPersonTree = ref(false)
+    const personTreeData = ref<any[]>([])
+    const personTreeRef = ref<InstanceType<any> | null>(null)
+    const personTreeFilterText = ref('')
+
+    // 查看名单分页相关
+    const deptUsersPage = ref(1)
+    const deptUsersPageSize = ref(20)
+
     // ======= 成绩统计相关 =======
     const gradesStats = ref<any>(null)
     const loadingGradesStats = ref(false)
@@ -2965,6 +3572,21 @@ export default defineComponent({
       }
     }
     
+    // 作弊详情弹窗
+    const cheatDetailDialogVisible = ref(false)
+    const cheatDetailData = ref<any>(null)
+
+    // 查看作弊详情（切屏事件）
+    const viewCheatDetail = (row: any) => {
+      cheatDetailData.value = {
+        student_name: row.student_name,
+        student_id: row.student_id,
+        cheat_count: row.cheat_count || 0,
+        cheat_events: row.cheat_events || []
+      }
+      cheatDetailDialogVisible.value = true
+    }
+
     // 计算错误选项柱状图宽度
     const getWrongChoiceBarWidth = (count: number) => {
       if (!questionDetailData.value?.wrong_choice_distribution?.length) return 0
@@ -3022,8 +3644,11 @@ export default defineComponent({
     const availableKnowledgePoints = computed(() => {
       const kpList: string[] = []
       approvedQuestions.value.forEach(q => {
-        const kps = extractKnowledgePointsFromAnalysis(q.analysis || '')
-        kps.forEach(kp => {
+        // 优先使用结构化知识点字段，回退到正则提取
+        const kps = (q.knowledge_points && q.knowledge_points.length > 0)
+          ? q.knowledge_points
+          : extractKnowledgePointsFromAnalysis(q.analysis || '')
+        kps.forEach((kp: string) => {
           // 使用标准化比较去重
           if (!kpList.some(existing => isSameKnowledgePoint(existing, kp))) {
             kpList.push(kp)
@@ -3058,12 +3683,13 @@ export default defineComponent({
         result = result.filter(q => q.qtype === 'saq')
       }
 
-      // 按知识点筛选（使用标准化比较，忽略括号和空格差异）
+      // 按知识点筛选（优先使用结构化字段，使用标准化比较）
       if (selectedKnowledgePoints.value.length > 0) {
         result = result.filter(q => {
-          const qKps = extractKnowledgePointsFromAnalysis(q.analysis || '')
-          // 题目的知识点与选中的知识点有交集（使用标准化比较）
-          return qKps.some(qKp => 
+          const qKps = (q.knowledge_points && q.knowledge_points.length > 0)
+            ? q.knowledge_points
+            : extractKnowledgePointsFromAnalysis(q.analysis || '')
+          return qKps.some((qKp: string) => 
             selectedKnowledgePoints.value.some(selKp => isSameKnowledgePoint(qKp, selKp))
           )
         })
@@ -3125,6 +3751,18 @@ export default defineComponent({
       return map[status] || status
     }
 
+    // 密码重置：用户选项列表（只显示普通用户，不显示管理员）
+    const resetUserOptions = computed(() => {
+      return users.value.filter(u => {
+        const role = normalizeRole(u.role)
+        return role === UserRole.USER && u.status === 1
+      })
+    })
+
+    const onResetUserChange = (userId: string | number) => {
+      selectedResetUserId.value = userId
+    }
+
     const changeMyPassword = async () => {
       if (!myNewPassword.value) return ElMessage.warning('新密码不可为空')
       changingPassword.value = true
@@ -3135,15 +3773,15 @@ export default defineComponent({
           body: JSON.stringify({
              id: store.state.user.id,
              username: store.state.user.username,
-             oldPassword: myOldPassword.value,
+             password: myOldPassword.value,
              newPassword: myNewPassword.value
             })
         })
-        if (response.data.ok) {
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
           ElMessage.success('修改成功，请重新登录')
           store.dispatch('logout')
           setTimeout(() => window.location.href = '/login', 1000)
-        } else throw new Error(response.data.detail || '修改失败')
+        } else throw new Error(response.data?.message || '修改失败')
       } catch (error: any) {
         ElMessage.error('修改失败：' + error.message)
       } finally {
@@ -3152,23 +3790,31 @@ export default defineComponent({
     }
 
     const resetUserPassword = async () => {
-      if (!resetUsername.value || !resetPassword.value) return ElMessage.warning('请输入用户名和新密码')
+      if (!selectedResetUserId.value) return ElMessage.warning('请先选择用户')
+      if (!resetPassword.value) return ElMessage.warning('请输入新密码')
+      if (resetPassword.value.length < 6) return ElMessage.warning('密码至少6位')
+      if (resetPassword.value !== resetPasswordConfirm.value) return ElMessage.warning('两次输入的密码不一致')
+
+      const targetUser = users.value.find(u => u.id === selectedResetUserId.value)
+      if (!targetUser) return ElMessage.warning('用户不存在，请刷新后重试')
+
       resettingPassword.value = true
       try {
         const response = await fetchWithAuth(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: store.state.user.id,
-            username: resetUsername.value,
+            id: targetUser.id,
+            username: targetUser.username,
             newPassword: resetPassword.value
           })
         })
-        if (response.data.ok) {
-          ElMessage.success('重置成功')
-          resetUsername.value = ''
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          ElMessage.success(`已成功重置用户【${targetUser.username}】的密码`)
+          selectedResetUserId.value = null
           resetPassword.value = ''
-        } else throw new Error(response.data.detail || '重置失败')
+          resetPasswordConfirm.value = ''
+        } else throw new Error(response.data?.message || '重置失败，用户可能不存在')
       } catch (error: any) {
         ElMessage.error('重置失败：' + error.message)
       } finally {
@@ -3739,6 +4385,8 @@ export default defineComponent({
             has_images: Boolean(it.has_images),
             stem_images: it.stem_images || [],
             analysis_images: it.analysis_images || [],
+            knowledge_clauses: it.knowledge_clauses || [],
+            knowledge_points: it.knowledge_points || [],
           }
         })
       } catch (error: any) {
@@ -4235,49 +4883,6 @@ export default defineComponent({
       return { explain: analysis, kp: '' }
     }
 
-    // 智能格式化知识点：自动添加《》和、
-    const formatKnowledgePoint = (kp: string): string => {
-      if (!kp || !kp.trim()) return ''
-      
-      // 如果已经是标准格式（全部都有《》），直接返回
-      const standardPattern = /^《[^》]+》(、《[^》]+》)*$/
-      if (standardPattern.test(kp.trim())) {
-        return kp.trim()
-      }
-      
-      // 先提取已有的《》内容和其他文本
-      // 将输入按多种分隔符拆分：、，,；;空格
-      let text = kp.trim()
-      
-      // 提取所有《xxx》格式的内容
-      const existingBooks: string[] = []
-      text = text.replace(/《([^》]+)》/g, (_, content) => {
-        existingBooks.push(content.trim())
-        return '\x00'  // 占位符
-      })
-      
-      // 将剩余文本按分隔符拆分
-      const separators = /[、，,；;\s]+/
-      const parts = text.split(separators).filter(p => p && p !== '\x00')
-      
-      // 合并所有知识点名称
-      const allItems = [...existingBooks, ...parts].filter(item => item.trim())
-      
-      if (allItems.length === 0) return ''
-      
-      // 格式化为标准格式
-      return allItems.map(item => `《${item.trim()}》`).join('、')
-    }
-
-    // 将知识点拼接回解析文本
-    const combineKnowledgePoint = (explain: string, kp: string): string => {
-      if (!kp || !kp.trim()) return explain
-      // 自动格式化知识点
-      const formattedKp = formatKnowledgePoint(kp)
-      if (!formattedKp) return explain
-      return `${explain}\n\n知识点：${formattedKp}`
-    }
-
     // 按需加载题目图片
     const loadQuestionImages = async (qid: string): Promise<any> => {
       try {
@@ -4300,13 +4905,17 @@ export default defineComponent({
       editingId.value = row.qid
       editBuf.stem = row.stem || ''
       editBuf.answer = row.answer || ''
-      // 清理 markdown 符号，方便编辑，并提取知识点
+      // 清理 markdown 符号，方便编辑，并提取纯解析文本（去除嵌入的知识点行）
       const cleanedAnalysis = cleanMarkdownForEdit(row.analysis || '')
       const { explain: extractedExplain, kp } = extractKnowledgePoint(cleanedAnalysis)
       editBuf.explain = extractedExplain
       editBuf.knowledge_point = kp
-      // 将知识点文本解析为数组供多选组件使用
-      editSelectedKnowledgePoints.value = extractKnowledgePointsFromAnalysis(row.analysis || '')
+      // 优先使用结构化 knowledge_points 字段，回退到从 analysis 正则提取（兼容旧数据）
+      if (row.knowledge_points && row.knowledge_points.length > 0) {
+        editSelectedKnowledgePoints.value = [...row.knowledge_points]
+      } else {
+        editSelectedKnowledgePoints.value = extractKnowledgePointsFromAnalysis(row.analysis || '')
+      }
       
       const map: Record<string, string> = {}
       ;(row.options || []).forEach((o: any) => {
@@ -4340,6 +4949,8 @@ export default defineComponent({
       editBuf.option_images = optImgs
       // 加载解析图片
       editBuf.analysis_images = JSON.parse(JSON.stringify(row.analysis_images || []))
+      // 加载知识条款
+      editBuf.knowledge_clauses = JSON.parse(JSON.stringify(row.knowledge_clauses || []))
     }
 
     const cancelEdit = () => {
@@ -4349,19 +4960,29 @@ export default defineComponent({
     const saveRow = async (row: any) => {
       if (!isEditing(row.qid)) return
       try {
-        // 1) 把当前编辑缓冲区打包发给后端（注意带上 answer 和图片）
-        // 从多选组件获取知识点，转换为标准格式
-        const kpText = editSelectedKnowledgePoints.value.length > 0 
-          ? editSelectedKnowledgePoints.value.map(kp => `《${kp}》`).join('、')
-          : ''
-        // 将知识点拼接回解析文本
-        const finalExplain = combineKnowledgePoint(editBuf.explain, kpText)
+        // 1) 把当前编辑缓冲区打包发给后端
+        // 解析文本仅保存纯解析内容，知识点通过 knowledge_points 结构化字段传递
+        const finalExplain = (editBuf.explain || '').trim()
+        // 根据是否有实际内容的选项自动判定题目类型
+        // 同时清理空选项（无文本且无图片的选项不保存）
+        const cleanedOptions: Record<string, string> = {}
+        const optImgs = editBuf.option_images || {}
+        for (const [k, v] of Object.entries(editBuf.options || {})) {
+          if ((v as string || '').trim() !== '' || (optImgs[k] && optImgs[k].length > 0)) {
+            cleanedOptions[k] = v as string
+          }
+        }
+        const hasOptions = Object.keys(cleanedOptions).length > 0
+        const newQtype = hasOptions ? (((editBuf.answer || '').length > 1) ? 'multi' : 'single') : 'saq'
         const itemData: any = {
           id: row.qid,
           stem: editBuf.stem,
-          options: { ...editBuf.options },
+          options: { ...cleanedOptions },
           answer: (editBuf.answer || '').toUpperCase(),
           explain: finalExplain,
+          qtype: newQtype,
+          knowledge_clauses: editBuf.knowledge_clauses || [],
+          knowledge_points: editSelectedKnowledgePoints.value || [],
         }
         
         // 添加图片数据
@@ -4402,13 +5023,19 @@ export default defineComponent({
           row.answer = (updated.answer || '').toString().toUpperCase()
           row.analysis = updated.explain || ''
           row.status = updated.status || ((row.analysis || '').trim() ? 'draft' : 'none')
+          row.qtype = updated.qtype || newQtype
+          row.knowledge_clauses = updated.knowledge_clauses || []
+          row.knowledge_points = updated.knowledge_points || []
         } else {
           // 理论上不会走到这里，兜底用前端缓冲区
           row.stem = editBuf.stem
           row.options = normalizeOptions(editBuf.options)
           row.answer = (editBuf.answer || '').toString().toUpperCase()
-          row.analysis = editBuf.explain
+          row.analysis = editBuf.explain || ''
           row.status = (row.analysis && row.analysis.trim()) ? 'draft' : 'none'
+          row.qtype = newQtype
+          row.knowledge_clauses = editBuf.knowledge_clauses || []
+          row.knowledge_points = editSelectedKnowledgePoints.value || []
         }
 
         ElMessage.success('保存成功')
@@ -4482,12 +5109,59 @@ export default defineComponent({
 
     // 删除选项
     const removeOption = (key: string) => {
-      const existingKeys = Object.keys(editBuf.options || {})
-      if (existingKeys.length <= 1) {
-        ElMessage.warning('至少需要保留1个选项')
-        return
-      }
       delete editBuf.options[key]
+      // 同时删除该选项的图片
+      if (editBuf.option_images && editBuf.option_images[key]) {
+        delete editBuf.option_images[key]
+      }
+    }
+
+    // 判断编辑缓冲区中是否有实际内容的选项（文本非空或有图片）
+    const hasRealOptions = () => {
+      const opts = editBuf.options || {}
+      const optImgs = editBuf.option_images || {}
+      return Object.keys(opts).some(k => (opts[k] || '').trim() !== '' || (optImgs[k] && optImgs[k].length > 0))
+    }
+
+    // 编辑时的题目类型（根据是否有实际内容的选项自动判断）
+    const editingQtype = computed(() => {
+      return hasRealOptions() ? 'mcq' : 'saq'
+    })
+
+    // 中文数字转换
+    const chineseNumber = (n: number): string => {
+      const nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
+                     '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十']
+      return nums[n - 1] || String(n)
+    }
+
+    // 添加知识条款
+    const addKnowledgeClause = () => {
+      if (!editBuf.knowledge_clauses) editBuf.knowledge_clauses = []
+      editBuf.knowledge_clauses.push('')
+    }
+
+    // 删除知识条款
+    const removeKnowledgeClause = (index: number) => {
+      editBuf.knowledge_clauses.splice(index, 1)
+    }
+
+    // 上传试卷/编辑试卷 - 添加知识条款
+    const addPaperItemClause = (item: any) => {
+      if (!item.knowledge_clauses) item.knowledge_clauses = []
+      item.knowledge_clauses.push('')
+    }
+
+    // 上传试卷/编辑试卷 - 删除知识条款
+    const removePaperItemClause = (item: any, index: number) => {
+      if (item.knowledge_clauses) {
+        item.knowledge_clauses.splice(index, 1)
+        // 同步更新 clause_scores
+        if (item.clause_scores && item.clause_scores.length > index) {
+          item.clause_scores.splice(index, 1)
+          item.score = item.clause_scores.reduce((s: number, v: number) => s + (v || 0), 0)
+        }
+      }
     }
 
     // 删除题干图片
@@ -4721,14 +5395,40 @@ export default defineComponent({
       
       if (saqScoreMode.value === 'uniform') {
         scoreConfig.saq = saqScore.value
+        // 统一模式下，为有知识条款的题目自动分配各条款分数
+        const clauseScoresMap: Record<string, number[]> = {}
+        approvedQuestions.value.forEach(q => {
+          if (q.qtype === 'saq' && q.knowledge_clauses && q.knowledge_clauses.length > 0) {
+            clauseScoresMap[q.qid] = distributeScore(saqScore.value, q.knowledge_clauses.length)
+          }
+        })
+        if (Object.keys(clauseScoresMap).length > 0) {
+          scoreConfig.saq_clause_scores = clauseScoresMap
+        }
       } else {
         // 自定义模式：传递每题分数
-        scoreConfig.saq_custom = { ...saqCustomScores }
+        const customScores: Record<string, number> = {}
+        const clauseScoresMap: Record<string, number[]> = {}
+        approvedQuestions.value.forEach(q => {
+          if (q.qtype === 'saq') {
+            if (q.knowledge_clauses && q.knowledge_clauses.length > 0 && saqClauseScores[q.qid]) {
+              clauseScoresMap[q.qid] = [...saqClauseScores[q.qid]]
+              customScores[q.qid] = getSaqClauseTotal(q.qid)
+            } else {
+              customScores[q.qid] = saqCustomScores[q.qid] ?? saqScore.value
+            }
+          }
+        })
+        scoreConfig.saq_custom = customScores
+        if (Object.keys(clauseScoresMap).length > 0) {
+          scoreConfig.saq_clause_scores = clauseScoresMap
+        }
       }
       
       let requestBody: any = { 
         name,
-        score_config: scoreConfig
+        score_config: scoreConfig,
+        password: generatePaperPassword.value.trim()
       }
       
       if (paperGenerateMode.value === 'random') {
@@ -4800,6 +5500,7 @@ export default defineComponent({
 
         paperMessage.value = '试卷已生成'
         ElMessage.success('试卷生成成功')
+        generatePaperPassword.value = ''
         setTimeout(() => { paperMessage.value = '' }, 1500)
         // 生成成功后刷新列表
         loadPaperList()
@@ -4858,12 +5559,126 @@ export default defineComponent({
       }
     }
 
-    const downloadPaper = (paperId: string) => {
+    const downloadPaperDirect = (paperId: string) => {
       const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(paperId)}`
       openInNewTab(url)
     }
 
-    const deletePaper = async (paperId: string, title: string) => {
+    // 带密码保护的下载
+    const downloadPaper = (paperId: string) => {
+      const paper = paperList.value.find((p: any) => p.paper_id === paperId)
+      if (paper?.has_password) {
+        paperPasswordAction.value = 'download'
+        paperPasswordTargetId.value = paperId
+        paperPasswordInput.value = ''
+        paperPasswordDialogVisible.value = true
+      } else {
+        downloadPaperDirect(paperId)
+      }
+    }
+
+    // 带密码保护的编辑（读取编辑按钮）
+    const editPaperWithPasswordCheck = () => {
+      if (!editPaperSelected.value) {
+        ElMessage.warning('请选择要编辑的试卷')
+        return
+      }
+      const paper = paperList.value.find((p: any) => p.paper_id === editPaperSelected.value)
+      if (paper?.has_password) {
+        paperPasswordAction.value = 'edit'
+        paperPasswordTargetId.value = editPaperSelected.value
+        paperPasswordInput.value = ''
+        paperPasswordDialogVisible.value = true
+      } else {
+        loadPaperForEdit()
+      }
+    }
+
+    // 验证密码并执行操作
+    const verifyPaperPassword = async () => {
+      if (!paperPasswordInput.value.trim()) {
+        ElMessage.warning('请输入密码')
+        return
+      }
+      verifyingPassword.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/papers/verify_password`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ paper_id: paperPasswordTargetId.value, password: paperPasswordInput.value.trim() })
+        })
+        const j = await r.json()
+        if (!j?.ok) throw new Error(j?.msg || '验证失败')
+        if (!j.verified) {
+          ElMessage.error('密码错误')
+          return
+        }
+        // 密码正确，执行对应操作
+        paperPasswordDialogVisible.value = false
+        if (paperPasswordAction.value === 'download') {
+          downloadPaperDirect(paperPasswordTargetId.value)
+        } else if (paperPasswordAction.value === 'edit') {
+          loadPaperForEdit()
+        } else if ((paperPasswordAction.value as string) === 'delete') {
+          doDeletePaper(paperPasswordTargetId.value, deletePaperTitle.value)
+        }
+      } catch (e: any) {
+        ElMessage.error('验证失败：' + (e?.message || e))
+      } finally {
+        verifyingPassword.value = false
+      }
+    }
+
+    // 超级管理员：查看/修改密码
+    const openPasswordManage = async (paperId: string, title: string) => {
+      passwordManageTargetId.value = paperId
+      passwordManageTargetTitle.value = title
+      passwordManageValue.value = ''
+      passwordManageLoading.value = true
+      passwordManageShowPwd.value = false
+      passwordManageDialogVisible.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/papers/get_password?paper_id=${encodeURIComponent(paperId)}`, {
+          method: 'GET',
+          headers: getAuthHeaders(),
+          cache: 'no-store'
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          passwordManageValue.value = j.password || ''
+        } else {
+          throw new Error(j?.msg || '获取密码失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('获取密码失败：' + (e?.message || e))
+      } finally {
+        passwordManageLoading.value = false
+      }
+    }
+
+    // 超级管理员：保存密码
+    const savePasswordManage = async () => {
+      passwordManageLoading.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/papers/password`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ paper_id: passwordManageTargetId.value, password: passwordManageValue.value.trim() })
+        })
+        const j = await r.json()
+        if (!j?.ok) throw new Error(j?.msg || '保存失败')
+        ElMessage.success(passwordManageValue.value.trim() ? '密码已更新' : '密码已清除')
+        passwordManageDialogVisible.value = false
+        await loadPaperList()
+      } catch (e: any) {
+        ElMessage.error('保存密码失败：' + (e?.message || e))
+      } finally {
+        passwordManageLoading.value = false
+      }
+    }
+
+    // 实际执行删除
+    const doDeletePaper = async (paperId: string, title: string) => {
       try {
         await ElMessageBox.confirm(
           `确认删除试卷「${title}」？同时会删除对应的学生版文件。`,
@@ -4888,6 +5703,21 @@ export default defineComponent({
         }
       } finally {
         deletingPaper[paperId] = false
+      }
+    }
+
+    // 带密码保护的删除
+    const deletePaperTitle = ref('')
+    const deletePaper = (paperId: string, title: string) => {
+      const paper = paperList.value.find((p: any) => p.paper_id === paperId)
+      if (paper?.has_password) {
+        paperPasswordAction.value = 'delete' as any
+        paperPasswordTargetId.value = paperId
+        deletePaperTitle.value = title
+        paperPasswordInput.value = ''
+        paperPasswordDialogVisible.value = true
+      } else {
+        doDeletePaper(paperId, title)
       }
     }
 
@@ -5170,9 +6000,37 @@ export default defineComponent({
         uploadedSaqScore.value = scoreConfig.saq || 10
         uploadedSaqScoreMode.value = scoreConfig.saq_mode || 'uniform'
         
+        // 恢复知识条款分数到各题目上（使用索引作为key）
+        const savedClauseScores = scoreConfig.saq_clause_scores || {}
+        uploadedPaperItems.value.forEach((item: any, idx: number) => {
+          if (item.qtype === 'saq' && item.knowledge_clauses && item.knowledge_clauses.length > 0) {
+            if (savedClauseScores[String(idx)]) {
+              item.clause_scores = [...savedClauseScores[String(idx)]]
+              item.score = item.clause_scores.reduce((s: number, v: number) => s + (v || 0), 0)
+            } else if (uploadedSaqScoreMode.value === 'uniform') {
+              item.clause_scores = distributeScore(uploadedSaqScore.value, item.knowledge_clauses.length)
+              item.score = uploadedSaqScore.value
+            }
+          }
+        })
+        
         // 标记为编辑模式
         isEditingExistingPaper.value = true
         editPaperOriginalId.value = editPaperSelected.value
+        
+        // 加载已有密码（如果超级管理员或者已验证过密码）
+        paperPassword.value = ''
+        try {
+          const pr = await fetch(`${MCQ_BASE_URL}/papers/get_password?paper_id=${encodeURIComponent(editPaperSelected.value)}`, {
+            method: 'GET',
+            headers: getAuthHeaders(),
+            cache: 'no-store'
+          })
+          const pj = await pr.json()
+          if (pj?.ok && pj.password) {
+            paperPassword.value = pj.password
+          }
+        } catch { /* ignore - password field stays empty */ }
         
         editingPaperItemIdx.value = null
         paperPreviewVisible.value = true
@@ -5216,8 +6074,29 @@ export default defineComponent({
         
         if (uploadedSaqScoreMode.value === 'uniform') {
           scoreConfig.saq = uploadedSaqScore.value
+          // 统一模式下，为有知识条款的题目自动分配各条款分数（使用索引作为key）
+          const clauseScoresMap: Record<string, number[]> = {}
+          validItems.forEach((item: any, idx: number) => {
+            if (item.qtype === 'saq' && item.knowledge_clauses && item.knowledge_clauses.length > 0) {
+              clauseScoresMap[String(idx)] = distributeScore(uploadedSaqScore.value, item.knowledge_clauses.length)
+            }
+          })
+          if (Object.keys(clauseScoresMap).length > 0) {
+            scoreConfig.saq_clause_scores = clauseScoresMap
+          }
+        } else {
+          // 自定义模式下，收集知识条款分数（使用索引作为key）
+          const clauseScoresMap: Record<string, number[]> = {}
+          validItems.forEach((item: any, idx: number) => {
+            if (item.qtype === 'saq' && item.knowledge_clauses && item.knowledge_clauses.length > 0 && item.clause_scores) {
+              clauseScoresMap[String(idx)] = [...item.clause_scores]
+            }
+          })
+          if (Object.keys(clauseScoresMap).length > 0) {
+            scoreConfig.saq_clause_scores = clauseScoresMap
+          }
         }
-        // 自定义模式下，每题分数已保存在 item.score 中
+        // 自定义模式下，每题总分已保存在 item.score 中
         
         const payload: any = {
           title: uploadedPaperTitle.value.trim(),
@@ -5241,10 +6120,25 @@ export default defineComponent({
           throw new Error(j?.msg || '保存失败')
         }
         
+        // 保存成功后设置密码（如果有）
+        const newPaperId = j.paper_id || ''
+        if (paperPassword.value.trim() && newPaperId) {
+          try {
+            await fetch(`${MCQ_BASE_URL}/papers/password`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ paper_id: newPaperId, password: paperPassword.value.trim() })
+            })
+          } catch (pwdErr: any) {
+            ElMessage.warning('试卷已保存，但密码设置失败：' + (pwdErr?.message || pwdErr))
+          }
+        }
+        
         ElMessage.success(j.msg || (isUpdate ? '试卷更新成功' : '试卷保存成功'))
         paperPreviewVisible.value = false
         uploadedPaperItems.value = []
         uploadedPaperTitle.value = ''
+        paperPassword.value = ''
         
         // 重置编辑状态
         isEditingExistingPaper.value = false
@@ -5265,6 +6159,7 @@ export default defineComponent({
     const onPaperDialogClosed = () => {
       isEditingExistingPaper.value = false
       editPaperOriginalId.value = ''
+      paperPassword.value = ''
       // 重置简答题分数模式为默认
       uploadedSaqScoreMode.value = 'uniform'
       // 停止解析任务
@@ -5607,8 +6502,31 @@ export default defineComponent({
 
     // ========== 考试发布相关函数 ==========
     
-    // 预览分组用户名单
+    // 查看名单分页计算
+    const pagedDeptUsersList = computed(() => {
+      const start = (deptUsersPage.value - 1) * deptUsersPageSize.value
+      return deptUsersList.value.slice(start, start + deptUsersPageSize.value)
+    })
+
+    // 预览分组用户名单（优先展示已选人员）
     const previewDeptUsers = async () => {
+      deptUsersPage.value = 1
+      if (publishForm.targetUsers.length > 0) {
+        // 如果已精确选择了人员，从树数据中提取已选用户展示
+        const selectedIds = new Set(publishForm.targetUsers)
+        const users: any[] = []
+        for (const group of personTreeData.value) {
+          const gName = group.label?.replace(/\s*\(\d+人\)\s*$/, '') || ''
+          for (const child of (group.children || [])) {
+            if (selectedIds.has(child.userId)) {
+              users.push({ id: child.userId, username: child.username, policeId: child.policeId, groupName: gName })
+            }
+          }
+        }
+        deptUsersList.value = users
+        deptUsersDialogVisible.value = true
+        return
+      }
       if (publishForm.targetDepartments.length === 0) {
         return ElMessage.warning('请先选择目标分组')
       }
@@ -5616,21 +6534,153 @@ export default defineComponent({
       deptUsersDialogVisible.value = true
       deptUsersList.value = []
       try {
-        const response = await fetchWithAuth(getApiUrl('/api/user/groups/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupIds: publishForm.targetDepartments })
-        })
-        if (response.ok && response.data?.data?.users) {
-          deptUsersList.value = response.data.data.users
-        } else {
-          throw new Error(response.data?.message || '获取用户列表失败')
-        }
+        // 按分组逐个加载，以便获取分组名
+        const results = await Promise.all(
+          publishForm.targetDepartments.map(async (groupId: string) => {
+            const response = await fetchWithAuth(getApiUrl('/api/user/groups/users'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupIds: [groupId] })
+            })
+            const users = (response.ok && response.data?.data?.users) ? response.data.data.users : []
+            const group = groupOptions.value.find((g: any) => g.id === groupId)
+            const gName = group?.name || `分组${groupId}`
+            return users.map((u: any) => ({ ...u, groupName: gName }))
+          })
+        )
+        deptUsersList.value = results.flat()
       } catch (error: any) {
         ElMessage.error('获取分组用户列表失败：' + (error?.message || error))
         deptUsersList.value = []
       } finally {
         loadingDeptUsers.value = false
+      }
+    }
+
+    // 人员选择树 - 实时勾选计数
+    const personTreeCheckedCount = ref(0)
+
+    const onPersonTreeCheck = () => {
+      if (personTreeRef.value) {
+        const checkedNodes = personTreeRef.value.getCheckedNodes(true)
+        personTreeCheckedCount.value = checkedNodes.filter((n: any) => !n.isGroup).length
+      }
+    }
+
+    // 分组变更时清空已选人员
+    const onGroupSelectionChange = () => {
+      publishForm.targetUsers = []
+      personTreeCheckedCount.value = 0
+    }
+
+    // 人员树搜索过滤
+    const filterPersonTreeNode = (value: string, data: any) => {
+      if (!value) return true
+      const keyword = value.toLowerCase()
+      return (data.label || '').toLowerCase().includes(keyword)
+    }
+
+    // 监听搜索关键字变化触发树过滤
+    watch(personTreeFilterText, (val) => {
+      personTreeRef.value?.filter(val)
+    })
+
+    // 打开人员选择对话框
+    const openPersonSelectDialog = async () => {
+      if (publishForm.targetDepartments.length === 0) {
+        return ElMessage.warning('请先选择目标分组')
+      }
+      personSelectDialogVisible.value = true
+      loadingPersonTree.value = true
+      personTreeData.value = []
+      personTreeCheckedCount.value = 0
+      personTreeFilterText.value = ''
+
+      // 保存需要恢复的勾选keys
+      const keysToRestore = publishForm.targetUsers.length > 0
+        ? publishForm.targetUsers.map((uid: number) => `user_${uid}`)
+        : null  // null 表示默认全选
+
+      try {
+        // 并行加载每个分组的用户
+        const results = await Promise.all(
+          publishForm.targetDepartments.map(async (groupId: string) => {
+            const response = await fetchWithAuth(getApiUrl('/api/user/groups/users'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupIds: [groupId] })
+            })
+            const users = (response.ok && response.data?.data?.users) ? response.data.data.users : []
+            return { groupId, users }
+          })
+        )
+
+        const treeData = results.map(({ groupId, users }) => {
+          const group = groupOptions.value.find((g: any) => g.id === groupId)
+          const groupName = group?.name || `分组${groupId}`
+          const children = users.map((u: any) => ({
+            nodeId: `user_${u.id}`,
+            label: `${u.username}${u.policeId ? ' (' + u.policeId + ')' : ''}`,
+            isGroup: false,
+            userId: u.id,
+            username: u.username,
+            policeId: u.policeId || '',
+            department: u.department || ''
+          }))
+          return {
+            nodeId: `group_${groupId}`,
+            label: `${groupName} (${children.length}人)`,
+            isGroup: true,
+            groupId: groupId,
+            children: children
+          }
+        })
+
+        personTreeData.value = treeData
+        // 先关闭loading使tree渲染到DOM
+        loadingPersonTree.value = false
+        await nextTick()
+
+        // 设置勾选状态：有选择则恢复，否则默认全选
+        if (personTreeRef.value) {
+          if (keysToRestore) {
+            personTreeRef.value.setCheckedKeys(keysToRestore)
+          } else {
+            const allUserNodeIds = treeData.flatMap((g: any) => g.children.map((c: any) => c.nodeId))
+            personTreeRef.value.setCheckedKeys(allUserNodeIds)
+          }
+          onPersonTreeCheck()
+        }
+      } catch (error: any) {
+        ElMessage.error('加载人员列表失败：' + (error?.message || error))
+        loadingPersonTree.value = false
+      }
+    }
+
+    // 全选 / 全不选
+    const checkAllPersonTree = () => {
+      if (!personTreeRef.value) return
+      const allUserNodeIds = personTreeData.value.flatMap((g: any) => g.children.map((c: any) => c.nodeId))
+      personTreeRef.value.setCheckedKeys(allUserNodeIds)
+      onPersonTreeCheck()
+    }
+    const uncheckAllPersonTree = () => {
+      if (!personTreeRef.value) return
+      personTreeRef.value.setCheckedKeys([])
+      personTreeCheckedCount.value = 0
+    }
+
+    // 确认人员选择
+    const confirmPersonSelection = () => {
+      if (!personTreeRef.value) return
+      const checkedNodes = personTreeRef.value.getCheckedNodes(true)
+      const selectedUsers = checkedNodes.filter((n: any) => !n.isGroup)
+      publishForm.targetUsers = selectedUsers.map((n: any) => n.userId)
+      personSelectDialogVisible.value = false
+      if (selectedUsers.length > 0) {
+        ElMessage.success(`已选择 ${selectedUsers.length} 人`)
+      } else {
+        ElMessage.warning('未选择任何人员')
       }
     }
 
@@ -5658,7 +6708,8 @@ export default defineComponent({
             end_time: publishForm.timeRange[1],
             duration_min: publishForm.durationMin,
             description: publishForm.description,
-            target_groups: publishForm.targetDepartments  // 目标分组ID列表
+            target_groups: publishForm.targetDepartments,  // 目标分组ID列表
+            target_users: publishForm.targetUsers.length > 0 ? publishForm.targetUsers : undefined  // 细化到个人的用户ID列表
           })
         })
         const data = await response.json()
@@ -5671,6 +6722,7 @@ export default defineComponent({
           publishForm.durationMin = 60
           publishForm.description = ''
           publishForm.targetDepartments = []
+          publishForm.targetUsers = []
           loadPublishedExams()
         } else {
           throw new Error(data?.msg || '发布失败')
@@ -5954,6 +7006,53 @@ export default defineComponent({
       window.open('/saq-grading', '_blank')
     }
 
+    // Tab切换拦截：离开考试设置时检查未保存修改
+    const beforeTabLeave = (activeName: string, oldActiveName: string) => {
+      if (oldActiveName === 'exam-settings' && isAntiCheatDirty.value) {
+        return ElMessageBox.confirm(
+          '防作弊配置已修改但尚未保存，确定要离开吗？',
+          '未保存的更改',
+          {
+            confirmButtonText: '离开',
+            cancelButtonText: '留在此页',
+            type: 'warning',
+          }
+        ).then(() => true).catch(() => false)
+      }
+      return true
+    }
+
+    // 页面关闭/刷新时检查未保存的防作弊配置
+    const handleAdminBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (activeTab.value === 'exam-settings' && isAntiCheatDirty.value) {
+        e.preventDefault()
+        e.returnValue = '防作弊配置已修改但尚未保存，确定要离开吗？'
+        return e.returnValue
+      }
+    }
+
+    // 路由离开时检查未保存的防作弊配置
+    onBeforeRouteLeave(async (to, from, next) => {
+      if (activeTab.value === 'exam-settings' && isAntiCheatDirty.value) {
+        try {
+          await ElMessageBox.confirm(
+            '防作弊配置已修改但尚未保存，确定要离开吗？',
+            '未保存的更改',
+            {
+              confirmButtonText: '离开',
+              cancelButtonText: '留在此页',
+              type: 'warning',
+            }
+          )
+          next()
+        } catch {
+          next(false)
+        }
+      } else {
+        next()
+      }
+    })
+
     onMounted(() => {
       if (showBjzxTabs.value) {
         loadQuestions()
@@ -5963,15 +7062,22 @@ export default defineComponent({
         checkPendingTask()
         loadKnowledgePointOptions()
         loadGroupOptions()
+        loadAntiCheatConfig()
       }
       if (showAdminTabs.value) {
         loadUsers()
         loadPendingUsers()
       }
+      window.addEventListener('beforeunload', handleAdminBeforeUnload)
+    })
+
+    onUnmounted(() => {
+      window.removeEventListener('beforeunload', handleAdminBeforeUnload)
     })
 
     return {
-      username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword,
+      username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword, resetPasswordConfirm,
+      selectedResetUserId, resetUserOptions, onResetUserChange,
       showAdminTabs, showBjzxTabs,
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
@@ -5982,7 +7088,7 @@ export default defineComponent({
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,pendingTaskDismissed,dismissPendingTask,
       rejectingAll,page,pageSize,rowRegenLoading,deletingQuestion,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
-      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,removeStemImage,removeOptionImage,removeAnalysisImage,triggerStemImageUpload,onStemImageSelected,triggerOptionImageUpload,onOptionImageSelected,triggerAnalysisImageUpload,onAnalysisImageSelected,
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,removeStemImage,removeOptionImage,removeAnalysisImage,triggerStemImageUpload,onStemImageSelected,triggerOptionImageUpload,onOptionImageSelected,triggerAnalysisImageUpload,onAnalysisImageSelected,editingQtype,chineseNumber,addKnowledgeClause,removeKnowledgeClause,addPaperItemClause,removePaperItemClause,
       // 任务控制相关
       currentTaskId, currentTaskStatus, stoppingTask, resumingTask, isTaskRunning, canResumeTask, stopTask, resumeTask,
       sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
@@ -6002,11 +7108,11 @@ export default defineComponent({
       // 试卷生成相关
       questions, filteredQuestions, statusFilter, searchQuery, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage,
-      singleScore, multiScore, indeterminateScore, saqScore, saqScoreMode, saqCustomScores,
+      singleScore, multiScore, indeterminateScore, saqScore, saqScoreMode, saqCustomScores, saqClauseScores, distributeScore, getSaqClauseTotal,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       selectedKnowledgePoints, availableKnowledgePoints, mergedKnowledgePointOptions,
       approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
-      paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility,
+      paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility, isSuperAdminUser, generatePaperPassword,
       exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
       userSearch, users, loadingUsers, actionLoadingId,
       // 试卷生成模式
@@ -6024,7 +7130,13 @@ export default defineComponent({
       uploadedSingleScore, uploadedMultiScore, uploadedIndeterminateScore, uploadedSaqScore, uploadedSaqScoreMode,
       // 编辑已有试卷相关
       editPaperSelected, loadingPaperDetail, isEditingExistingPaper, editPaperOriginalId,
-      loadPaperForEdit, onPaperDialogClosed,
+      loadPaperForEdit, onPaperDialogClosed, editPaperWithPasswordCheck,
+      // 试卷密码保护相关
+      paperPassword, paperPasswordDialogVisible, paperPasswordInput, paperPasswordAction, paperPasswordTargetId,
+      verifyingPassword, verifyPaperPassword, downloadPaperDirect, deletePaperTitle,
+      passwordManageDialogVisible, passwordManageTargetId, passwordManageTargetTitle,
+      passwordManageValue, passwordManageLoading, passwordManageShowPwd,
+      openPasswordManage, savePasswordManage,
       // 试卷解析相关
       paperExplaining, paperExplainMsg, paperTaskId, paperParseTargets, paperItemExplaining,
       explainPaperItemsAsync, stopPaperExplainTask, explainSinglePaperItem,
@@ -6039,6 +7151,12 @@ export default defineComponent({
       addKnowledgePoint, startEditKp, saveEditKp, cancelEditKp, deleteKnowledgePoint, resetKnowledgePoints,
       // 部门用户预览相关
       deptUsersDialogVisible, loadingDeptUsers, deptUsersList, previewDeptUsers,
+      pagedDeptUsersList, deptUsersPage, deptUsersPageSize,
+      // 人员选择树相关
+      personSelectDialogVisible, loadingPersonTree, personTreeData, personTreeRef, personTreeCheckedCount,
+      personTreeFilterText, filterPersonTreeNode,
+      openPersonSelectDialog, onGroupSelectionChange, onPersonTreeCheck, confirmPersonSelection,
+      checkAllPersonTree, uncheckAllPersonTree,
       // 简答题评分
       goToSaqGrading, Edit,
       // 成绩统计相关
@@ -6050,6 +7168,11 @@ export default defineComponent({
       // 知识点/错题详情弹窗
       kpDetailDialogVisible, loadingKpDetail, kpDetailData, viewKpDetail,
       questionDetailDialogVisible, loadingQuestionDetail, questionDetailData, viewQuestionDetail, getWrongChoiceBarWidth,
+      // 作弊详情弹窗
+      cheatDetailDialogVisible, cheatDetailData, viewCheatDetail,
+      // 防作弊配置相关
+      antiCheatConfig, loadingAntiCheat, savingAntiCheat, antiCheatMessage,
+      loadAntiCheatConfig, saveAntiCheatConfig, isAntiCheatDirty, beforeTabLeave,
       // 图标组件
       Upload, Download, MagicStick, Search, Check, Close
     }

@@ -693,6 +693,23 @@
                   </span>
                   <span v-if="item.comment" class="saq-comment">评语：{{ item.comment }}</span>
                 </div>
+                <!-- 知识条款明细（有知识条款时显示） -->
+                <div v-if="item.knowledge_clauses && item.knowledge_clauses.length > 0" class="saq-clauses-detail">
+                  <div class="saq-clauses-header">
+                    <span class="saq-label">知识条款（{{ item.knowledge_clauses.length }}条）</span>
+                  </div>
+                  <div 
+                    v-for="(clause, ci) in item.knowledge_clauses" 
+                    :key="ci" 
+                    class="saq-clause-item"
+                  >
+                    <span class="saq-clause-label">条款{{ ci + 1 }}</span>
+                    <span class="saq-clause-score" v-if="item.clause_scores && item.clause_scores[ci] !== undefined">
+                      （{{ item.clause_scores[ci] }}分）
+                    </span>
+                    <span class="saq-clause-text">{{ clause }}</span>
+                  </div>
+                </div>
                 <div class="saq-review-row">
                   <span class="saq-label">我的作答：</span>
                 </div>
@@ -808,7 +825,7 @@
     </el-dialog>
 
     <!-- 考试中切屏次数显示 -->
-    <div v-if="examStarted && !submitted && switchCount > 0" class="switch-count-badge">
+    <div v-if="antiCheatConfig.enabled && examStarted && !submitted && switchCount > 0" class="switch-count-badge">
       ⚠️ 已切屏 {{ switchCount }}/{{ maxSwitchCount }} 次
     </div>
 
@@ -1196,6 +1213,9 @@ interface ReviewItem extends Question {
   comment?: string
   my_answer?: string
   correct_answer?: string
+  knowledge_clauses?: string[]  // 知识条款列表
+  clause_scores?: number[]  // 每条款配置分数
+  knowledge_points?: string[]  // 结构化知识点列表
 }
 
 interface ReviewData {
@@ -1284,8 +1304,11 @@ export default defineComponent({
           const approvedQuestions = (bankData.items || []).filter((q: any) => q.status === 'approved')
           const kpList: string[] = []
           approvedQuestions.forEach((q: any) => {
-            const kps = extractKnowledgePointsFromAnalysis(q.explain || '')
-            kps.forEach(kp => {
+            // 优先使用结构化 knowledge_points 字段，回退到正则提取（兼容旧数据）
+            const kps = (q.knowledge_points && q.knowledge_points.length > 0)
+              ? q.knowledge_points
+              : extractKnowledgePointsFromAnalysis(q.explain || '')
+            kps.forEach((kp: string) => {
               // 使用标准化比较去重
               if (!kpList.some(existing => isSameKnowledgePoint(existing, kp))) {
                 kpList.push(kp)
@@ -1332,9 +1355,35 @@ export default defineComponent({
     const exportMessage = ref('')
     const scoreChartRef = ref<HTMLCanvasElement | null>(null)
 
+    // ======= 防作弊配置（从后端获取） =======
+    const antiCheatConfig = reactive({
+      enabled: true,
+      tab_switch_detection: true,
+      window_blur_detection: true,
+      window_resize_detection: true,
+      force_maximize: true,
+      beforeunload_warning: true,
+      max_switch_count: 3,
+    })
+    const antiCheatConfigLoaded = ref(false)
+
+    const loadAntiCheatConfig = async () => {
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`)
+        const data = await resp.json()
+        if (data?.ok && data.config) {
+          Object.assign(antiCheatConfig, data.config)
+        }
+      } catch (e) {
+        console.warn('加载防作弊配置失败，使用默认配置:', e)
+      } finally {
+        antiCheatConfigLoaded.value = true
+      }
+    }
+
     // ======= 防作弊相关 =======
     const switchCount = ref(0)  // 切屏次数
-    const maxSwitchCount = 3    // 最大允许切屏次数
+    const maxSwitchCount = computed(() => antiCheatConfig.max_switch_count || 3)  // 从配置获取最大允许切屏次数
     const switchWarningVisible = ref(false)  // 警告弹窗
     const lastSwitchTime = ref('')  // 最后一次切屏时间
     const switchLogs = ref<Array<{time: string, type: string}>>([])  // 切屏记录
@@ -1540,7 +1589,12 @@ export default defineComponent({
       if (!reviewData.value) return []
       return reviewData.value.items.filter(item => {
         if (item.qtype === 'saq') {
-          // SAQ: 未得满分且已评分才算错题
+          // SAQ未作答：直接判定为错题
+          const raw: any = item.my_answer
+          const answerText = typeof raw === 'string' ? raw.trim() : (Array.isArray(raw) ? raw.join('').trim() : '')
+          const answered = answerText && answerText !== '(未作答)'
+          if (!answered) return true
+          // SAQ已作答：已评分且未得满分才算错题（待评分不计入）
           return item.is_correct !== true && item.is_correct !== null
         }
         // 选择题: 错误才算错题
@@ -1715,7 +1769,10 @@ export default defineComponent({
       const kpMap: Record<string, { name: string; count: number; questionIndices: number[] }> = {}
       
       wrongQuestions.value.forEach((item) => {
-        const kps = extractKnowledgePoints(item.analysis)
+        // 优先使用结构化知识点字段，回退到正则提取
+        const kps = (item.knowledge_points && item.knowledge_points.length > 0) 
+          ? item.knowledge_points 
+          : extractKnowledgePoints(item.analysis)
         kps.forEach(kp => {
           if (!kpMap[kp]) {
             kpMap[kp] = { name: kp, count: 0, questionIndices: [] }
@@ -1998,7 +2055,8 @@ export default defineComponent({
           body: JSON.stringify({
             attempt_id: attemptId.value,
             answers,
-            switch_count: switchCount.value  // 同时保存切屏次数
+            switch_count: switchCount.value,  // 同时保存切屏次数
+            switch_events: switchLogs.value   // 同时保存切屏事件记录
           })
         })
         
@@ -2070,10 +2128,12 @@ export default defineComponent({
 
     // ======= 本地存储切屏次数相关函数（必须在使用前定义）=======
     const getSwitchCountKey = (aId?: string) => `exam_switch_count_${aId || attemptId.value}`
+    const getSwitchLogsKey  = (aId?: string) => `exam_switch_logs_${aId  || attemptId.value}`
     
     const saveSwitchCountToLocal = () => {
       if (!attemptId.value) return
       localStorage.setItem(getSwitchCountKey(), String(switchCount.value))
+      localStorage.setItem(getSwitchLogsKey(),  JSON.stringify(switchLogs.value))
     }
     
     const loadSwitchCountFromLocal = (aId?: string): number => {
@@ -2081,10 +2141,17 @@ export default defineComponent({
       const saved = localStorage.getItem(key)
       return saved ? parseInt(saved, 10) || 0 : 0
     }
+
+    const loadSwitchLogsFromLocal = (aId?: string): Array<{time: string, type: string}> => {
+      try {
+        return JSON.parse(localStorage.getItem(getSwitchLogsKey(aId)) || '[]')
+      } catch { return [] }
+    }
     
     const clearSwitchCountLocal = () => {
       if (!attemptId.value) return
       localStorage.removeItem(getSwitchCountKey())
+      localStorage.removeItem(getSwitchLogsKey())
     }
 
     const checkInProgressExam = async () => {
@@ -2168,7 +2235,8 @@ export default defineComponent({
       const localCount = loadSwitchCountFromLocal(progressData.attempt_id)
       switchCount.value = Math.max(backendCount, localCount)
       lastSwitchTimestamp.value = 0
-      switchLogs.value = []
+      // 恢复切屏事件记录（从本地存储）
+      switchLogs.value = loadSwitchLogsFromLocal(progressData.attempt_id)
       switchWarningVisible.value = false
       
       // 如果本地记录更多，同步到后端
@@ -2185,8 +2253,10 @@ export default defineComponent({
       // 重置懒加载状态（低配模式）
       resetLazyLoad()
       
-      // 记录初始窗口大小（用于检测窗口缩小）
-      recordInitialWindowSize()
+      // 记录初始窗口大小（用于检测窗口缩小，受防作弊配置控制）
+      if (antiCheatConfig.enabled && antiCheatConfig.window_resize_detection) {
+        recordInitialWindowSize()
+      }
       
       // 启动倒计时和自动保存
       startTimer()
@@ -2215,7 +2285,8 @@ export default defineComponent({
         body: JSON.stringify({
           attempt_id: attemptId.value,
           answers,
-          switch_count: switchCount.value
+          switch_count: switchCount.value,
+          switch_events: switchLogs.value
         }),
         keepalive: true
       }).catch(e => console.error('保存切屏次数失败:', e))
@@ -2224,12 +2295,16 @@ export default defineComponent({
     // 页面关闭前警告
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (examStarted.value && !submitted.value) {
-        // 记录切屏并保存
-        handleSwitchDetected('关闭/刷新页面')
-        saveSwitchCount()
-        e.preventDefault()
-        e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
-        return e.returnValue
+        // 记录切屏并保存（如果防作弊开启）
+        if (antiCheatConfig.enabled) {
+          handleSwitchDetected('关闭/刷新页面')
+          saveSwitchCount()
+        }
+        if (antiCheatConfig.enabled && antiCheatConfig.beforeunload_warning) {
+          e.preventDefault()
+          e.returnValue = '考试进行中，确定要离开吗？您的答案已自动保存。'
+          return e.returnValue
+        }
       }
     }
 
@@ -2247,6 +2322,8 @@ export default defineComponent({
 
     // 统一的切屏处理函数（带防抖）
     const handleSwitchDetected = (type: string) => {
+      // 防作弊总开关关闭时跳过
+      if (!antiCheatConfig.enabled) return
       // 只在考试进行中且未提交时检测
       if (!examStarted.value || submitted.value) return
       
@@ -2263,24 +2340,26 @@ export default defineComponent({
       // 立即保存切屏次数（使用 fetch + keepalive 确保可靠保存）
       saveSwitchCount()
       
-      if (switchCount.value >= maxSwitchCount) {
+      if (switchCount.value >= maxSwitchCount.value) {
         // 达到最大次数，自动提交
         ElMessage.error(`检测到第${switchCount.value}次切屏，系统将自动提交试卷！`)
         submitExam()
       } else {
         // 显示警告
         switchWarningVisible.value = true
-        ElMessage.warning(`警告：检测到切屏（第${switchCount.value}/${maxSwitchCount}次），请专注作答！`)
+        ElMessage.warning(`警告：检测到切屏（第${switchCount.value}/${maxSwitchCount.value}次），请专注作答！`)
       }
     }
 
     const handleVisibilityChange = () => {
+      if (!antiCheatConfig.tab_switch_detection) return
       if (document.hidden) {
         handleSwitchDetected('切换标签页/最小化')
       }
     }
 
     const handleWindowBlur = () => {
+      if (!antiCheatConfig.window_blur_detection) return
       // 如果页面已经隐藏，不重复计数（visibilitychange已处理）
       if (document.hidden) return
       
@@ -2344,6 +2423,7 @@ export default defineComponent({
 
     // 窗口缩小检测（视为切屏）
     const handleWindowResize = () => {
+      if (!antiCheatConfig.window_resize_detection) return
       // 只在考试进行中且未提交时检测
       if (!examStarted.value || submitted.value) return
       // 如果没有记录初始窗口大小，跳过
@@ -2446,12 +2526,14 @@ export default defineComponent({
     const loadPublishedExams = async () => {
       loadingExamNotifications.value = true
       try {
-        // 传入用户部门，按部门过滤考试通知
+        // 传入用户部门和用户ID，按部门/个人过滤考试通知
         const userDepartment = store.state.user.department || ''
+        const userId = store.state.user.id || ''
         let url = API_ENDPOINTS.EXAM.NOTIFICATIONS
-        if (userDepartment) {
-          url += `?user_department=${encodeURIComponent(userDepartment)}`
-        }
+        const params = new URLSearchParams()
+        if (userDepartment) params.set('user_department', userDepartment)
+        if (userId) params.set('user_id', userId)
+        if (params.toString()) url += `?${params.toString()}`
         const data = await mcqFetch(url)
         if (data?.ok !== false) {
           publishedExams.value = Array.isArray(data.exams) ? data.exams : []
@@ -2533,11 +2615,13 @@ export default defineComponent({
         // 2. 按题型分类（只取已通过的题目）
         let approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
         
-        // 2.1 按知识点筛选（如果选择了知识点）
+        // 2.1 按知识点筛选（如果选择了知识点），优先使用结构化字段
         if (selectedPracticeKnowledgePoints.value.length > 0) {
           approvedQuestions = approvedQuestions.filter((q: any) => {
-            const qKps = extractKnowledgePointsFromAnalysis(q.explain || '')
-            return qKps.some(qKp => 
+            const qKps = (q.knowledge_points && q.knowledge_points.length > 0)
+              ? q.knowledge_points
+              : extractKnowledgePointsFromAnalysis(q.explain || '')
+            return qKps.some((qKp: string) => 
               selectedPracticeKnowledgePoints.value.some(selKp => isSameKnowledgePoint(qKp, selKp))
             )
           })
@@ -2605,12 +2689,19 @@ export default defineComponent({
         // 辅助函数：构建题目项（包含图片数据）
         const buildPaperItem = (q: any, qtype: string) => {
           const item: any = {
-            qid: q.qid,
+            qid: q.id || q.qid,
             stem: q.stem,
             options: q.options,
             answer: q.answer,
             explain_original: q.explain || '',
             qtype: qtype
+          }
+          // 包含结构化知识点和知识条款
+          if (q.knowledge_points && q.knowledge_points.length > 0) {
+            item.knowledge_points = q.knowledge_points
+          }
+          if (q.knowledge_clauses && q.knowledge_clauses.length > 0) {
+            item.knowledge_clauses = q.knowledge_clauses
           }
           // 包含图片数据
           if (q.stem_images && q.stem_images.length > 0) {
@@ -2757,11 +2848,15 @@ export default defineComponent({
         // 重置防作弊状态
         resetAntiCheat()
         
-        // 提示用户最大化窗口
-        await promptMaximizeWindow()
+        // 提示用户最大化窗口（受防作弊配置控制）
+        if (antiCheatConfig.enabled && antiCheatConfig.force_maximize) {
+          await promptMaximizeWindow()
+        }
         
         // 记录初始窗口大小（用于检测窗口缩小）- 全屏后记录
-        recordInitialWindowSize()
+        if (antiCheatConfig.enabled && antiCheatConfig.window_resize_detection) {
+          recordInitialWindowSize()
+        }
 
         // 启动倒计时和自动保存
         startTimer()
@@ -3029,11 +3124,16 @@ export default defineComponent({
       const studentId = store.state.user.username
       if (!studentId || !reviewData.value) return
       
-      // 收集错题（包括SAQ未得满分的题目）
+      // 收集错题（包括SAQ未作答和未得满分的题目）
       const wrongItems = reviewData.value.items
         .filter(item => {
           if (item.qtype === 'saq') {
-            // SAQ: 未得满分（部分正确或错误）才算错题
+            // SAQ未作答：直接判定为错题
+            const raw: any = item.my_answer
+            const answerText = typeof raw === 'string' ? raw.trim() : (Array.isArray(raw) ? raw.join('').trim() : '')
+            const answered = answerText && answerText !== '(未作答)'
+            if (!answered) return true
+            // SAQ已作答：已评分且未得满分才算错题（待评分不计入）
             return item.is_correct !== true && item.is_correct !== null
           }
           // 选择题: 错误才算错题
@@ -3308,8 +3408,10 @@ export default defineComponent({
           stem: q.stem,
           options: q.options,
           answer: q.answer,
-          explain: q.explain || '',
+          explain_original: q.explain || '',
           qtype: q.qtype || 'single',
+          knowledge_points: q.knowledge_points || [],
+          knowledge_clauses: q.knowledge_clauses || [],
           stem_images: q.stem_images,
           option_images: q.option_images,
           analysis_images: q.analysis_images
@@ -3365,7 +3467,7 @@ export default defineComponent({
 
     // 监听路由离开（Vue Router 导航）
     onBeforeRouteLeave((to, from, next) => {
-      if (examStarted.value && !submitted.value) {
+      if (examStarted.value && !submitted.value && antiCheatConfig.tab_switch_detection) {
         // 记录切屏（handleSwitchDetected 内部会调用 saveSwitchCount with keepalive）
         handleSwitchDetected('离开考试页面')
       }
@@ -3376,6 +3478,8 @@ export default defineComponent({
       loadPapers()
       loadPublishedExams()  // 加载考试通知
       loadWrongBook()  // 加载错题本
+      // 加载防作弊配置
+      loadAntiCheatConfig()
       // 检查是否有未完成的考试
       checkInProgressExam()
       // 添加页面关闭前警告
@@ -3536,6 +3640,8 @@ export default defineComponent({
       viewExamResult,
       submitTimeoutExam,
       deleteExamRecord,
+      // 防作弊配置
+      antiCheatConfig,
       // Icons
       Bell,
       Refresh,
@@ -4995,6 +5101,49 @@ export default defineComponent({
   word-wrap: break-word;
 }
 
+/* 知识条款明细样式 */
+.saq-clauses-detail {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 6px;
+}
+
+.saq-clauses-header {
+  margin-bottom: 8px;
+}
+
+.saq-clause-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.saq-clause-label {
+  color: #a855f7;
+  font-weight: 600;
+  font-size: 12px;
+  background: rgba(168, 85, 247, 0.15);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.saq-clause-score {
+  color: #94a3b8;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.saq-clause-text {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
 .section-count {
   font-size: 14px;
   color: #94a3b8;
@@ -5529,6 +5678,9 @@ export default defineComponent({
 
 .saq-wrong-area {
   margin: 12px 0 12px 34px;
+}
+.saq-wrong-area .saq-answer-content {
+  color: #1e293b;
 }
 .saq-wrong-row {
   margin-bottom: 10px;
