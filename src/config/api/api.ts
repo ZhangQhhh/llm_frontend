@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   ADMIN: {
     USERS: `/admin/users`,
     USER_LIST: `/api/admin/users/list/`,
+    USER_LOGIN_IPS: `/api/admin/users/login-ips/`,
     USER_BAN: `/api/admin/users/ban/`,
     USER_UNBAN: `/api/admin/users/unban/`,
     // 账号审核
@@ -40,11 +41,15 @@ export const API_ENDPOINTS = {
     RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
     UPGRADE_ADMIN: `/api/admin/upgrade-admin/`,
     SET_BJZX_ADMIN: `/api/admin/users/set-bjzx-admin/`,  // 设置边检智学管理员
+    IP_BLACKLIST_LIST: `/api/admin/ip-blacklist/`,
+    IP_BLACKLIST_ADD: `/api/admin/ip-blacklist/`,
+    IP_BLACKLIST_DELETE: (identifier: string | number) => `/api/admin/ip-blacklist/${encodeURIComponent(String(identifier))}/`,
   },
   USER: {
     LOGIN: `/user/account/token/`,
     REGISTER: `/user/account/register/`,
-    INFO: `/user/account/info/`
+    INFO: `/user/account/info/`,
+    SYNC_LOGIN_IP: `/user/account/login-ip/`
   },
   PERMISSIONS: {
     LIST: `/user/permissions`,
@@ -137,7 +142,12 @@ export const API_ENDPOINTS = {
     TOTAL_FORECAST: `/entryExit/forecast-total`,
     TRAFFIC_TOOLS_FORECAST: `/entryExit/forecast-traffic-tools`,
     TOTAL_FORECAST_HISTORY: `/entryExit/forecast-total/history`,
-    TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`
+    TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`,
+    YEAR_DATA_UPLOAD: `/entryExit/year-data/upload`,
+    YEAR_DATA_FILES: `/entryExit/year-data/files`,
+    YEAR_REPORT_VALIDATE: `/entryExit/year-report/validate`,
+    YEAR_REPORT_GENERATE: `/entryExit/year-report/generate`,
+    YEAR_REPORT_PROGRESS: (jobId: string) => `/entryExit/year-report/progress/${jobId}`
   },
   // 文档管理接口
   DOCUMENTS: {

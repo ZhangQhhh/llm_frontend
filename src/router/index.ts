@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import KnowledgeQAView from '../views/KnowledgeQAView.vue'
+import KnowledgeQAViewBeta from '../views/KnowledgeQAViewBeta.vue'
 import ConversationView from '../views/ConversationView.vue'
 import SmartOfficeView from '../views/SmartOfficeView.vue'
 import Immigration12367View from '../views/Immigration12367View.vue'
@@ -20,6 +21,7 @@ declare module 'vue-router' {
     title?: string
     pageCode?: string
     publicAccess?: boolean
+    hideAppChrome?: boolean
   }
 }
 
@@ -89,12 +91,28 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/knowledge-qa/debug',
+    alias: '/debug',
     name: 'knowledge-qa-debug',
     component: KnowledgeQAView,
     meta: {
-      requiresAuth: true,
       title: '知识问答 (Debug模式)',
-      pageCode: 'PAGE_004'
+      publicAccess: true
+    }
+  },
+  {
+    path: '/403',
+    name: 'ip-blocked',
+    component: () => import('../views/IpBlockedView.vue'),
+    meta: { title: '403 禁止访问', publicAccess: true, hideAppChrome: true }
+  },
+  {
+    path: '/knowledge-qa/beta',
+    name: 'knowledge-qa-beta',
+    component: KnowledgeQAViewBeta,
+    meta: {
+      requiresAuth: true,
+      title: '知识问答 Beta',
+      publicAccess: true
     }
   },
   {

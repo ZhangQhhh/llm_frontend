@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="qa-page ai-tech-theme" :class="{ 'lite-mode': liteMode }">
     <!-- 科技感AI背景效果 (简洁模式下隐藏) -->
     <div v-if="!liteMode" class="ai-bg">
@@ -56,7 +56,7 @@
         </div>
       </el-header>
 
-      <el-main>
+      <el-main ref="mainScrollRef">
         <div class="content-wrapper">
           <!-- 搜索/输入区域 -->
           <el-card class="search-card glass-effect" :body-style="{ padding: '0' }">
@@ -189,8 +189,17 @@
                             <div class="spinner-small"></div>
                             <span>正在深度思考中...</span>
                           </div>
-                          <div v-else-if="loading" class="thinking-text thinking-plain" v-text="thinking"></div>
-                          <div v-else class="thinking-text markdown-body" v-html="renderMarkdown(thinking)"></div>
+                          <div v-else class="thinking-text markdown-body markstream-wrapper">
+                            <MarkdownRender
+                              custom-id="knowledge-qa-beta-thinking"
+                              :content="streamingThinkingContent"
+                              :max-live-nodes="0"
+                              :batch-rendering="markstreamThinkingBatchRendering"
+                              :viewport-priority="true"
+                              :render-code-blocks-as-pre="true"
+                              :final="!loading"
+                            />
+                          </div>
                         </div>
                       </el-collapse-item>
                     </el-collapse>
@@ -219,11 +228,17 @@
                         <span>AI正在思考中...</span>
                       </div>
                     </div>
-                    <div v-else-if="answer && loading" class="markdown-body">
-                      <div v-html="streamingStableHtml"></div>
-                      <span class="streaming-tail" v-text="streamingTail"></span>
+                    <div v-else-if="answer" class="markdown-body markstream-wrapper">
+                      <MarkdownRender
+                        custom-id="knowledge-qa-beta"
+                        :content="streamingAnswerContent"
+                        :max-live-nodes="0"
+                        :batch-rendering="markstreamBatchRendering"
+                        :viewport-priority="true"
+                        :render-code-blocks-as-pre="true"
+                        :final="!loading"
+                      />
                     </div>
-                    <div v-else-if="answer" class="markdown-body" v-html="renderMarkdown(processedAnswer)"></div>
                   </div>
 
                   <!-- 底部反馈 -->
@@ -521,9 +536,11 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
+import MarkdownRender from 'markstream-vue';
+import 'markstream-vue/index.css';
 import {
    Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
@@ -559,8 +576,9 @@ import { renderMarkdown } from '@/utils/markdown';
 // import { streamMonitor } from '@/utils/streamPerformanceMonitor'; // 暂时注释，待后续使用
 
 export default defineComponent({
-  name: 'KnowledgeQAView',
+  name: 'KnowledgeQAViewBeta',
   components: {
+    MarkdownRender,
      Cpu, Aim, Operation, Promotion, Loading, Connection,
     ChatDotRound, CopyDocument, Select, CloseBold, Key, Share, Document,
     Sunny, Setting, Monitor, TrophyBase
@@ -579,21 +597,27 @@ export default defineComponent({
     const thinking = ref('');
     const pendingAnswerBuffer = ref('');
     const pendingThinkingBuffer = ref('');
-    const streamingStableHtml = ref('');
-    const streamingTail = ref('');
-    const lastStableText = ref('');
     const references = ref<ReferenceSource[]>([]);
     const activeThinking = ref(['1']); // 默认展开思考
     const answerBodyRef = ref<HTMLElement | null>(null);
+    const mainScrollRef = ref<unknown>(null);
     const scrollAnchor = ref<HTMLElement | null>(null);
-    
-    // ChatGPT/Claude 风格滚动控制 + 节流
-    let userHasScrolledUp = false; // 用户是否手动向上滚动
-    let isAutoScrolling = false; // 防止自动滚动触发用户滚动检测
-    let lastScrollTime = 0; // 上次滚动时间
-    const SCROLL_THROTTLE_MS = 600; // 节流间隔（毫秒）- 保证每600ms至少滚动一次
-    const STREAM_FLUSH_MS = 16;
+
+    // Sticky + rAF 自动跟随滚动
+    const STICKY_BOTTOM_THRESHOLD_PX = 80;
+    const STICKY_SCROLL_EPSILON_PX = 4;
+    const STICKY_SCROLL_MIN_INTERVAL_MS = 56;
+    let shouldStickToBottom = true;
+    let isProgrammaticScroll = false;
+    let scrollRafId: number | null = null;
+    let scrollStateRafId: number | null = null;
+    let stickyRescheduleTimer: number | null = null;
+    let lastStickyScrollAt = 0;
+    let boundMainScrollElement: HTMLElement | null = null;
+    const STREAM_FLUSH_MS = 32;
+    const STREAM_FORCE_FLUSH_CHARS = 1200;
     let streamFlushTimer: number | null = null;
+    let lastStreamFlushAt = 0;
     const postDoneScrollTimers: number[] = [];
 
     const flushStreamBuffers = () => {
@@ -605,17 +629,22 @@ export default defineComponent({
         answer.value += pendingAnswerBuffer.value;
         pendingAnswerBuffer.value = '';
       }
-      if (loading.value) {
-        updateStreamingRender();
-      }
     };
 
     const scheduleStreamFlush = () => {
       if (streamFlushTimer !== null) return;
+      const now = performance.now();
+      const pendingChars = pendingThinkingBuffer.value.length + pendingAnswerBuffer.value.length;
+      const targetInterval = pendingChars >= STREAM_FORCE_FLUSH_CHARS ? 0 : STREAM_FLUSH_MS;
+      const waitMs = Math.max(0, targetInterval - (now - lastStreamFlushAt));
       streamFlushTimer = window.setTimeout(() => {
         streamFlushTimer = null;
         flushStreamBuffers();
-      }, STREAM_FLUSH_MS);
+        lastStreamFlushAt = performance.now();
+        if (pendingThinkingBuffer.value || pendingAnswerBuffer.value) {
+          scheduleStreamFlush();
+        }
+      }, waitMs);
     };
 
     const mapReferenceIds = (text: string) => {
@@ -626,40 +655,6 @@ export default defineComponent({
         const newId = referenceIdMap.value.get(originalId);
         return newId ? `[业务规定 ${newId}]` : match;
       });
-    };
-
-    const splitStableContent = (text: string) => {
-      if (!text) return { stable: '', tail: '' };
-      let inFence = false;
-      let lastBoundary = -1;
-      for (let i = 0; i < text.length - 2; i++) {
-        if (text[i] === '`' && text[i + 1] === '`' && text[i + 2] === '`') {
-          inFence = !inFence;
-          i += 2;
-          continue;
-        }
-        if (!inFence && text[i] === '\n' && text[i + 1] === '\n') {
-          lastBoundary = i + 2;
-        }
-      }
-      if (lastBoundary === -1 && text.length > 400) {
-        const lastNewline = text.lastIndexOf('\n');
-        if (lastNewline > 0) lastBoundary = lastNewline + 1;
-      }
-      if (lastBoundary <= 0) {
-        return { stable: '', tail: text };
-      }
-      return { stable: text.slice(0, lastBoundary), tail: text.slice(lastBoundary) };
-    };
-
-    const updateStreamingRender = () => {
-      const fullText = mapReferenceIds(answer.value);
-      const { stable, tail } = splitStableContent(fullText);
-      streamingTail.value = tail;
-      if (stable !== lastStableText.value) {
-        streamingStableHtml.value = stable ? renderMarkdown(stable) : '';
-        lastStableText.value = stable;
-      }
     };
 
     // 过滤后的参考文献（根据环境变量决定是否显示隐藏节点）
@@ -715,6 +710,26 @@ export default defineComponent({
     const processedAnswer = computed(() => {
       return mapReferenceIds(answer.value);
     });
+    const stripThinkTags = (text: string) => {
+      if (!text) return '';
+      return text
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<\/?think>/gi, '');
+    };
+    const streamingAnswerContent = computed(() => stripThinkTags(processedAnswer.value));
+    const streamingThinkingContent = computed(() => stripThinkTags(thinking.value));
+    const markstreamBatchRendering = {
+      initialRenderBatchSize: 24,
+      renderBatchSize: 16,
+      renderBatchDelay: 8,
+      renderBatchBudgetMs: 6
+    };
+    const markstreamThinkingBatchRendering = {
+      initialRenderBatchSize: 20,
+      renderBatchSize: 14,
+      renderBatchDelay: 10,
+      renderBatchBudgetMs: 6
+    };
     const subQuestions = ref<SubQuestionsData | null>(null);
     const keywords = ref<KeywordsData | null>(null);
     const loading = ref(false);
@@ -834,8 +849,9 @@ export default defineComponent({
       onChunk?: () => void
     ) => {
       const chars = text.split('');
-      for (let i = 0; i < chars.length; i++) {
-        targetRef.value += chars[i];
+      const chunkSize = delay <= 20 ? 2 : 1;
+      for (let i = 0; i < chars.length; i += chunkSize) {
+        targetRef.value += chars.slice(i, i + chunkSize).join('');
         onChunk?.();
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
@@ -854,15 +870,15 @@ export default defineComponent({
       thinking.value = '';
       pendingAnswerBuffer.value = '';
       pendingThinkingBuffer.value = '';
-      streamingStableHtml.value = '';
-      streamingTail.value = '';
-      lastStableText.value = '';
+      lastStreamFlushAt = 0;
       if (streamFlushTimer !== null) {
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
       }
       clearPostDoneScrollTimers();
-      userHasScrolledUp = false;  // 重置滚动状态
+      shouldStickToBottom = true;
+      bindMainScrollListener();
+      nextTick(() => scheduleStickyScroll(true));
       
       // 模拟流式输出思考过程
       const mockThinking = normalizeMockThinking(getMockThinking());
@@ -873,12 +889,7 @@ export default defineComponent({
       // 模拟流式输出回答
       const mockAnswer = getMockAnswer();
       if (mockAnswer) {
-        await simulateStreamOutput(mockAnswer, answer, 20, () => {
-          if (loading.value) {
-            updateStreamingRender();
-          }
-        });
-        updateStreamingRender();
+        await simulateStreamOutput(mockAnswer, answer, 20);
       }
       
       // 设置参考文献
@@ -1098,9 +1109,7 @@ export default defineComponent({
       thinking.value = '';
       pendingAnswerBuffer.value = '';
       pendingThinkingBuffer.value = '';
-      streamingStableHtml.value = '';
-      streamingTail.value = '';
-      lastStableText.value = '';
+      lastStreamFlushAt = 0;
       if (streamFlushTimer !== null) {
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
@@ -1323,9 +1332,7 @@ export default defineComponent({
       thinking.value = '';
       pendingAnswerBuffer.value = '';
       pendingThinkingBuffer.value = '';
-      streamingStableHtml.value = '';
-      streamingTail.value = '';
-      lastStableText.value = '';
+      lastStreamFlushAt = 0;
       if (streamFlushTimer !== null) {
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
@@ -1338,7 +1345,9 @@ export default defineComponent({
       feedbackSubmitted.value = false;
       loading.value = true;
       activeThinking.value = ['1'];
-      userHasScrolledUp = false;  // 重置滚动状态
+      shouldStickToBottom = true;
+      bindMainScrollListener();
+      nextTick(() => scheduleStickyScroll(true));
 
       if (insertBlock.value) {
         showProgress.value = true;
@@ -1452,9 +1461,7 @@ export default defineComponent({
             streamFlushTimer = null;
           }
           flushStreamBuffers();
-          streamingStableHtml.value = renderMarkdown(mapReferenceIds(answer.value));
-          streamingTail.value = '';
-          lastStableText.value = mapReferenceIds(answer.value);
+          lastStreamFlushAt = performance.now();
           loading.value = false;
           showProgress.value = false;
           schedulePostDoneScroll();
@@ -1532,42 +1539,125 @@ export default defineComponent({
       return '';
     };
 
-    // ChatGPT/Claude 风格滚动：使用 scrollIntoView + 节流
-    const autoScrollToBottom = (force = false) => {
-      // 如果用户手动向上滚动了，不自动滚动（除非强制）
-      if (userHasScrolledUp && !force) {
+    const getMainScrollElement = (): HTMLElement | null => {
+      const candidate = mainScrollRef.value as { $el?: HTMLElement } | HTMLElement | null;
+      if (!candidate) return null;
+      if (candidate instanceof HTMLElement) return candidate;
+      if (candidate.$el instanceof HTMLElement) return candidate.$el;
+      return null;
+    };
+
+    const bindMainScrollListener = () => {
+      const element = getMainScrollElement();
+      if (!element || element === boundMainScrollElement) {
         return;
       }
-      
-      const now = Date.now();
-      // 节流：限制滚动频率，但强制滚动立即执行
-      if (!force && now - lastScrollTime < SCROLL_THROTTLE_MS) {
+      if (boundMainScrollElement) {
+        boundMainScrollElement.removeEventListener('scroll', handleUserScroll);
+      }
+      element.addEventListener('scroll', handleUserScroll, { passive: true });
+      boundMainScrollElement = element;
+    };
+
+    const unbindMainScrollListener = () => {
+      if (!boundMainScrollElement) {
         return;
       }
-      lastScrollTime = now;
-      
-      requestAnimationFrame(() => {
-        if (scrollAnchor.value) {
-          isAutoScrolling = true;
-          scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' });
-          setTimeout(() => { isAutoScrolling = false; }, 150);
-        } else {
-          // 降级方案：直接滚动到底部
-          isAutoScrolling = true;
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth'
-          });
-          setTimeout(() => { isAutoScrolling = false; }, 150);
+      boundMainScrollElement.removeEventListener('scroll', handleUserScroll);
+      boundMainScrollElement = null;
+    };
+
+    const getDistanceFromBottom = () => {
+      const mainScrollEl = getMainScrollElement();
+      if (mainScrollEl) {
+        return Math.max(
+          0,
+          mainScrollEl.scrollHeight - (mainScrollEl.scrollTop + mainScrollEl.clientHeight)
+        );
+      }
+      const root = (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+      return Math.max(0, root.scrollHeight - (root.scrollTop + root.clientHeight));
+    };
+
+    const clearPendingScrollRaf = () => {
+      if (scrollRafId !== null) {
+        cancelAnimationFrame(scrollRafId);
+        scrollRafId = null;
+      }
+    };
+
+    const clearScrollStateRaf = () => {
+      if (scrollStateRafId !== null) {
+        cancelAnimationFrame(scrollStateRafId);
+        scrollStateRafId = null;
+      }
+    };
+
+    const clearStickyRescheduleTimer = () => {
+      if (stickyRescheduleTimer !== null) {
+        clearTimeout(stickyRescheduleTimer);
+        stickyRescheduleTimer = null;
+      }
+    };
+
+    const syncStickyState = () => {
+      if (isProgrammaticScroll) return;
+      shouldStickToBottom = getDistanceFromBottom() <= STICKY_BOTTOM_THRESHOLD_PX;
+    };
+
+    const doScrollToBottom = () => {
+      const mainScrollEl = getMainScrollElement();
+      if (mainScrollEl) {
+        mainScrollEl.scrollTop = mainScrollEl.scrollHeight;
+        return;
+      }
+      const anchor = scrollAnchor.value;
+      if (anchor) {
+        anchor.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'auto' });
+        return;
+      }
+      const root = (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+      window.scrollTo({ top: root.scrollHeight, behavior: 'auto' });
+    };
+
+    const scheduleStickyScroll = (force = false) => {
+      if (!force && !shouldStickToBottom) return;
+      if (scrollRafId !== null) return;
+
+      scrollRafId = window.requestAnimationFrame(() => {
+        scrollRafId = null;
+        const distance = getDistanceFromBottom();
+        if (!force && distance <= STICKY_SCROLL_EPSILON_PX) {
+          return;
         }
+
+        const now = performance.now();
+        const elapsed = now - lastStickyScrollAt;
+        if (!force && elapsed < STICKY_SCROLL_MIN_INTERVAL_MS) {
+          if (stickyRescheduleTimer === null) {
+            stickyRescheduleTimer = window.setTimeout(() => {
+              stickyRescheduleTimer = null;
+              scheduleStickyScroll();
+            }, Math.max(0, STICKY_SCROLL_MIN_INTERVAL_MS - elapsed));
+          }
+          return;
+        }
+
+        isProgrammaticScroll = true;
+        doScrollToBottom();
+        lastStickyScrollAt = performance.now();
+        window.setTimeout(() => {
+          isProgrammaticScroll = false;
+          syncStickyState();
+        }, 0);
       });
     };
 
     const schedulePostDoneScroll = () => {
-      const delays = [0, 120, 320];
-      delays.forEach((delay) => {
+      const plans = [0, 120];
+      plans.forEach((delay) => {
         const timerId = window.setTimeout(() => {
-          autoScrollToBottom(true);
+          scheduleStickyScroll(true);
           const index = postDoneScrollTimers.indexOf(timerId);
           if (index !== -1) {
             postDoneScrollTimers.splice(index, 1);
@@ -1582,48 +1672,50 @@ export default defineComponent({
       postDoneScrollTimers.length = 0;
     };
 
-    // 检测用户是否手动向上滚动（ChatGPT/Claude 风格）
     const handleUserScroll = () => {
-      // 如果是自动滚动触发的，忽略
-      if (isAutoScrolling) return;
-      
-      const currentScrollTop = window.scrollY;
-      const maxScrollTop = document.documentElement.scrollHeight - window.innerHeight;
-      const distanceFromBottom = maxScrollTop - currentScrollTop;
-      
-      // 距离底部超过 50px 认为用户在查看历史
-      // 距离底部小于 50px 认为用户回到了底部，恢复自动滚动
-      userHasScrolledUp = distanceFromBottom > 50;
+      if (scrollStateRafId !== null) return;
+      scrollStateRafId = window.requestAnimationFrame(() => {
+        scrollStateRafId = null;
+        syncStickyState();
+      });
     };
 
-    // 监听 answer 和 thinking 变化，自动滚动（已内置节流）
+    const handleViewportChange = () => {
+      bindMainScrollListener();
+      handleUserScroll();
+    };
+
     watch([answer, thinking], () => {
       if (loading.value) {
-        autoScrollToBottom();
+        scheduleStickyScroll();
       }
     });
 
-    // 监听 mcqMode 变化
     onMounted(() => {
-      // 监听选择题模式变化
       store.watch(
         () => mcqMode.value,
         (newVal) => handleMcqModeChange(newVal)
       );
-      // 添加滚动监听
-      window.addEventListener('wheel', handleUserScroll, { passive: true });
-      window.addEventListener('touchmove', handleUserScroll, { passive: true });
+      nextTick(() => {
+        bindMainScrollListener();
+        syncStickyState();
+      });
+      window.addEventListener('scroll', handleUserScroll, { passive: true });
+      window.addEventListener('resize', handleViewportChange, { passive: true });
     });
 
     onUnmounted(() => {
-      window.removeEventListener('wheel', handleUserScroll);
-      window.removeEventListener('touchmove', handleUserScroll);
-      // 清理定时器
+      window.removeEventListener('scroll', handleUserScroll);
+      window.removeEventListener('resize', handleViewportChange);
+      unbindMainScrollListener();
       if (summaryTimeoutId) {
         clearTimeout(summaryTimeoutId);
         summaryTimeoutId = null;
       }
       clearPostDoneScrollTimers();
+      clearPendingScrollRaf();
+      clearScrollStateRaf();
+      clearStickyRescheduleTimer();
       if (streamFlushTimer !== null) {
         clearTimeout(streamFlushTimer);
         streamFlushTimer = null;
@@ -1687,12 +1779,12 @@ export default defineComponent({
     };
 
     return {
-      question, answer, thinking, references, filteredReferences, referenceIdMap, processedAnswer, subQuestions, keywords,
+      question, answer, thinking, references, filteredReferences, referenceIdMap, processedAnswer, streamingAnswerContent, streamingThinkingContent, subQuestions, keywords,
       loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       streamTestEnabled, streamTestAvailable,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
-      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef, scrollAnchor,
-      streamingStableHtml, streamingTail,
+      showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef, mainScrollRef, scrollAnchor,
+      markstreamBatchRendering, markstreamThinkingBatchRendering,
       // 答案归纳相关
       summarizing, summaryResult,
       handleSubmit, handleLike, handleDislikeSubmit, openFeedbackModal,
@@ -3946,3 +4038,4 @@ export default defineComponent({
   gap: 0.5rem;
 }
 </style>
+

@@ -59,16 +59,27 @@
             @change="handleDateChange"
           />
         </div>
-        <div class="filter-item" v-if="!isWritingLogs">
+        <div class="filter-item">
           <label>用户名：</label>
-          <el-input
-            v-model="filterUserName"
-            placeholder="输入用户名筛选"
+          <el-select
+            v-model="selectedUserNames"
+            multiple
+            filterable
             clearable
-            style="width: 200px;"
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
+            collapse-tags
+            collapse-tags-tooltip
+            style="width: 320px;"
+            placeholder="勾选用户名筛选"
+            @change="handleUserFilterChange"
+            @clear="handleUserFilterChange"
+          >
+            <el-option
+              v-for="option in userFilterOptions"
+              :key="option.value"
+              :label="`${option.label} (${option.count})`"
+              :value="option.value"
+            />
+          </el-select>
         </div>
         <div class="filter-item">
           <el-button type="primary" @click="handleSearch" :loading="loading">
@@ -159,7 +170,7 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="logs.length === 0" class="empty">
+      <div v-else-if="filteredLogs.length === 0" class="empty">
         <el-icon :size="64" color="#9ca3af"><FolderOpened /></el-icon>
         <span>{{ isWritingLogs ? "该日期暂无写作日志" : "暂无日志记录" }}</span>
       </div>
@@ -167,7 +178,7 @@
       <!-- 日志列表 -->
       <div v-else class="log-list">
         <div
-          v-for="(log, index) in logs"
+          v-for="(log, index) in filteredLogs"
           :key="getLogId(log, index, true)"
           class="log-item"
           @click="viewDetail(log)"
@@ -380,9 +391,9 @@ import {
   type ReportLogDetail
 } from '@/utils/chatApi';
 import { renderMarkdown } from '@/utils/markdown';
-import { buildUserFilterParams } from '@/utils/qaLogFilters';
 import { ensureUserCacheLoaded, getUserNameById } from '@/utils/userCache';
 import { isMockEnabled } from '@/mocks/mockService';
+import { getLatestMockReportLogDate, getMockReportLogDates } from '@/mocks/reportLogsMocks';
 
 const store = useStore();
 
@@ -400,6 +411,12 @@ interface LogListState {
   page_size: number;
   total_pages: number;
   logs: LogItem[];
+}
+
+interface UserFilterOption {
+  value: string;
+  label: string;
+  count: number;
 }
 
 // 状态
@@ -420,7 +437,7 @@ const logCategory = ref<LogCategory>('qa');
 const writingType = ref<WritingType | ''>('');
 
 const selectedDate = ref<string>(getTodayDate());
-const filterUserName = ref('');
+const selectedUserNames = ref<string[]>([]);
 const currentPage = ref(1);
 const pageSize = ref(20);
 
@@ -447,6 +464,49 @@ const pageTitle = computed(() => {
   return '问答日志管理';
 });
 
+const userFilterOptions = computed<UserFilterOption[]>(() => {
+  const optionMap = new Map<string, UserFilterOption>();
+  for (const log of logs.value) {
+    const displayName = getLogDisplayUserName(log);
+    if (!displayName) {
+      continue;
+    }
+    const normalizedName = normalizeUserName(displayName);
+    const existing = optionMap.get(normalizedName);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    optionMap.set(normalizedName, {
+      value: displayName,
+      label: displayName,
+      count: 1
+    });
+  }
+
+  return Array.from(optionMap.values()).sort((a, b) => {
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+    return a.label.localeCompare(b.label, 'zh-CN');
+  });
+});
+
+const filteredLogs = computed<LogItem[]>(() => {
+  if (!selectedUserNames.value.length) {
+    return logs.value;
+  }
+
+  const selectedNameSet = new Set(selectedUserNames.value.map((name) => normalizeUserName(name)));
+  return logs.value.filter((log) => {
+    const displayName = getLogDisplayUserName(log);
+    if (!displayName) {
+      return false;
+    }
+    return selectedNameSet.has(normalizeUserName(displayName));
+  });
+});
+
 // 获取今天日期
 function getTodayDate(): string {
   const today = new Date();
@@ -471,11 +531,18 @@ async function loadAvailableDates(options: { setDefault?: boolean } = {}) {
     } else if (isWritingLogs.value) {
       const result = await getWritingLogDates(token);
       availableDates.value = result.dates || [];
+    } else if (isMockMode.value) {
+      availableDates.value = getMockReportLogDates();
     } else {
       availableDates.value = [];
     }
 
-    if (setDefault) {
+    if (isReportLogs.value && isMockMode.value) {
+      const latestDate = getLatestMockReportLogDate();
+      if (latestDate && (setDefault || !availableDates.value.includes(selectedDate.value))) {
+        selectedDate.value = latestDate;
+      }
+    } else if (setDefault) {
       selectedDate.value = availableDates.value[0] || getTodayDate();
     }
   } catch (err: any) {
@@ -803,6 +870,25 @@ function getUserName(userId?: string): string {
   return getUserNameById(userId);
 }
 
+function normalizeUserName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function getLogDisplayUserName(log: LogItem): string {
+  const explicitName = getLogUserName(log);
+  if (explicitName && explicitName.trim()) {
+    return explicitName.trim();
+  }
+
+  const userId = getLogUserId(log);
+  if (!userId) {
+    return '';
+  }
+
+  const resolvedName = getUserName(userId);
+  return resolvedName && resolvedName !== '-' ? resolvedName : '';
+}
+
 // 加载日志列表
 async function loadLogs(options: { silent?: boolean } = {}) {
   const { silent = false } = options;
@@ -813,7 +899,6 @@ async function loadLogs(options: { silent?: boolean } = {}) {
 
   try {
     const token = store.state.user.token;
-    const hasUserFilter = filterUserName.value.trim().length > 0;
     if (isReportLogs.value) {
       const date = selectedDate.value;
       const start_date = date ? `${date}T00:00:00` : undefined;
@@ -821,7 +906,6 @@ async function loadLogs(options: { silent?: boolean } = {}) {
       const result = await getReportLogs(token, {
         page: currentPage.value,
         page_size: pageSize.value,
-        username: hasUserFilter ? filterUserName.value.trim() : undefined,
         start_date,
         end_date
       });
@@ -841,12 +925,6 @@ async function loadLogs(options: { silent?: boolean } = {}) {
       };
       logs.value = reportLogs;
     } else {
-      const userFilterResult = await buildUserFilterParams(filterUserName.value);
-      if (!silent && userFilterResult.status === 'ambiguous') {
-        const keyword = userFilterResult.keyword || filterUserName.value.trim();
-        ElMessage.warning(`用户名“${keyword}”匹配多个用户，请输入更完整的用户名`);
-      }
-
       if (isWritingLogs.value) {
         if (!selectedDate.value) {
           await loadAvailableDates({ setDefault: true });
@@ -867,15 +945,12 @@ async function loadLogs(options: { silent?: boolean } = {}) {
         const total = typeof result.total === 'number' ? result.total : writingLogs.length;
         const page = result.page ?? currentPage.value;
         const page_size = result.page_size ?? pageSize.value;
-        const totalForDisplay = hasUserFilter ? writingLogs.length : total;
-        const fallbackTotalPages = Math.ceil(totalForDisplay / page_size) || 1;
-        const total_pages = hasUserFilter
-          ? fallbackTotalPages
-          : (typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages);
+        const fallbackTotalPages = Math.ceil(total / page_size) || 1;
+        const total_pages = typeof result.total_pages === 'number' ? result.total_pages : fallbackTotalPages;
 
         logData.value = {
           date: result.date || selectedDate.value,
-          total: totalForDisplay,
+          total,
           page,
           page_size,
           total_pages,
@@ -885,7 +960,6 @@ async function loadLogs(options: { silent?: boolean } = {}) {
       } else {
         const result = await getQALogsByDate(token, {
           date: selectedDate.value,
-          ...userFilterResult.params,
           page: currentPage.value,
           page_size: pageSize.value
         });
@@ -968,6 +1042,13 @@ function handleWritingTypeChange() {
   loadLogs();
 }
 
+function handleUserFilterChange() {
+  if (currentPage.value !== 1) {
+    currentPage.value = 1;
+    loadLogs();
+  }
+}
+
 // 处理搜索
 function handleSearch() {
   currentPage.value = 1;
@@ -976,7 +1057,7 @@ function handleSearch() {
 
 // 处理重置
 async function handleReset() {
-  filterUserName.value = '';
+  selectedUserNames.value = [];
   currentPage.value = 1;
   pageSize.value = 20;
 

@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import store from './store'
+import http from './config/api/http'
+import { API_ENDPOINTS } from './config/api/api'
 import { initSessionWatch } from './utils/userStatusChecker'
 
 // 1. 导入 Element Plus 库
@@ -19,6 +21,19 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 
 // Bootstrap JS removed to reduce global runtime overhead.
 
+const syncLoginIp = async () => {
+  try {
+    const response = await http.post(API_ENDPOINTS.USER.SYNC_LOGIN_IP, {})
+    const data = response.data || {}
+    const isSuccess = data.success || data.code === 200 || response.status === 204
+    if (!isSuccess) {
+      console.warn('[main] 同步登录IP失败:', response.status, data)
+    }
+  } catch (error) {
+    console.warn('[main] 同步登录IP异常:', error)
+  }
+}
+
 // 恢复登录状态
 const token = localStorage.getItem('jwt_token')
 if (token) {
@@ -30,6 +45,7 @@ if (token) {
   store.dispatch('getinfo', {
     success: () => {
       console.log('[Auth] 用户信息已恢复')
+      void syncLoginIp()
       // 延迟启动 WebSocket 监听，确保状态完全恢复
       setTimeout(() => {
         const userId = (store.state as any).user?.id

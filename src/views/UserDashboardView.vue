@@ -1784,39 +1784,159 @@ const toggleIPColumn = async () => {
 }
 
 // 从问答日志加载用户活动数据（使用缓存服务）
+interface LoginIpActivity {
+  userId?: string
+  username?: string
+  ip?: string
+  lastLogin?: string
+}
+
+const normalizeLoginIpRows = (raw: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(raw)) {
+    return raw as Array<Record<string, unknown>>
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    if (Array.isArray(obj.items)) {
+      return obj.items as Array<Record<string, unknown>>
+    }
+    if (Array.isArray(obj.list)) {
+      return obj.list as Array<Record<string, unknown>>
+    }
+    return Object.entries(obj).map(([userId, record]) => {
+      if (record && typeof record === 'object') {
+        const source = record as Record<string, unknown>
+        return {
+          ...source,
+          userId: source.userId ?? source.user_id ?? source.id ?? userId
+        }
+      }
+      return {
+        userId,
+        ip: record
+      }
+    })
+  }
+  return []
+}
+
+const normalizeLoginIpKey = (value: unknown) => String(value ?? '').trim().toLowerCase()
+
+const fetchUserLoginIpData = async (): Promise<{
+  byUserId: Map<string, LoginIpActivity>
+  byUsername: Map<string, LoginIpActivity>
+}> => {
+  const byUserId = new Map<string, LoginIpActivity>()
+  const byUsername = new Map<string, LoginIpActivity>()
+  try {
+    const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.USER_LOGIN_IPS))
+    const bizCode = Number(response.data?.code)
+    const isBizOk = response.ok
+      && response.data?.success !== false
+      && (Number.isNaN(bizCode) || bizCode === 200)
+
+    if (!isBizOk) {
+      console.warn('[UserDashboard] fetch login-ip failed:', response.status, response.data?.message || response.data)
+      return { byUserId, byUsername }
+    }
+
+    const payload = response.data?.data?.list
+      || response.data?.data?.users
+      || response.data?.data
+      || response.data?.list
+      || response.data
+      || []
+    const rows = normalizeLoginIpRows(payload)
+
+    rows.forEach((row) => {
+      const userIdRaw = row.userId ?? row.user_id ?? row.id ?? row.uid
+      const userId = String(userIdRaw ?? '').trim()
+      const username = String(row.username ?? row.userName ?? row.name ?? '').trim()
+
+      const ipRaw = row.ip ?? row.loginIp ?? row.login_ip ?? row.last_login_ip ?? row.user_ip ?? row.client_ip
+      const loginTimeRaw = row.lastLogin ?? row.lastLoginAt ?? row.last_login_at ?? row.login_at ?? row.updated_at
+
+      const ip = String(ipRaw ?? '').trim()
+      const lastLogin = String(loginTimeRaw ?? '').trim()
+      if (!ip && !lastLogin) return
+
+      const activity: LoginIpActivity = {
+        userId: userId || undefined,
+        username: username || undefined,
+        ip: ip || undefined,
+        lastLogin: lastLogin || undefined
+      }
+
+      if (userId) {
+        byUserId.set(userId, activity)
+      }
+      if (username) {
+        byUsername.set(normalizeLoginIpKey(username), activity)
+      }
+    })
+  } catch (error) {
+    console.warn('[UserDashboard] fetch login-ip exception:', error)
+  }
+  return { byUserId, byUsername }
+}
+
 const loadUserActivity = async (forceRefresh = false) => {
   loadingIP.value = true
   try {
-    // 使用缓存服务获取活动数据
-    const activityMap = forceRefresh 
-      ? await refreshActivityCache() 
-      : await getUserActivityMap()
-    
-    // 更新用户列表中的IP和最近登录时间
+    const loginIpData = await fetchUserLoginIpData()
+
+    // Priority: backend login-ip data.
     users.value = users.value.map(user => {
       const odUserId = String(user.id)
-      const activity = activityMap.get(odUserId)
+      const loginIp = loginIpData.byUserId.get(odUserId)
+        || loginIpData.byUsername.get(normalizeLoginIpKey(user.username))
       return {
         ...user,
-        last_login_ip: activity?.ip || user.last_login_ip,
-        last_login_at: activity?.lastLogin || user.last_login_at
+        last_login_ip: loginIp?.ip || user.last_login_ip,
+        last_login_at: loginIp?.lastLogin || user.last_login_at
       }
     })
-    
-    // 获取问答排行榜
-    const rankingData = await getQARanking(10)
-    qaRanking.value = rankingData.map(item => {
-      // 优先从缓存获取用户名
-      const cachedUser = getUserById(item.userId)
-      const localUser = users.value.find(u => String(u.id) === item.userId)
-      return {
-        userId: item.userId,
-        username: cachedUser?.username || localUser?.username || `用户${item.userId}`,
-        count: item.qaCount
-      }
-    })
-    
-    ElMessage.success(`已加载 ${activityMap.size} 个用户的活动记录`)
+
+    // Fallback: activity logs from 5000 side.
+    let activityMap: Awaited<ReturnType<typeof getUserActivityMap>> = new Map()
+    try {
+      activityMap = forceRefresh
+        ? await refreshActivityCache()
+        : await getUserActivityMap()
+
+      users.value = users.value.map(user => {
+        const odUserId = String(user.id)
+        const loginIp = loginIpData.byUserId.get(odUserId)
+          || loginIpData.byUsername.get(normalizeLoginIpKey(user.username))
+        const activity = activityMap.get(odUserId)
+        return {
+          ...user,
+          last_login_ip: loginIp?.ip || activity?.ip || user.last_login_ip,
+          last_login_at: loginIp?.lastLogin || activity?.lastLogin || user.last_login_at
+        }
+      })
+    } catch (error) {
+      console.warn('[UserDashboard] activity log unavailable, backend login-ip applied:', error)
+    }
+
+    // Ranking should not block IP refresh.
+    try {
+      const rankingData = await getQARanking(10)
+      qaRanking.value = rankingData.map(item => {
+        const cachedUser = getUserById(item.userId)
+        const localUser = users.value.find(u => String(u.id) === item.userId)
+        return {
+          userId: item.userId,
+          username: cachedUser?.username || localUser?.username || `用户${item.userId}`,
+          count: item.qaCount
+        }
+      })
+    } catch (error) {
+      console.warn('[UserDashboard] load ranking failed:', error)
+    }
+
+    const loadedCount = Math.max(loginIpData.byUserId.size, loginIpData.byUsername.size, activityMap.size)
+    ElMessage.success(`已加载 ${loadedCount} 个用户的活动记录`)
   } catch (error: any) {
     ElMessage.error('加载活动数据失败: ' + (error?.message || '未知错误'))
   } finally {
@@ -2671,3 +2791,4 @@ watch(
   }
 }
 </style>
+
