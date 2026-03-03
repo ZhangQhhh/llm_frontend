@@ -440,7 +440,7 @@
                     </el-button>
                   </div>
 
-                  <!-- 杩涘害鏉?-->
+                  <!-- 进度条 -->
                   <transition name="el-fade-in">
                     <div v-if="generating" class="progress-wrapper">
                       <div class="progress-label">
@@ -806,7 +806,7 @@ const normalizeYearFileList = (payload: any): YearDataFileItem[] => {
       version: Number(item?.version || 0),
       isActive: Boolean(item?.isActive)
     }))
-    .sort((a, b) => (b.monthId || '').localeCompare(a.monthId || ''));
+    .sort((a: any, b: any) => (b.monthId || '').localeCompare(a.monthId || ''));
 };
 
 const switchYearApiPrefix = (path: string): string => {
@@ -976,7 +976,7 @@ const uploadForecastHistory = async () => {
         ElMessage.success('历史数据更新成功');
       }
     } else {
-      ElMessage.error(res.data?.message || '鍘嗗彶鏁版嵁鏇存柊澶辫触');
+      ElMessage.error(res.data?.message || '历史数据更新失败');
     }
   } catch (error) {
     console.error(error);
@@ -1498,8 +1498,8 @@ const handleGenerateYearReport = async () => {
 const handleGenerate = async () => {
   if (!canGenerate.value) {
     const message = analysisMode.value === 'month'
-      ? '璇蜂笂浼犳墍鏈夊繀瑕佹枃浠跺苟閫夋嫨鏈堜唤鑼冨洿'
-      : '璇烽€夋嫨姝ｇ‘鐨勫紑濮?缁撴潫鏈堜唤';
+      ? '请上传所有必要文件并选择月份范围'
+      : '请选择正确的开始-结束月份';
     ElMessage.warning(message);
     return;
   }
@@ -1548,11 +1548,11 @@ const handleUploadDoc = async () => {
       loadDocuments();
       activeTab.value = 'docs';
     } else {
-      ElMessage.error('涓婁紶澶辫触');
+      ElMessage.error('上传失败');
     }
   } catch (error) {
-    console.error('涓婁紶澶辫触:', error);
-    ElMessage.error('涓婁紶澶辫触锛岃閲嶈瘯');
+    console.error('上传失败:', error);
+    ElMessage.error('上传失败，请重试');
   } finally {
     uploading.value = false;
   }
@@ -1567,7 +1567,7 @@ const loadDocuments = async () => {
       documents.value = res.data.data || [];
     }
   } catch (error) {
-    console.error('鍔犺浇鏂囨。鍒楄〃澶辫触:', error);
+    console.error('加载文档列表失败:', error);
   } finally {
     loadingDocs.value = false;
   }
@@ -1795,7 +1795,7 @@ const formatDate = (dateStr: string): string => {
   }
 }
 
-/* === 鍗＄墖鏍峰紡 === */
+/* === 卡片样式 === */
 .section-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -2000,13 +2000,13 @@ const formatDate = (dateStr: string): string => {
   color: white !important;
 }
 
-/* === 渚ц竟鏍?=== */
+/* === 侧边栏 === */
 .sidebar {
   display: flex;
   flex-direction: column;
 }
 
-/* Tab 鏍峰紡 */
+/* Tab 样式 */
 .function-tabs {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -2033,7 +2033,7 @@ const formatDate = (dateStr: string): string => {
   background-color: #14b8a6;
 }
 
-/* === 鐢熸垚鍗＄墖 === */
+/* === 生成卡片 === */
 .upload-area {
   display: flex;
   flex-direction: column;
@@ -2370,7 +2370,7 @@ const formatDate = (dateStr: string): string => {
   font-weight: 500;
 }
 
-/* === 鏂囨。涓婁紶鍗＄墖 === */
+/* === 文档上传卡片 === */
 .upload-doc-area {
   display: flex;
   flex-direction: column;
@@ -2468,7 +2468,7 @@ const formatDate = (dateStr: string): string => {
   box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
 }
 
-/* === 鏂囨。绠＄悊 === */
+/* === 文档管理 === */
 .docs-card {
   max-height: 600px;
   display: flex;
@@ -2597,7 +2597,7 @@ const formatDate = (dateStr: string): string => {
   }
 }
 
-/* 婊氬姩鏉＄編鍖?*/
+/* 滚动条美化 */
 .docs-list::-webkit-scrollbar {
   width: 6px;
 }
