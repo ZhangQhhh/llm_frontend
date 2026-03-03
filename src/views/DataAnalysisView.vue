@@ -8,7 +8,7 @@
     </div>
 
     <div class="main-content">
-      <!-- 椤堕儴鏍囬鍖?-->
+      <!-- 顶部标题区域 -->
       <header class="page-header animate-slide-down">
         <div class="header-content">
           <div class="title-section">
@@ -26,10 +26,10 @@
         </div>
       </header>
 
-      <!-- 涓诲伐浣滃尯 -->
+      <!-- 主工作区 -->
       <div class="workspace">
         
-        <!-- 宸︿晶锛氶娴嬪ぇ灞?-->
+        <!-- 左侧：预测大盘 -->
         <section class="forecast-section animate-slide-left">
           <div class="section-card forecast-card">
             <div class="card-header">
@@ -83,7 +83,7 @@
               </div>
             </div>
 
-            <!-- 缁熻鍗＄墖 -->
+            <!-- 统计卡片 -->
             <transition name="el-zoom-in-top">
               <div v-if="hasForecastData" class="stats-grid">
                 <div class="stat-card">
@@ -119,13 +119,13 @@
           </div>
         </section>
 
-        <!-- 鍙充晶锛氬姛鑳藉尯 -->
+        <!-- 右侧：功能区 -->
         <aside class="sidebar animate-slide-right">
           
-          <!-- Tab 鍒囨崲 -->
+          <!-- Tab 切换 -->
           <el-tabs v-model="activeTab" class="function-tabs">
             
-            <!-- Tab 1: 鎶ュ憡鐢熸垚 -->
+            <!-- Tab 1: 报告生成 -->
             <el-tab-pane label="报告生成" name="generate">
               <div class="section-card generate-card">
                 <div class="card-header">
@@ -134,7 +134,7 @@
 
                 <div class="upload-area">
                   
-                  <!-- 鍒嗘瀽妯″紡 -->
+                  <!-- 分析模式 -->
                   <div class="analysis-mode">
                     <label>分析模式</label>
                     <el-radio-group v-model="analysisMode" size="small">
@@ -143,7 +143,7 @@
                     </el-radio-group>
                   </div>
 
-                  <!-- 鎸夋湀鍙傛暟 -->
+                  <!-- 按月参数 -->
                   <div v-if="analysisMode === 'month'" class="month-selector-group">
                     <div class="selector-item">
                       <label>基准期月份</label>
@@ -171,7 +171,7 @@
                     </div>
                   </div>
 
-                  <!-- 鎸夊勾鍙傛暟 -->
+                  <!-- 按年参数 -->
                   <div v-else class="month-selector-group year-selector-group">
                     <div class="selector-item">
                       <label>开始月份</label>
@@ -201,7 +201,7 @@
                       <label>报告类型</label>
                       <el-select v-model="yearReportType" style="width: 100%">
                         <el-option label="综合报告（人员+航班）" value="comprehensive" />
-                        <el-option label="仅人员报告" value="people_only" />
+                        <!-- <el-option label="仅人员报告" value="people_only" /> -->
                       </el-select>
                     </div>
                   </div>
@@ -325,7 +325,7 @@
                     </div>
                   </div>
 
-                  <!-- 浜哄憳鏁版嵁 -->
+                  <!-- 人员数据 -->
                   <div v-if="analysisMode === 'month'" class="upload-group">
                     <div class="group-title">
                       <el-icon><User /></el-icon>
@@ -355,7 +355,7 @@
                     </div>
                   </div>
 
-                  <!-- 鑸彮鏁版嵁 -->
+                  <!-- 车辆数据 -->
                   <div v-if="analysisMode === 'month'" class="upload-group">
                     <div class="group-title">
                       <el-icon><Ship /></el-icon>
@@ -420,7 +420,7 @@
                     </div>
                   </div>
 
-                  <!-- 鎿嶄綔鎸夐挳 -->
+                  <!-- 操作按钮 -->
                   <div class="action-buttons">
                     <el-button 
                       type="primary" 
@@ -460,7 +460,7 @@
               </div>
             </el-tab-pane>
 
-            <!-- Tab 2: 鏂囨。涓婁紶 -->
+            <!-- Tab 2: 文档上传 -->
             <el-tab-pane label="文档上传" name="upload">
               <div class="section-card upload-card">
                 <div class="card-header">
@@ -524,7 +524,7 @@
               </div>
             </el-tab-pane>
 
-            <!-- Tab 3: 鏂囨。绠＄悊 -->
+            <!-- Tab 3: 文档管理 -->
             <el-tab-pane label="文档管理" name="docs">
               <div class="section-card docs-card">
                 <div class="card-header">
@@ -625,7 +625,7 @@ const forecastUploadRef = ref();
 const forecastHistoryFile = ref<File | null>(null);
 const uploadingForecastHistory = ref(false);
 
-// 鏈堜唤閫夋嫨
+// 月份选择
 const baseMonth = ref('');
 const compareMonth = ref('');
 const analysisMode = ref<'month' | 'year'>('month');
@@ -651,7 +651,7 @@ const files = reactive({
 
 const generating = ref(false);
 const progressPercent = ref(0);
-const progressStep = ref('鍑嗗涓?..');
+const progressStep = ref('准备中...');
 const progressStatus = ref('');
 
 const fileInput_basePeriod = ref();
@@ -667,13 +667,13 @@ const stats = reactive({
   growth: '0'
 });
 
-// 鏂囨。涓婁紶
+// 文档上传
 const uploadDocFile = ref<File | null>(null);
 const overwriteDoc = ref(false);
 const uploading = ref(false);
 const uploadRef = ref();
 
-// 鏂囨。绠＄悊
+// 文档管理
 interface DocumentItem {
   name: string;
   size: number;
@@ -973,14 +973,14 @@ const uploadForecastHistory = async () => {
       if (inserted !== null || updated !== null) {
         ElMessage.success('历史数据更新成功：新增 ' + (inserted ?? 0) + '，覆盖 ' + (updated ?? 0));
       } else {
-        ElMessage.success('鍘嗗彶鏁版嵁鏇存柊鎴愬姛');
+        ElMessage.success('历史数据更新成功');
       }
     } else {
       ElMessage.error(res.data?.message || '鍘嗗彶鏁版嵁鏇存柊澶辫触');
     }
   } catch (error) {
     console.error(error);
-    ElMessage.error('鍘嗗彶鏁版嵁鏇存柊澶辫触');
+    ElMessage.error('历史数据更新失败');
   } finally {
     uploadingForecastHistory.value = false;
     forecastHistoryFile.value = null;
@@ -1210,13 +1210,13 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
 
 const handleUploadYearData = async () => {
   if (!canUploadYearData.value || !yearUploadFile.value) {
-    ElMessage.warning('璇峰厛閫夋嫨鏁版嵁绫诲瀷銆佹湀浠藉拰涓婁紶鏂囦欢');
+    ElMessage.warning('请先选择数据类型、月份和上传文件');
     return;
   }
 
   const [year, month] = yearUploadMonth.value.split('-');
   if (!year || !month) {
-    ElMessage.warning('鏈堜唤鏍煎紡搴斾负 YYYY-MM');
+    ElMessage.warning('月份格式应为 YYYY-MM');
     return;
   }
 
@@ -1238,7 +1238,7 @@ const handleUploadYearData = async () => {
     });
 
     if (!res.data?.success) {
-      ElMessage.error(res.data?.message || '鏈堣〃涓婁紶澶辫触');
+      ElMessage.error(res.data?.message || '月表上传失败');
       return;
     }
 
@@ -1251,7 +1251,7 @@ const handleUploadYearData = async () => {
   } catch (error: any) {
     console.error(error);
     const msg = await parseGenerateErrorMessage(error);
-    ElMessage.error(msg || '鏈堣〃涓婁紶澶辫触');
+    ElMessage.error(msg || '月表上传失败');
   } finally {
     uploadingYearData.value = false;
   }
@@ -1333,8 +1333,8 @@ const handleGenerateMonthReport = async () => {
   const progressTimer = setInterval(() => {
     if (progressPercent.value < 90) {
       progressPercent.value += 5;
-      if (progressPercent.value > 30) progressStep.value = '姝ｅ湪鏃堕棿搴忓垪鍒嗘瀽...';
-      if (progressPercent.value > 60) progressStep.value = '姝ｅ湪鐢熸垚 Word 鎶ュ憡...';
+      if (progressPercent.value > 30) progressStep.value = '正在时间序列分析...';
+      if (progressPercent.value > 60) progressStep.value = '正在生成 Word 报告...';
     }
   }, 800);
 
@@ -1405,7 +1405,7 @@ const handleGenerateYearReport = async () => {
   generating.value = true;
   progressPercent.value = 0;
   progressStatus.value = '';
-  progressStep.value = '姝ｅ湪鏍￠獙绐楀彛瀹屾暣鎬?..';
+  progressStep.value = '正在校验窗口完整性...';
   yearMissingPeopleMonths.value = [];
   yearMissingTrafficMonths.value = [];
 
@@ -1424,7 +1424,7 @@ const handleGenerateYearReport = async () => {
     });
 
     if (!validateRes.data?.success) {
-      ElMessage.error(validateRes.data?.message || '鏍￠獙澶辫触');
+      ElMessage.error(validateRes.data?.message || '校验失败');
       return;
     }
 
@@ -1528,7 +1528,7 @@ const clearUploadDoc = () => {
 
 const handleUploadDoc = async () => {
   if (!uploadDocFile.value) {
-    ElMessage.warning('璇峰厛閫夋嫨鏂囦欢');
+    ElMessage.warning('请先选择文件');
     return;
   }
 
@@ -1543,7 +1543,7 @@ const handleUploadDoc = async () => {
     });
 
     if (res.data && res.data.success) {
-      ElMessage.success('涓婁紶鎴愬姛');
+      ElMessage.success('上传成功');
       clearUploadDoc();
       loadDocuments();
       activeTab.value = 'docs';
