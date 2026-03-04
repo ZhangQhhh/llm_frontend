@@ -1446,17 +1446,10 @@ export default defineComponent({
       const result: Record<string, string> = {}
       if (!analysis) return result
       
-      // 查找"分项解析："之后的内容
-      const marker = '分项解析：'
-      const markerIdx = analysis.indexOf(marker)
-      if (markerIdx === -1) return result
-      
-      const afterMarker = analysis.substring(markerIdx + marker.length)
-      
-      // 匹配 "A. xxx" 格式，直到下一个选项或特定结束标记
-      const optionPattern = /([A-H])[.、]\s*([\s\S]*?)(?=(?:\n[A-H][.、])|(?:\n\n说明：)|(?:\n【)|$)/g
+      // 使用【选项X分析】标记分割各选项段落（比 A. 格式更可靠，避免误匹配内部 【证据链验证】 等）
+      const optionPattern = /【选项([A-H])分析】([\s\S]*?)(?=【选项[A-H]分析】|【答案汇总|说明：本步骤|$)/g
       let match
-      while ((match = optionPattern.exec(afterMarker)) !== null) {
+      while ((match = optionPattern.exec(analysis)) !== null) {
         const label = match[1].toUpperCase()
         const content = match[2].trim()
         if (content) {
