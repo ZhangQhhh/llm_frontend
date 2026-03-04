@@ -10,6 +10,10 @@
         <p class="subtitle">{{ isAdmin ? '管理和分享各类资源' : '查看和下载各类资源' }}</p>
       </header>
 
+      <!-- 页面标签切换 -->
+      <el-tabs v-model="activeTab" class="main-tabs" type="border-card">
+        <el-tab-pane label="资料管理" name="resources">
+
       <!-- 管理员上传区域 -->
       <el-card v-if="isAdmin" class="upload-card" shadow="hover">
         <template #header>
@@ -225,6 +229,126 @@
           />
         </div>
       </el-card>
+
+        </el-tab-pane>
+
+        <!-- 课程评分标签页 -->
+        <el-tab-pane label="课程评分" name="rating">
+          <!-- 搜索与筛选栏 -->
+          <div class="course-toolbar">
+            <div class="course-toolbar-left">
+              <el-input
+                v-model="courseSearchKeyword"
+                placeholder="搜索课程名称 / 授课教员"
+                clearable
+                size="default"
+                style="width: 260px"
+                :prefix-icon="Search"
+              />
+              <el-radio-group v-model="courseRatedFilter" size="default">
+                <el-radio-button value="all">全部</el-radio-button>
+                <el-radio-button value="unrated">未评分</el-radio-button>
+                <el-radio-button value="rated">已评分</el-radio-button>
+              </el-radio-group>
+              <el-tag type="info" size="small">
+                共 {{ filteredCourses.length }} 个课程
+              </el-tag>
+            </div>
+            <div class="course-toolbar-right">
+              <el-button :icon="Refresh" @click="loadCourses" :loading="coursesLoading">刷新</el-button>
+              <el-button v-if="isAdmin" type="primary" @click="showCreateCourseDialog">
+                <el-icon><Star /></el-icon>
+                创建评分课程
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 课程列表 -->
+          <div v-if="coursesLoading" class="loading-container" style="padding: 40px">
+            <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+            <p>加载中...</p>
+          </div>
+
+          <el-empty v-else-if="filteredCourses.length === 0" :description="courseList.length === 0 ? '暂无评分课程' : '没有匹配的课程'" />
+
+          <div v-else class="course-list">
+            <el-card
+              v-for="course in paginatedCourses"
+              :key="course.id"
+              class="course-item"
+              shadow="hover"
+            >
+              <div class="course-header">
+                <div class="course-name-wrap">
+                  <h3 class="course-name">{{ course.name }}</h3>
+                  <el-tag v-if="course.my_rated" type="success" size="small" style="margin-left: 8px">已评分</el-tag>
+                  <el-tag v-else type="info" size="small" style="margin-left: 8px">未评分</el-tag>
+                </div>
+                <div class="course-actions">
+                  <el-button size="small" type="success" @click="openCourseRatingDialog(course)">
+                    <el-icon><Star /></el-icon>
+                    {{ course.my_rated ? '修改评分' : '评分' }}
+                  </el-button>
+                  <el-button
+                    v-if="isAdmin"
+                    size="small"
+                    type="primary"
+                    @click="openCourseSummary(course)"
+                  >
+                    <el-icon><DataAnalysis /></el-icon>
+                    汇总
+                  </el-button>
+                  <el-button
+                    v-if="isAdmin"
+                    size="small"
+                    type="warning"
+                    @click="openEditCourseDialog(course)"
+                  >
+                    <el-icon><Edit /></el-icon>
+                  </el-button>
+                  <el-popconfirm
+                    v-if="isAdmin"
+                    title="确定删除该课程及所有评分数据？"
+                    @confirm="deleteCourse(course.id)"
+                  >
+                    <template #reference>
+                      <el-button size="small" type="danger">
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
+                </div>
+              </div>
+              <div class="course-meta">
+                <span class="meta-item">
+                  <el-icon><User /></el-icon>
+                  授课教员：{{ course.instructor }}
+                </span>
+                <span class="meta-item" v-if="course.training_time">
+                  <el-icon><Clock /></el-icon>
+                  培训时间：{{ course.training_time }}
+                </span>
+                <span class="meta-item">
+                  <el-icon><Clock /></el-icon>
+                  创建时间：{{ formatDate(course.created_at) }}
+                </span>
+              </div>
+            </el-card>
+
+            <!-- 分页 -->
+            <div class="course-pagination" v-if="filteredCourses.length > coursePageSize">
+              <el-pagination
+                v-model:current-page="courseCurrentPage"
+                v-model:page-size="coursePageSize"
+                :page-sizes="[10, 20, 50]"
+                :total="filteredCourses.length"
+                layout="total, sizes, prev, pager, next"
+                small
+              />
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <!-- 视频播放对话框 -->
@@ -347,6 +471,302 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 创建/编辑课程对话框 -->
+    <el-dialog
+      v-model="courseDialogVisible"
+      :title="editingCourse ? '编辑课程' : '创建评分课程'"
+      width="850px"
+      destroy-on-close
+    >
+      <el-form :model="courseForm" label-width="100px">
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="课程名称" required>
+              <el-input v-model="courseForm.name" placeholder="请输入课程名称" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="授课教员" required>
+              <el-input v-model="courseForm.instructor" placeholder="请输入授课教员姓名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="培训时间">
+              <el-input v-model="courseForm.training_time" placeholder="如：2025年3月1日" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+
+      <!-- 评分维度编辑 -->
+      <div class="dim-edit-section">
+        <div class="dim-edit-header">
+          <h4 style="margin: 0">评分维度设置</h4>
+          <el-button size="small" type="primary" @click="addDimensionRow">
+            <el-icon><Plus /></el-icon> 添加项目
+          </el-button>
+        </div>
+        <el-table :data="courseForm.dimensions" border size="small" style="width: 100%">
+          <el-table-column label="评分项目" min-width="120">
+            <template #default="scope">
+              <el-input v-model="scope.row.label" placeholder="如：教学理念" size="small" />
+            </template>
+          </el-table-column>
+          <el-table-column label="评分标准" min-width="260">
+            <template #default="scope">
+              <el-input
+                v-model="scope.row.description"
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 3 }"
+                placeholder="评分标准说明"
+                size="small"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="分值" width="100" align="center">
+            <template #default="scope">
+              <el-input-number
+                v-model="scope.row.max_score"
+                :min="1"
+                :max="100"
+                :step="5"
+                size="small"
+                controls-position="right"
+                style="width: 80px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="" width="50" align="center">
+            <template #default="scope">
+              <el-button
+                type="danger"
+                size="small"
+                :icon="Delete"
+                circle
+                :disabled="courseForm.dimensions.length <= 1"
+                @click="removeDimensionRow(scope.$index)"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="dim-edit-total">
+          总分值：<strong>{{ dimensionsTotalScore }}分</strong>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="courseDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="courseSaving" @click="saveCourse">
+          {{ editingCourse ? '保存' : '创建' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 课程评分对话框 -->
+    <el-dialog
+      v-model="ratingDialogVisible"
+      :title="'课程评分 - ' + (ratingCourse?.name || '')"
+      width="750px"
+      destroy-on-close
+      class="rating-dialog"
+    >
+      <div class="rating-form-container">
+        <!-- 课程信息 -->
+        <div class="rating-course-info" v-if="ratingCourse">
+          <span><strong>课程名称：</strong>{{ ratingCourse.name }}</span>
+          <span><strong>授课教员：</strong>{{ ratingCourse.instructor }}</span>
+          <span v-if="ratingCourse.training_time"><strong>培训时间：</strong>{{ ratingCourse.training_time }}</span>
+        </div>
+        <el-alert
+          v-if="myExistingRating"
+          title="您已提交过评分，再次提交将覆盖之前的评分"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        <div class="rating-table">
+          <div class="rating-table-header">
+            <div class="rating-col-dim">评分项目</div>
+            <div class="rating-col-desc">评分标准</div>
+            <div class="rating-col-max">分值</div>
+            <div class="rating-col-score">得分</div>
+          </div>
+          <div
+            v-for="dim in activeDimensions"
+            :key="dim.key"
+            class="rating-table-row"
+          >
+            <div class="rating-col-dim">
+              <span class="dim-label">{{ dim.label }}</span>
+            </div>
+            <div class="rating-col-desc">{{ dim.description }}</div>
+            <div class="rating-col-max">{{ dim.max_score }}分</div>
+            <div class="rating-col-score">
+              <el-input-number
+                v-model="ratingForm.scores[dim.key]"
+                :min="0"
+                :max="dim.max_score"
+                :step="1"
+                size="small"
+                controls-position="right"
+                style="width: 110px"
+              />
+            </div>
+          </div>
+          <div class="rating-table-footer">
+            <div class="rating-col-dim"><strong>合计总分</strong></div>
+            <div class="rating-col-desc"></div>
+            <div class="rating-col-max"><strong>{{ activeDimensions.reduce((s, d) => s + d.max_score, 0) }}分</strong></div>
+            <div class="rating-col-score">
+              <el-tag :type="ratingTotal >= 80 ? 'success' : ratingTotal >= 60 ? 'warning' : 'danger'" size="large">
+                <strong>{{ ratingTotal }}分</strong>
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        <el-form-item label="评语（可选）" style="margin-top: 16px" label-width="100px">
+          <el-input
+            v-model="ratingForm.comment"
+            type="textarea"
+            :rows="2"
+            placeholder="请输入对该课程的评语（可选）"
+          />
+        </el-form-item>
+      </div>
+      <template #footer>
+        <el-button @click="ratingDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="ratingSubmitting" @click="submitRating">
+          {{ myExistingRating ? '更新评分' : '提交评分' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 管理员评分汇总对话框 -->
+    <el-dialog
+      v-model="ratingSummaryVisible"
+      :title="'评分汇总 - ' + (summaryCourse?.name || '')"
+      width="950px"
+      destroy-on-close
+      class="rating-summary-dialog"
+    >
+      <div v-if="summaryLoading" class="loading-container" style="padding: 40px">
+        <el-icon class="is-loading" :size="30"><Loading /></el-icon>
+        <p>加载中...</p>
+      </div>
+      <div v-else-if="ratingSummaryData" class="summary-container">
+        <!-- 课程信息 -->
+        <div class="rating-course-info" v-if="ratingSummaryData.course">
+          <span><strong>课程名称：</strong>{{ ratingSummaryData.course.name }}</span>
+          <span><strong>授课教员：</strong>{{ ratingSummaryData.course.instructor }}</span>
+          <span v-if="ratingSummaryData.course.training_time"><strong>培训时间：</strong>{{ ratingSummaryData.course.training_time }}</span>
+        </div>
+        <!-- 概览卡片 -->
+        <div class="summary-overview">
+          <div class="overview-item overview-total">
+            <div class="overview-value">{{ ratingSummaryData.average_total }}</div>
+            <div class="overview-label">平均总分</div>
+          </div>
+          <div class="overview-item overview-count">
+            <div class="overview-value">{{ ratingSummaryData.total_count }}</div>
+            <div class="overview-label">评分人数</div>
+          </div>
+          <div
+            v-for="dim in summaryDimensions"
+            :key="dim.key"
+            class="overview-item"
+          >
+            <div class="overview-value">{{ ratingSummaryData.dimension_averages[dim.key] || 0 }}</div>
+            <div class="overview-label">{{ dim.label }}均分</div>
+          </div>
+        </div>
+
+        <!-- 搜索栏 -->
+        <div class="summary-search-bar">
+          <el-input
+            v-model="summarySearchKeyword"
+            placeholder="搜索评分人"
+            clearable
+            size="small"
+            style="width: 220px"
+            :prefix-icon="Search"
+          />
+          <el-tag type="info" size="small">
+            {{ filteredSummaryDetail.length }} / {{ ratingSummaryData.ratings_detail?.length || 0 }} 条记录
+          </el-tag>
+        </div>
+
+        <!-- 评分详情表格 -->
+        <el-table
+          v-if="filteredSummaryDetail.length > 0"
+          :data="paginatedSummaryDetail"
+          stripe
+          border
+          style="width: 100%; margin-top: 12px"
+          max-height="400"
+        >
+          <el-table-column prop="username" label="评分人" width="100" fixed />
+          <el-table-column
+            v-for="dim in summaryDimensions"
+            :key="dim.key"
+            :label="dim.label"
+            width="90"
+            align="center"
+          >
+            <template #default="scope">
+              {{ scope.row.scores?.[dim.key] ?? '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="total_score" label="总分" width="80" align="center">
+            <template #default="scope">
+              <el-tag
+                :type="scope.row.total_score >= 80 ? 'success' : scope.row.total_score >= 60 ? 'warning' : 'danger'"
+                size="small"
+              >
+                {{ scope.row.total_score }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="comment" label="评语" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="rated_at" label="评分时间" width="160">
+            <template #default="scope">
+              {{ formatDate(scope.row.rated_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center" fixed="right">
+            <template #default="scope">
+              <el-popconfirm
+                :title="'确定删除 ' + scope.row.username + ' 的评分？'"
+                @confirm="deleteUserRating(scope.row.username)"
+              >
+                <template #reference>
+                  <el-button type="danger" size="small" :icon="Delete" circle />
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <!-- 分页 -->
+        <div class="summary-pagination" v-if="filteredSummaryDetail.length > summaryPageSize">
+          <el-pagination
+            v-model:current-page="summaryCurrentPage"
+            v-model:page-size="summaryPageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="filteredSummaryDetail.length"
+            layout="total, sizes, prev, pager, next"
+            small
+          />
+        </div>
+
+        <el-empty v-if="ratingSummaryData.ratings_detail && ratingSummaryData.ratings_detail.length > 0 && filteredSummaryDetail.length === 0" description="没有匹配的评分人" />
+        <el-empty v-else-if="!ratingSummaryData.ratings_detail || ratingSummaryData.ratings_detail.length === 0" description="暂无评分数据" />
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="ratingSummaryVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -371,7 +791,10 @@ import {
   Document,
   Tickets,
   View,
-  Search
+  Search,
+  Star,
+  DataAnalysis,
+  Plus
 } from '@element-plus/icons-vue'
 import llmHttp from '@/config/api/llmHttp'
 
@@ -380,6 +803,9 @@ const store = useStore()
 
 // 权限判断
 const isAdmin = computed(() => store.getters.isAdmin)
+
+// 标签页
+const activeTab = ref('resources')
 
 // 资料列表
 const resources = ref<any[]>([])
@@ -778,6 +1204,354 @@ function formatDate(dateStr: string): string {
   })
 }
 
+// ==================== 精品课程评分功能（独立评价体系） ====================
+
+// 评分维度定义（与后端保持一致，参照合肥边检站评分表）
+const ratingDimensions = ref([
+  { key: 'concept',    label: '教学理念', description: '教学突出实战、实用、实效，聚焦新形势、新任务、新要求，符合时代性、把握规律性、富有创造性。', max_score: 10 },
+  { key: 'content',    label: '教学内容', description: '教学重难点处理恰当，剖析问题深入，数据案例翔实，内容逻辑严密，层次清晰，有理有据，有观点有方法，能达到传道授业解惑的效果。', max_score: 30 },
+  { key: 'effect',     label: '教学效果', description: '参训人员注意力集中，能理解并反馈所学内容。', max_score: 30 },
+  { key: 'courseware',  label: '课件讲义', description: '课件讲义规范详细，包含完整的教学目标、依据、方法、学时安排和讲授的主体内容，可作为同类课程教学参考。', max_score: 10 },
+  { key: 'method',     label: '教学方法', description: '教学过程安排合理，教学方法运用恰当，教学组织有序；教学模式具有特色，课堂吸引力强，启发培训对象主动思考。', max_score: 10 },
+  { key: 'quality',    label: '教官素养', description: '主讲教官姿态端正，语言规范、生动准确、感染力强；课件简洁大方、布局合理，特点突出、详略得当，讲解与课件内容适配。', max_score: 10 },
+])
+
+const defaultScores = (dims: any[]) => {
+  const scores: Record<string, number> = {}
+  for (const dim of dims) {
+    scores[dim.key] = 0
+  }
+  return scores
+}
+
+// 课程列表
+const courseList = ref<any[]>([])
+const coursesLoading = ref(false)
+const courseSearchKeyword = ref('')
+const courseRatedFilter = ref('all')  // all / rated / unrated
+
+// 课程分页
+const courseCurrentPage = ref(1)
+const coursePageSize = ref(10)
+
+// 课程列表筛选
+const filteredCourses = computed(() => {
+  let result = courseList.value
+  // 搜索关键词（课程名称或授课教员）
+  const kw = courseSearchKeyword.value.trim().toLowerCase()
+  if (kw) {
+    result = result.filter((c: any) =>
+      (c.name || '').toLowerCase().includes(kw) ||
+      (c.instructor || '').toLowerCase().includes(kw)
+    )
+  }
+  // 已评分/未评分筛选
+  if (courseRatedFilter.value === 'rated') {
+    result = result.filter((c: any) => c.my_rated)
+  } else if (courseRatedFilter.value === 'unrated') {
+    result = result.filter((c: any) => !c.my_rated)
+  }
+  return result
+})
+
+const paginatedCourses = computed(() => {
+  const start = (courseCurrentPage.value - 1) * coursePageSize.value
+  return filteredCourses.value.slice(start, start + coursePageSize.value)
+})
+
+// 搜索或筛选变化时重置课程分页
+watch([courseSearchKeyword, courseRatedFilter], () => {
+  courseCurrentPage.value = 1
+})
+
+// 课程创建/编辑对话框
+const courseDialogVisible = ref(false)
+const editingCourse = ref<any>(null)
+const courseSaving = ref(false)
+const courseForm = ref<{ name: string; instructor: string; training_time: string; dimensions: any[] }>({
+  name: '',
+  instructor: '',
+  training_time: '',
+  dimensions: JSON.parse(JSON.stringify(ratingDimensions.value))
+})
+
+// 维度编辑：总分计算
+const dimensionsTotalScore = computed(() => {
+  return courseForm.value.dimensions.reduce((sum: number, d: any) => sum + (d.max_score || 0), 0)
+})
+
+// 添加维度行
+function addDimensionRow() {
+  const idx = courseForm.value.dimensions.length + 1
+  courseForm.value.dimensions.push({
+    key: `dim_${idx}_${Date.now()}`,
+    label: '',
+    description: '',
+    max_score: 10
+  })
+}
+
+// 删除维度行
+function removeDimensionRow(index: number) {
+  courseForm.value.dimensions.splice(index, 1)
+}
+
+// 评分对话框
+const ratingDialogVisible = ref(false)
+const ratingCourse = ref<any>(null)
+const ratingSubmitting = ref(false)
+const myExistingRating = ref<any>(null)
+const ratingForm = ref<{ scores: Record<string, number>; comment: string }>({
+  scores: {},
+  comment: ''
+})
+
+// 当前评分使用的维度（来自课程自定义）
+const activeDimensions = ref<any[]>(ratingDimensions.value)
+
+// 评分合计
+const ratingTotal = computed(() => {
+  return Object.values(ratingForm.value.scores).reduce((sum, v) => sum + (v || 0), 0)
+})
+
+// 评分汇总对话框（管理员）
+const ratingSummaryVisible = ref(false)
+const summaryCourse = ref<any>(null)
+const summaryLoading = ref(false)
+const ratingSummaryData = ref<any>(null)
+
+// 汇总对话框使用的维度（来自课程自定义）
+const summaryDimensions = computed(() => {
+  if (summaryCourse.value?.dimensions) return summaryCourse.value.dimensions
+  if (ratingSummaryData.value?.course?.dimensions) return ratingSummaryData.value.course.dimensions
+  return ratingDimensions.value
+})
+
+// 汇总对话框搜索与分页
+const summarySearchKeyword = ref('')
+const summaryCurrentPage = ref(1)
+const summaryPageSize = ref(10)
+
+const filteredSummaryDetail = computed(() => {
+  const detail = ratingSummaryData.value?.ratings_detail || []
+  const kw = summarySearchKeyword.value.trim().toLowerCase()
+  if (!kw) return detail
+  return detail.filter((r: any) =>
+    (r.username || '').toLowerCase().includes(kw)
+  )
+})
+
+const paginatedSummaryDetail = computed(() => {
+  const start = (summaryCurrentPage.value - 1) * summaryPageSize.value
+  return filteredSummaryDetail.value.slice(start, start + summaryPageSize.value)
+})
+
+// 搜索变化时重置分页
+watch(summarySearchKeyword, () => {
+  summaryCurrentPage.value = 1
+})
+
+// 加载课程列表
+async function loadCourses() {
+  coursesLoading.value = true
+  try {
+    const response = await llmHttp.get('/courses')
+    if (response.data.ok) {
+      courseList.value = response.data.data || []
+    }
+  } catch (error) {
+    console.error('加载课程列表失败:', error)
+  } finally {
+    coursesLoading.value = false
+  }
+}
+
+// 切换到课程评分标签时自动加载
+watch(activeTab, (val) => {
+  if (val === 'rating' && courseList.value.length === 0) {
+    loadCourses()
+  }
+})
+
+// 创建课程对话框
+function showCreateCourseDialog() {
+  editingCourse.value = null
+  courseForm.value = {
+    name: '',
+    instructor: '',
+    training_time: '',
+    dimensions: JSON.parse(JSON.stringify(ratingDimensions.value))
+  }
+  courseDialogVisible.value = true
+}
+
+// 编辑课程对话框
+function openEditCourseDialog(course: any) {
+  editingCourse.value = course
+  courseForm.value = {
+    name: course.name,
+    instructor: course.instructor,
+    training_time: course.training_time || '',
+    dimensions: course.dimensions
+      ? JSON.parse(JSON.stringify(course.dimensions))
+      : JSON.parse(JSON.stringify(ratingDimensions.value))
+  }
+  courseDialogVisible.value = true
+}
+
+// 保存课程（创建或更新）
+async function saveCourse() {
+  if (!courseForm.value.name.trim()) {
+    ElMessage.warning('请输入课程名称')
+    return
+  }
+  if (!courseForm.value.instructor.trim()) {
+    ElMessage.warning('请输入授课教员')
+    return
+  }
+
+  // 验证评分维度
+  for (let i = 0; i < courseForm.value.dimensions.length; i++) {
+    const dim = courseForm.value.dimensions[i]
+    if (!dim.label || !dim.label.trim()) {
+      ElMessage.warning(`第${i + 1}项评分项目名称不能为空`)
+      return
+    }
+  }
+
+  courseSaving.value = true
+  try {
+    let response
+    if (editingCourse.value) {
+      response = await llmHttp.put(`/courses/${editingCourse.value.id}`, courseForm.value)
+    } else {
+      response = await llmHttp.post('/courses', courseForm.value)
+    }
+
+    if (response.data.ok) {
+      ElMessage.success(editingCourse.value ? '课程更新成功' : '课程创建成功')
+      courseDialogVisible.value = false
+      await loadCourses()
+    } else {
+      ElMessage.error(response.data.message || '操作失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '操作失败')
+  } finally {
+    courseSaving.value = false
+  }
+}
+
+// 删除课程
+async function deleteCourse(courseId: string) {
+  try {
+    const response = await llmHttp.delete(`/courses/${courseId}`)
+    if (response.data.ok) {
+      ElMessage.success('课程已删除')
+      await loadCourses()
+    } else {
+      ElMessage.error(response.data.message || '删除失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '删除失败')
+  }
+}
+
+// 打开评分对话框
+async function openCourseRatingDialog(course: any) {
+  ratingCourse.value = course
+  // 使用课程自定义维度
+  const dims = course.dimensions || ratingDimensions.value
+  activeDimensions.value = dims
+  ratingForm.value = { scores: defaultScores(dims), comment: '' }
+  myExistingRating.value = null
+  ratingDialogVisible.value = true
+
+  try {
+    const response = await llmHttp.get(`/courses/${course.id}/my-rating`)
+    if (response.data.ok && response.data.data?.has_rated) {
+      const existing = response.data.data.rating
+      myExistingRating.value = existing
+      ratingForm.value.scores = { ...existing.scores }
+      ratingForm.value.comment = existing.comment || ''
+    }
+  } catch (error) {
+    console.error('获取已有评分失败:', error)
+  }
+}
+
+// 提交评分
+async function submitRating() {
+  for (const dim of activeDimensions.value) {
+    const score = ratingForm.value.scores[dim.key]
+    if (score === undefined || score === null || score < 0 || score > dim.max_score) {
+      ElMessage.warning(`请正确填写"${dim.label}"的评分（0-${dim.max_score}）`)
+      return
+    }
+  }
+
+  ratingSubmitting.value = true
+  try {
+    const response = await llmHttp.post(`/courses/${ratingCourse.value.id}/rate`, {
+      scores: ratingForm.value.scores,
+      comment: ratingForm.value.comment
+    })
+
+    if (response.data.ok) {
+      ElMessage.success(myExistingRating.value ? '评分更新成功' : '评分提交成功')
+      // 更新课程列表中的评分状态
+      const idx = courseList.value.findIndex((c: any) => c.id === ratingCourse.value.id)
+      if (idx >= 0) courseList.value[idx].my_rated = true
+      ratingDialogVisible.value = false
+    } else {
+      ElMessage.error(response.data.message || '评分失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '评分提交失败')
+  } finally {
+    ratingSubmitting.value = false
+  }
+}
+
+// 打开管理员评分汇总
+async function openCourseSummary(course: any) {
+  summaryCourse.value = course
+  ratingSummaryData.value = null
+  summaryLoading.value = true
+  summarySearchKeyword.value = ''
+  summaryCurrentPage.value = 1
+  ratingSummaryVisible.value = true
+
+  try {
+    const response = await llmHttp.get(`/courses/${course.id}/ratings-summary`)
+    if (response.data.ok) {
+      ratingSummaryData.value = response.data.data
+    } else {
+      ElMessage.error(response.data.message || '获取评分汇总失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '获取评分汇总失败')
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
+// 删除某用户的评分
+async function deleteUserRating(username: string) {
+  if (!summaryCourse.value) return
+  try {
+    const response = await llmHttp.delete(`/courses/${summaryCourse.value.id}/rating/${encodeURIComponent(username)}`)
+    if (response.data.ok) {
+      ElMessage.success('评分已删除')
+      await openCourseSummary(summaryCourse.value)
+    } else {
+      ElMessage.error(response.data.message || '删除失败')
+    }
+  } catch (error: any) {
+    ElMessage.error('删除评分失败')
+  }
+}
+
 // 初始化
 onMounted(() => {
   loadResources()
@@ -1040,6 +1814,280 @@ onMounted(() => {
   padding: 20px 0;
   margin-top: 20px;
   border-top: 1px solid #ebeef5;
+}
+
+/* ==================== 标签页 ==================== */
+.main-tabs {
+  margin-bottom: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.main-tabs :deep(.el-tabs__content) {
+  padding: 20px;
+}
+
+/* ==================== 维度编辑样式 ==================== */
+.dim-edit-section {
+  border-top: 1px solid #ebeef5;
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.dim-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dim-edit-total {
+  text-align: right;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #606266;
+}
+
+/* ==================== 课程工具栏 ==================== */
+.course-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.course-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.course-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ==================== 课程列表样式 ==================== */
+
+.course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-item {
+  border-radius: 10px;
+}
+
+.course-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.course-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.course-name-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.course-name {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.course-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.course-meta {
+  display: flex;
+  gap: 20px;
+  font-size: 0.85rem;
+  color: #909399;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* 评分对话框课程信息栏 */
+.rating-course-info {
+  background: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #303133;
+}
+
+/* ==================== 汇总对话框搜索与分页 ==================== */
+.summary-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.summary-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* ==================== 课程评分样式 ==================== */
+.rating-form-container {
+  padding: 0 10px;
+}
+
+.rating-table {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rating-table-header {
+  display: flex;
+  background: #f5f7fa;
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  border-bottom: 2px solid #e4e7ed;
+}
+
+.rating-table-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #ebeef5;
+  transition: background-color 0.2s;
+}
+
+.rating-table-row:hover {
+  background-color: #f5f7fa;
+}
+
+.rating-table-footer {
+  display: flex;
+  align-items: center;
+  background: #fafafa;
+  border-top: 2px solid #e4e7ed;
+}
+
+.rating-col-dim {
+  width: 100px;
+  min-width: 100px;
+  padding: 12px 16px;
+  font-weight: 500;
+}
+
+.dim-label {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.rating-col-desc {
+  flex: 1;
+  padding: 12px 10px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.rating-col-max {
+  width: 70px;
+  min-width: 70px;
+  padding: 12px 10px;
+  text-align: center;
+  color: #909399;
+}
+
+.rating-col-score {
+  width: 130px;
+  min-width: 130px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+/* 评分汇总概览 */
+.summary-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.overview-item {
+  flex: 1;
+  min-width: 100px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  border: 1px solid #ebeef5;
+  transition: transform 0.2s;
+}
+
+.overview-item:hover {
+  transform: translateY(-2px);
+}
+
+.overview-item.overview-total {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+}
+
+.overview-item.overview-total .overview-value {
+  color: #fff;
+}
+
+.overview-item.overview-total .overview-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.overview-item.overview-count {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  color: #fff;
+  border: none;
+}
+
+.overview-item.overview-count .overview-value {
+  color: #fff;
+}
+
+.overview-item.overview-count .overview-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.overview-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+
+.overview-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 6px;
 }
 
 @media (max-width: 768px) {
