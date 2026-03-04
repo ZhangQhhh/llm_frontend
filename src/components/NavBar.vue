@@ -103,6 +103,10 @@
                 <el-icon><Download /></el-icon>
                 <span>软件下载</span>
               </el-dropdown-item>
+              <el-dropdown-item command="cloud-disk">
+                <el-icon><FolderOpened /></el-icon>
+                <span>网盘</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 <span>退出登录</span>
@@ -284,6 +288,8 @@ export default defineComponent({
         router.push('/video-center')
       } else if (command === 'software-download') {
         router.push('/software-download')
+      } else if (command === 'cloud-disk') {
+        window.open('http://53.3.1.2:7080', '_blank', 'noopener,noreferrer')
       }
     }
 
