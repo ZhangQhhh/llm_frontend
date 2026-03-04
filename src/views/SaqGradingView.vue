@@ -1668,7 +1668,7 @@ const llmOptions = ref([
   { value: 'qwen2025', label: 'Qwen (增强)' },
   { value: 'deepseek', label: 'DeepSeekv3.1' },
   { value: 'deepseek-3.2', label: 'DeepSeekv3.2' },
-  // { value: 'qwen-plus', label: 'Qwen (云端)' },
+  { value: 'qwen-plus', label: 'Qwen (云端)' },
 ])
 
 // 当后台评分有新进展时，刷新评分数据到UI

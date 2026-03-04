@@ -4291,7 +4291,7 @@ export default defineComponent({
             
             const updateItem: any = {
               id: qid,
-              explain: r.explain || '',
+              explain: r.explain_raw || r.explain || '',
             }
             
             // 如果原题无答案且 AI 给出了答案，自动填充并标记
@@ -5060,11 +5060,12 @@ export default defineComponent({
         }
         const r0 = data.results[0]
         const explain = (r0.explain||'').trim()
+        const explainRaw = (r0.explain_raw || r0.explain || '').trim()
         const newStatus = r0.answer_mismatch ? 'abnormal' : 'draft'
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method:'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ items: [{ id: row.qid, explain, status: newStatus }] })
+          body: JSON.stringify({ items: [{ id: row.qid, explain: explainRaw, status: newStatus }] })
         })
         const up = await upResp.json()
         if (!up?.ok) throw new Error(up?.msg || '写回失败')

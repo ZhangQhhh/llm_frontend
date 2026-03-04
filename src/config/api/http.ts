@@ -30,6 +30,9 @@ http.interceptors.request.use(
         if (user.username) {
           config.headers['X-User-Name'] = encodeURIComponent(user.username);
         }
+        if (user.isBjzxAdmin) {
+          config.headers['X-Is-Bjzx-Admin'] = 'true';
+        }
       } catch (e) {
         // ignore parse error
       }
@@ -91,6 +94,9 @@ davHttp.interceptors.request.use(
         if (user.username) {
           config.headers['X-User-Name'] = encodeURIComponent(user.username);
         }
+        if (user.isBjzxAdmin) {
+          config.headers['X-Is-Bjzx-Admin'] = 'true';
+        }
       } catch (e) {
         // ignore parse error
       }
@@ -145,6 +151,9 @@ mcqHttp.interceptors.request.use(
         }
         if (user.username) {
           config.headers['X-User-Name'] = encodeURIComponent(user.username);
+        }
+        if (user.isBjzxAdmin) {
+          config.headers['X-Is-Bjzx-Admin'] = 'true';
         }
       } catch (e) {
         // ignore parse error
