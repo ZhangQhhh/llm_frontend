@@ -47,6 +47,7 @@
                   <option value="qwen3-32b">Qwen(通用)</option>
                   <option value="qwen2025">Qwen(增强)</option>
                   <option value="deepseek">DeepSeek-3.1</option>
+                  <option value="deepseek-3.2">DeepSeek-3.2</option>
                 </select>
               </label>
 

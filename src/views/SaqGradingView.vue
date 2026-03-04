@@ -1667,6 +1667,7 @@ const llmOptions = ref([
   { value: 'qwen3-32b', label: 'Qwen (通用)' },
   { value: 'qwen2025', label: 'Qwen (增强)' },
   { value: 'deepseek', label: 'DeepSeekv3.1' },
+  { value: 'deepseek-3.2', label: 'DeepSeekv3.2' },
   // { value: 'qwen-plus', label: 'Qwen (云端)' },
 ])
 

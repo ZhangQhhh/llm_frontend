@@ -78,6 +78,7 @@
                     <el-option label="Qwen (通用)" value="qwen3-32b" />
                     <el-option label="Qwen (增强)" value="qwen2025" />
                     <el-option label="DeepSeekv3.1" value="deepseek" />
+                    <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
                     <!-- <el-option label="DeepSeek-32B (快速)" value="deepseek-32b" /> -->
                   </el-select>
 

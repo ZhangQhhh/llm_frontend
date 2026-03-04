@@ -758,6 +758,8 @@
 
                     <el-option label="DeepSeekv3.1" value="deepseek" />
 
+                    <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
+
                     <!-- <el-option label="DeepSeek 云端" value="deepseek-cloud" /> -->
 
                     <!-- <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" /> -->
