@@ -145,6 +145,9 @@ export const API_ENDPOINTS = {
     TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`,
     YEAR_DATA_UPLOAD: `/entryExit/year-data/upload`,
     YEAR_DATA_FILES: `/entryExit/year-data/files`,
+    YEAR_DATA_FILE_DELETE: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}`,
+    YEAR_DATA_FILE_DOWNLOAD: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}/download`,
+    YEAR_DATA_FILE_ACTIVATE: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}/activate`,
     YEAR_REPORT_VALIDATE: `/entryExit/year-report/validate`,
     YEAR_REPORT_GENERATE: `/entryExit/year-report/generate`,
     YEAR_REPORT_PROGRESS: (jobId: string) => `/entryExit/year-report/progress/${jobId}`
