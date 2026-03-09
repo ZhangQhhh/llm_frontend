@@ -126,6 +126,34 @@
     
     <!-- 性能设置对话框 -->
     <PerformanceSettings v-model="showPerformanceSettings" />
+    <el-dialog
+      v-model="showCloudDiskDialog"
+      title="网盘访问提示"
+      width="460px"
+      class="cloud-disk-dialog"
+    >
+      <div class="cloud-disk-dialog__content">
+        <p class="cloud-disk-dialog__desc">
+          检测到当前设备可能是国产化环境。如遇网盘无法正常打开，请使用 360 浏览器访问。
+        </p>
+        <div class="cloud-disk-dialog__link-box">
+          <span class="cloud-disk-dialog__link">{{ cloudDiskUrl }}</span>
+          <el-button size="small" plain @click="copyCloudDiskUrl">
+            <el-icon><DocumentCopy /></el-icon>
+            <span>复制地址</span>
+          </el-button>
+        </div>
+        <el-checkbox v-model="skipCloudDiskReminder" class="cloud-disk-dialog__checkbox">
+          后续直接打开，不再提醒
+        </el-checkbox>
+      </div>
+      <template #footer>
+        <div class="cloud-disk-dialog__footer">
+          <el-button @click="showCloudDiskDialog = false">取消</el-button>
+          <el-button type="primary" @click="openCloudDiskFromDialog">直接打开</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </nav>
 </template>
 
@@ -133,6 +161,7 @@
 import { defineComponent, computed, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { 
   Setting, 
   User, 
@@ -172,6 +201,10 @@ export default defineComponent({
     const router = useRouter()
     const route = useRoute()
     const showPerformanceSettings = ref(false)
+    const cloudDiskUrl = 'http://53.3.1.2:7080'
+    const cloudDiskSkipReminderKey = 'cloud_disk_skip_reminder'
+    const showCloudDiskDialog = ref(false)
+    const skipCloudDiskReminder = ref(localStorage.getItem(cloudDiskSkipReminderKey) === '1')
 
     const activeIndex = computed(() => route.path)
     const isLoggedIn = computed(() => store.state.user.is_login)
@@ -254,6 +287,67 @@ export default defineComponent({
       router.push(path)
     }
 
+    const shouldWarnForCloudDisk = () => {
+      if (skipCloudDiskReminder.value) {
+        return false
+      }
+
+      const agent = `${navigator.userAgent} ${navigator.platform || ''}`.toLowerCase()
+      const domesticEnvKeywords = ['kylin', 'neokylin', 'uos', 'uniontech']
+
+      return domesticEnvKeywords.some((keyword) => agent.includes(keyword))
+    }
+
+    const persistCloudDiskPreference = () => {
+      localStorage.setItem(
+        cloudDiskSkipReminderKey,
+        skipCloudDiskReminder.value ? '1' : '0'
+      )
+    }
+
+    const openCloudDisk = () => {
+      window.open(cloudDiskUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    const openCloudDiskFromDialog = () => {
+      persistCloudDiskPreference()
+      showCloudDiskDialog.value = false
+      openCloudDisk()
+    }
+
+    const copyCloudDiskUrl = async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(cloudDiskUrl)
+        } else {
+          const textArea = document.createElement('textarea')
+          textArea.value = cloudDiskUrl
+          textArea.style.position = 'fixed'
+          textArea.style.opacity = '0'
+          document.body.appendChild(textArea)
+          textArea.focus()
+          textArea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textArea)
+        }
+
+        ElMessage.success('网盘地址已复制')
+      } catch (error) {
+        ElMessage.error('复制失败，请手动复制地址')
+      }
+    }
+
+    const handleCloudDiskCommand = () => {
+      skipCloudDiskReminder.value = localStorage.getItem(cloudDiskSkipReminderKey) === '1'
+
+      if (shouldWarnForCloudDisk()) {
+        showCloudDiskDialog.value = true
+        return
+      }
+
+      openCloudDisk()
+    }
+
     const handleCommand = (command: string) => {
       if (command === 'logout') {
         store.dispatch('logout')
@@ -289,7 +383,7 @@ export default defineComponent({
       } else if (command === 'software-download') {
         router.push('/software-download')
       } else if (command === 'cloud-disk') {
-        window.open('http://53.3.1.2:7080', '_blank', 'noopener,noreferrer')
+        handleCloudDiskCommand()
       }
     }
 
@@ -312,7 +406,12 @@ export default defineComponent({
       roleText,
       navigateTo,
       handleCommand,
-      showPerformanceSettings
+      showPerformanceSettings,
+      showCloudDiskDialog,
+      skipCloudDiskReminder,
+      cloudDiskUrl,
+      copyCloudDiskUrl,
+      openCloudDiskFromDialog
     }
   }
 })
@@ -580,5 +679,44 @@ export default defineComponent({
   .logo-text {
     font-size: 16px;
   }
+}
+.cloud-disk-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cloud-disk-dialog__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #4b5563;
+}
+
+.cloud-disk-dialog__link-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.cloud-disk-dialog__link {
+  font-size: 14px;
+  color: #1d4ed8;
+  word-break: break-all;
+}
+
+.cloud-disk-dialog__checkbox {
+  margin-top: -4px;
+}
+
+.cloud-disk-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>
