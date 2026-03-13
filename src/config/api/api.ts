@@ -40,6 +40,9 @@ export const API_ENDPOINTS = {
     DOWNGRADE_ADMIN: `/api/admin/downgrade-admin/`,
     RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
     UPGRADE_ADMIN: `/api/admin/upgrade-admin/`,
+    UPDATE_USERNAME: `/api/admin/users/update-username/`,
+    UPDATE_ID_CARD_NUMBER: `/api/admin/users/update-id-card-number/`,
+    UPDATE_POLICE_ID: `/api/admin/users/update-police-id/`,
     SET_BJZX_ADMIN: `/api/admin/users/set-bjzx-admin/`,  // 设置边检智学管理员
     IP_BLACKLIST_LIST: `/api/admin/ip-blacklist/`,
     IP_BLACKLIST_ADD: `/api/admin/ip-blacklist/`,
