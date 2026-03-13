@@ -124,54 +124,99 @@
             </div>
 
             <div class="year-section">
-              <div class="year-upload-panel">
-                <div class="group-title">
-                  <el-icon><Upload /></el-icon>
-                  <span>按月上传年报数据</span>
-                </div>
-                <div class="year-upload-grid">
-                  <div class="selector-item">
-                    <label>数据类型</label>
-                    <el-select v-model="yearUploadDatasetType" style="width: 100%">
-                      <el-option label="人员数据（people）" value="people" />
-                      <el-option label="航班数据（traffic）" value="traffic" />
-                    </el-select>
+              <div class="year-upload-panels">
+                <div class="year-upload-panel">
+                  <div class="group-title">
+                    <el-icon><Upload /></el-icon>
+                    <span>按月上传年报数据</span>
                   </div>
-                  <div class="selector-item">
-                    <label>月份</label>
-                    <el-date-picker
-                      v-model="yearUploadMonth"
-                      type="month"
-                      placeholder="YYYY-MM"
-                      format="YYYY-MM"
-                      value-format="YYYY-MM"
-                      style="width: 100%"
-                    />
-                  </div>
-                  <div class="selector-item selector-item-wide">
-                    <label>月表文件（.xlsx）</label>
-                    <div
-                      class="file-box year-file-box"
-                      :class="{ active: yearUploadFile }"
-                      @click="triggerUpload('yearUpload')"
-                    >
-                      <input type="file" ref="fileInput_yearUpload" style="display:none" accept=".xlsx" @change="handleYearUploadFileChange" />
-                      <el-icon class="box-icon"><FolderAdd /></el-icon>
-                      <span class="box-label">选择月表文件</span>
-                      <span v-if="yearUploadFile" class="file-name">{{ yearUploadFile.name }}</span>
+                  <div class="year-upload-grid">
+                    <div class="selector-item">
+                      <label>数据类型</label>
+                      <el-select v-model="yearUploadDatasetType" style="width: 100%">
+                        <el-option label="人员数据（people）" value="people" />
+                        <el-option label="航班数据（traffic）" value="traffic" />
+                      </el-select>
+                    </div>
+                    <div class="selector-item">
+                      <label>月份</label>
+                      <el-date-picker
+                        v-model="yearUploadMonth"
+                        type="month"
+                        placeholder="YYYY-MM"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        style="width: 100%"
+                      />
+                    </div>
+                    <div class="selector-item selector-item-wide">
+                      <label>月表文件（.xls/.xlsx）</label>
+                      <div
+                        class="file-box year-file-box"
+                        :class="{ active: yearUploadFile }"
+                        @click="triggerUpload('yearUpload')"
+                      >
+                        <input type="file" ref="fileInput_yearUpload" style="display:none" accept=".xls,.xlsx" @change="handleYearUploadFileChange" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">选择月表文件</span>
+                        <span v-if="yearUploadFile" class="file-name">{{ yearUploadFile.name }}</span>
+                      </div>
                     </div>
                   </div>
+                  <div class="action-buttons year-upload-actions">
+                    <el-button
+                      type="primary"
+                      plain
+                      :loading="uploadingYearData"
+                      :disabled="!canUploadYearData"
+                      @click="handleUploadYearData"
+                    >
+                      上传当前月表
+                    </el-button>
+                  </div>
                 </div>
-                <div class="action-buttons year-upload-actions">
-                  <el-button
-                    type="primary"
-                    plain
-                    :loading="uploadingYearData"
-                    :disabled="!canUploadYearData"
-                    @click="handleUploadYearData"
-                  >
-                    上传当前月表
-                  </el-button>
+
+                <div class="year-upload-panel year-batch-upload-panel">
+                  <div class="group-title">
+                    <el-icon><Upload /></el-icon>
+                    <span>批量上传总表</span>
+                  </div>
+                  <div class="year-upload-grid">
+                    <div class="selector-item">
+                      <label>数据类型</label>
+                      <el-select v-model="yearBatchUploadDatasetType" style="width: 100%">
+                        <el-option label="人员数据（people）" value="people" />
+                        <el-option label="航班数据（traffic）" value="traffic" />
+                      </el-select>
+                    </div>
+                    <div class="selector-item selector-item-wide">
+                      <label>总表文件（.xls/.xlsx）</label>
+                      <div
+                        class="file-box year-file-box"
+                        :class="{ active: yearBatchUploadFile }"
+                        @click="triggerUpload('yearBatchUpload')"
+                      >
+                        <input type="file" ref="fileInput_yearBatchUpload" style="display:none" accept=".xls,.xlsx" @change="handleYearBatchUploadFileChange" />
+                        <el-icon class="box-icon"><FolderAdd /></el-icon>
+                        <span class="box-label">选择总表文件</span>
+                        <span v-if="yearBatchUploadFile" class="file-name">{{ yearBatchUploadFile.name }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="batch-upload-tip">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>仅支持 toad 模板，支持 .xls/.xlsx，后端会自动按日期拆月并跳过模板说明行。</span>
+                  </div>
+                  <div class="action-buttons year-upload-actions">
+                    <el-button
+                      type="primary"
+                      :loading="uploadingYearBatchData"
+                      :disabled="!canUploadYearBatchData"
+                      @click="handleUploadYearBatchData"
+                    >
+                      批量上传总表
+                    </el-button>
+                  </div>
                 </div>
               </div>
 
@@ -346,6 +391,106 @@
                 </div>
               </div>
             </div>
+
+            <el-dialog
+              v-model="yearBatchUploadDialogVisible"
+              width="720px"
+              destroy-on-close
+              class="batch-result-dialog"
+              :title="yearBatchUploadDialogMode === 'success' ? '批量上传结果' : '批量上传失败详情'"
+            >
+              <div v-if="yearBatchUploadDialogMode === 'success' && yearBatchUploadResult" class="batch-result-content">
+                <div class="batch-summary-grid">
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">源文件</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadResult.sourceFileName }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">数据类型</span>
+                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadResult.datasetType) }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">导入月份数</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadResult.importedMonthCount }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">数据行数</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadResult.totalRows }}</span>
+                  </div>
+                  <div class="batch-summary-item selector-item-wide">
+                    <span class="batch-summary-label">批次号</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadResult.batchId || '-' }}</span>
+                  </div>
+                </div>
+
+                <div v-if="yearBatchUploadResult.warnings.length" class="batch-warning-list">
+                  <div v-for="warning in yearBatchUploadResult.warnings" :key="warning" class="batch-warning-item">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>{{ warning }}</span>
+                  </div>
+                </div>
+
+                <el-table
+                  :data="yearBatchUploadResult.importedMonths"
+                  size="small"
+                  border
+                  class="batch-result-table"
+                  empty-text="未返回拆月结果"
+                >
+                  <el-table-column prop="monthId" label="月份" min-width="120" />
+                  <el-table-column prop="rowCount" label="写入行数" min-width="120" />
+                  <el-table-column prop="version" label="版本" min-width="100" />
+                  <el-table-column prop="recordId" label="记录 ID" min-width="220" show-overflow-tooltip />
+                </el-table>
+              </div>
+
+              <div v-else-if="yearBatchUploadErrorDetail" class="batch-result-content">
+                <div class="batch-error-banner">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>{{ yearBatchUploadErrorDetail.message }}</span>
+                </div>
+
+                <div class="batch-summary-grid">
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">源文件</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadErrorDetail.sourceFileName || '-' }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">数据类型</span>
+                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadErrorDetail.datasetType) }}</span>
+                  </div>
+                </div>
+
+                <div v-if="yearBatchUploadErrorDetail.missingColumns.length" class="batch-missing-columns">
+                  <span class="batch-section-title">缺失字段</span>
+                  <div class="batch-tag-list">
+                    <el-tag v-for="column in yearBatchUploadErrorDetail.missingColumns" :key="column" type="danger" effect="plain">
+                      {{ column }}
+                    </el-tag>
+                  </div>
+                </div>
+
+                <div class="batch-row-errors">
+                  <div class="batch-row-errors-header">
+                    <span class="batch-section-title">行级错误</span>
+                    <span class="batch-row-errors-tip">最多展示前 20 条错误</span>
+                  </div>
+                  <el-table
+                    :data="yearBatchUploadErrorDetail.rowErrors"
+                    size="small"
+                    border
+                    empty-text="未返回行级错误"
+                  >
+                    <el-table-column prop="row" label="行号" min-width="100" />
+                    <el-table-column prop="message" label="错误原因" min-width="320" show-overflow-tooltip />
+                  </el-table>
+                </div>
+              </div>
+
+              <template #footer>
+                <el-button @click="yearBatchUploadDialogVisible = false">关闭</el-button>
+              </template>
+            </el-dialog>
           </div>
         </section>
 
@@ -415,7 +560,7 @@
                     </div>
                     <div class="template-tip">
                       <el-icon><InfoFilled /></el-icon>
-                      <span>“更新历史CSV”请严格按照示意文件.csv的字段顺序与格式填写。</span>
+                      <span>“更新历史CSV”请按示意文件填写；年报总表请下载下方 toad 模板并按模板结构上传。</span>
                     </div>
                     <div class="template-grid">
                       <div v-for="item in templateFiles" :key="item.filename" class="template-item">
@@ -643,6 +788,8 @@ import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
 const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
 const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
 const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
+const templateToadPeopleXls = new URL('../assets/tem_file/toad 人员模板.xls', import.meta.url).href;
+const templateToadTrafficXls = new URL('../assets/tem_file/toad 交通运输工具模板.xls', import.meta.url).href;
 
 // --- State ---
 const activeTab = ref('generate');
@@ -667,10 +814,17 @@ const yearModelId = ref<YearModelId>('deepseek');
 const yearUploadDatasetType = ref<YearDatasetType>('people');
 const yearUploadMonth = ref('');
 const yearUploadFile = ref<File | null>(null);
+const yearBatchUploadDatasetType = ref<YearDatasetType>('people');
+const yearBatchUploadFile = ref<File | null>(null);
 const uploadingYearData = ref(false);
+const uploadingYearBatchData = ref(false);
 const yearMissingPeopleMonths = ref<string[]>([]);
 const yearMissingTrafficMonths = ref<string[]>([]);
 const yearApiUseCompatPrefix = ref(false);
+const yearBatchUploadDialogVisible = ref(false);
+const yearBatchUploadDialogMode = ref<'success' | 'error'>('success');
+const yearBatchUploadResult = ref<BatchUploadResult | null>(null);
+const yearBatchUploadErrorDetail = ref<BatchUploadErrorDetail | null>(null);
 
 const generating = ref(false);
 const progressPercent = ref(0);
@@ -678,6 +832,7 @@ const progressStep = ref('准备中...');
 const progressStatus = ref('');
 
 const fileInput_yearUpload = ref();
+const fileInput_yearBatchUpload = ref();
 
 const stats = reactive({
   max: '0',
@@ -709,6 +864,36 @@ interface TemplateFile {
   url: string;
 }
 
+interface BatchUploadMonthItem {
+  monthId: string;
+  rowCount: number;
+  recordId: string;
+  version: number;
+}
+
+interface BatchUploadResult {
+  batchId: string;
+  datasetType: YearDatasetType;
+  sourceFileName: string;
+  totalRows: number;
+  importedMonthCount: number;
+  importedMonths: BatchUploadMonthItem[];
+  warnings: string[];
+}
+
+interface BatchUploadErrorRowItem {
+  row: number | string;
+  message: string;
+}
+
+interface BatchUploadErrorDetail {
+  message: string;
+  datasetType?: YearDatasetType;
+  sourceFileName?: string;
+  missingColumns: string[];
+  rowErrors: BatchUploadErrorRowItem[];
+}
+
 interface YearDataFileItem {
   id?: string | number;
   recordId?: string | number;
@@ -725,6 +910,9 @@ interface YearDataFileItem {
   uploadedAt?: string;
   version?: number;
   isActive?: boolean;
+  importMode?: 'batch_split' | 'manual_month';
+  batchId?: string;
+  sourceOriginalName?: string;
 }
 
 const documents = ref<DocumentItem[]>([]);
@@ -756,6 +944,18 @@ const templateFiles: TemplateFile[] = [
     filename: '航班表2024.xls',
     desc: '航班数据模板示例（xls）。',
     url: templateFlightXls
+  },
+  {
+    title: 'Toad 人员总表模板',
+    filename: 'toad 人员模板.xls',
+    desc: '年报批量总表模板（toad），上传后由后端自动拆分为月表。',
+    url: templateToadPeopleXls
+  },
+  {
+    title: 'Toad 交通工具总表模板',
+    filename: 'toad 交通运输工具模板.xls',
+    desc: '年报批量总表模板（toad），适用于交通运输工具数据拆月上传。',
+    url: templateToadTrafficXls
   }
 ];
 
@@ -771,6 +971,10 @@ const canUploadYearData = computed(() =>
   Boolean(yearUploadFile.value && yearUploadMonth.value && !uploadingYearData.value)
 );
 
+const canUploadYearBatchData = computed(() =>
+  Boolean(yearBatchUploadFile.value && !uploadingYearBatchData.value)
+);
+
 const forecastTitle = computed(() =>
   forecastType.value === 'traffic' ? '交通工具预测' : '出入境总人数预测'
 );
@@ -778,6 +982,12 @@ const forecastTitle = computed(() =>
 const parseCount = (value: any) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+};
+
+const getDatasetTypeLabel = (datasetType?: string) => {
+  if (datasetType === 'traffic') return '航班数据（traffic）';
+  if (datasetType === 'people') return '人员数据（people）';
+  return '-';
 };
 
 const resolveYearFileRecordId = (row: any): string | number | null => {
@@ -807,12 +1017,15 @@ const normalizeYearFileList = (list: any[]): YearDataFileItem[] => {
       month: Number(item?.month ?? firstRecord?.month),
       monthId: item?.monthId || item?.month_id || firstRecord?.monthId || firstRecord?.month_id || ((item?.year || firstRecord?.year) && (item?.month || firstRecord?.month) ? String(item?.year || firstRecord?.year) + '-' + String(item?.month || firstRecord?.month).padStart(2, '0') : ''),
       originalName: item?.originalName || firstRecord?.originalName || item?.storedName || firstRecord?.storedName || '',
-      storedName: item?.storedName || firstRecord?.storedName || '',
-      uploadedBy: item?.uploadedBy || '',
-      uploadedAt: item?.uploadedAt || firstRecord?.uploadedAt || '',
-      version: Number(item?.version ?? firstRecord?.version ?? 0),
-      isActive: Boolean(item?.isActive ?? firstRecord?.isActive)
-    };
+       storedName: item?.storedName || firstRecord?.storedName || '',
+       uploadedBy: item?.uploadedBy || '',
+       uploadedAt: item?.uploadedAt || firstRecord?.uploadedAt || '',
+       version: Number(item?.version ?? firstRecord?.version ?? 0),
+       isActive: Boolean(item?.isActive ?? firstRecord?.isActive),
+       importMode: item?.importMode || item?.import_mode || firstRecord?.importMode || firstRecord?.import_mode,
+       batchId: item?.batchId || item?.batch_id || firstRecord?.batchId || firstRecord?.batch_id || '',
+       sourceOriginalName: item?.sourceOriginalName || item?.source_original_name || firstRecord?.sourceOriginalName || firstRecord?.source_original_name || ''
+     };
     })
     .sort((a: any, b: any) => (b.monthId || '').localeCompare(a.monthId || ''));
 };
@@ -833,7 +1046,10 @@ const flattenGroupedYearFileItems = (groupItems: any[], datasetType: 'people' | 
     if (!records.length) {
       flattened.push({
         ...item,
-        datasetType: item?.datasetType || item?.dataset_type || datasetType
+        datasetType: item?.datasetType || item?.dataset_type || datasetType,
+        importMode: item?.importMode || item?.import_mode,
+        batchId: item?.batchId || item?.batch_id,
+        sourceOriginalName: item?.sourceOriginalName || item?.source_original_name
       });
       return;
     }
@@ -846,7 +1062,10 @@ const flattenGroupedYearFileItems = (groupItems: any[], datasetType: 'people' | 
         ...item,
         ...activeRecord,
         datasetType: item?.datasetType || item?.dataset_type || activeRecord?.datasetType || activeRecord?.dataset_type || datasetType,
-        monthId: item?.monthId || item?.month_id || activeRecord?.monthId || activeRecord?.month_id
+        monthId: item?.monthId || item?.month_id || activeRecord?.monthId || activeRecord?.month_id,
+        importMode: item?.importMode || item?.import_mode || activeRecord?.importMode || activeRecord?.import_mode,
+        batchId: item?.batchId || item?.batch_id || activeRecord?.batchId || activeRecord?.batch_id,
+        sourceOriginalName: item?.sourceOriginalName || item?.source_original_name || activeRecord?.sourceOriginalName || activeRecord?.source_original_name
       });
       return;
     }
@@ -856,7 +1075,10 @@ const flattenGroupedYearFileItems = (groupItems: any[], datasetType: 'people' | 
         ...item,
         ...record,
         datasetType: item?.datasetType || item?.dataset_type || record?.datasetType || record?.dataset_type || datasetType,
-        monthId: item?.monthId || item?.month_id || record?.monthId || record?.month_id
+        monthId: item?.monthId || item?.month_id || record?.monthId || record?.month_id,
+        importMode: item?.importMode || item?.import_mode || record?.importMode || record?.import_mode,
+        batchId: item?.batchId || item?.batch_id || record?.batchId || record?.batch_id,
+        sourceOriginalName: item?.sourceOriginalName || item?.source_original_name || record?.sourceOriginalName || record?.source_original_name
       });
     });
   });
@@ -1287,6 +1509,10 @@ const calculateStats = (history: any[], forecast: any[]) => {
 const triggerUpload = (key: string) => {
   if (key === 'yearUpload') {
     fileInput_yearUpload.value?.click();
+    return;
+  }
+  if (key === 'yearBatchUpload') {
+    fileInput_yearBatchUpload.value?.click();
   }
 };
 
@@ -1294,7 +1520,15 @@ const handleYearUploadFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     yearUploadFile.value = target.files[0];
-    ElMessage.success('已选择月表: ' + target.files[0].name);
+    ElMessage.success('已选择上传文件: ' + target.files[0].name);
+  }
+};
+
+const handleYearBatchUploadFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    yearBatchUploadFile.value = target.files[0];
+    ElMessage.success('已选择总表文件: ' + target.files[0].name);
   }
 };
 
@@ -1370,6 +1604,77 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
   return error?.message || null;
 };
 
+const normalizeBatchUploadResult = (payload: any): BatchUploadResult => {
+  const data = payload?.data || payload || {};
+  const importedMonths = Array.isArray(data.importedMonths) ? data.importedMonths : [];
+  return {
+    batchId: String(data.batchId || ''),
+    datasetType: (data.datasetType || 'people') as YearDatasetType,
+    sourceFileName: String(data.sourceFileName || ''),
+    totalRows: Number(data.totalRows || 0),
+    importedMonthCount: Number(data.importedMonthCount || importedMonths.length || 0),
+    importedMonths: importedMonths.map((item: any) => ({
+      monthId: String(item?.monthId || ''),
+      rowCount: Number(item?.rowCount || 0),
+      recordId: String(item?.recordId || ''),
+      version: Number(item?.version || 0)
+    })),
+    warnings: Array.isArray(data.warnings) ? data.warnings.map((item: any) => String(item)) : []
+  };
+};
+
+const normalizeBatchUploadErrorDetail = (payload: any): BatchUploadErrorDetail | null => {
+  if (!payload || typeof payload !== 'object') return null;
+  const data = payload?.data || {};
+  const rowErrors = Array.isArray(data.rowErrors) ? data.rowErrors : [];
+  return {
+    message: payload?.message || data?.message || '批量上传失败',
+    datasetType: (data?.datasetType || payload?.datasetType || undefined) as YearDatasetType | undefined,
+    sourceFileName: data?.sourceFileName || payload?.sourceFileName || '',
+    missingColumns: Array.isArray(data?.missingColumns) ? data.missingColumns.map((item: any) => String(item)) : [],
+    rowErrors: rowErrors.map((item: any) => ({
+      row: item?.row ?? '-',
+      message: String(item?.message || '未知错误')
+    }))
+  };
+};
+
+const parseBatchUploadErrorDetail = async (error: any): Promise<BatchUploadErrorDetail | null> => {
+  const blobData = error?.response?.data;
+  if (blobData instanceof Blob) {
+    const text = await blobData.text();
+    try {
+      return normalizeBatchUploadErrorDetail(JSON.parse(text));
+    } catch {
+      return {
+        message: text || error?.message || '批量上传失败',
+        missingColumns: [],
+        rowErrors: []
+      };
+    }
+  }
+
+  return normalizeBatchUploadErrorDetail(error?.response?.data) || {
+    message: error?.message || '批量上传失败',
+    missingColumns: [],
+    rowErrors: []
+  };
+};
+
+const openBatchUploadSuccessDialog = (result: BatchUploadResult) => {
+  yearBatchUploadDialogMode.value = 'success';
+  yearBatchUploadResult.value = result;
+  yearBatchUploadErrorDetail.value = null;
+  yearBatchUploadDialogVisible.value = true;
+};
+
+const openBatchUploadErrorDialog = (detail: BatchUploadErrorDetail) => {
+  yearBatchUploadDialogMode.value = 'error';
+  yearBatchUploadResult.value = null;
+  yearBatchUploadErrorDetail.value = detail;
+  yearBatchUploadDialogVisible.value = true;
+};
+
 const handleUploadYearData = async () => {
   if (!canUploadYearData.value || !yearUploadFile.value) {
     ElMessage.warning('请先选择数据类型、月份和上传文件');
@@ -1419,6 +1724,58 @@ const handleUploadYearData = async () => {
   }
 };
 
+const handleUploadYearBatchData = async () => {
+  if (!canUploadYearBatchData.value || !yearBatchUploadFile.value) {
+    ElMessage.warning('请先选择数据类型并上传总表文件');
+    return;
+  }
+
+  uploadingYearBatchData.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', yearBatchUploadFile.value);
+    formData.append('datasetType', yearBatchUploadDatasetType.value);
+    formData.append('templateType', 'toad');
+    const username = getCurrentUsername();
+    if (username) formData.append('username', username);
+
+    const res: any = await requestYearApi({
+      method: 'post',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_UPLOAD_BATCH,
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    if (!res.data?.success) {
+      const detail = normalizeBatchUploadErrorDetail(res.data) || {
+        message: res.data?.message || '批量上传失败',
+        missingColumns: [],
+        rowErrors: []
+      };
+      ElMessage.error(detail.message);
+      openBatchUploadErrorDialog(detail);
+      return;
+    }
+
+    const result = normalizeBatchUploadResult(res.data);
+    yearBatchUploadFile.value = null;
+    if (fileInput_yearBatchUpload.value) fileInput_yearBatchUpload.value.value = '';
+
+    ElMessage.success(result.importedMonthCount > 0 ? `批量上传成功，已拆分 ${result.importedMonthCount} 个月` : '批量上传成功');
+    await loadYearDataFiles();
+    openBatchUploadSuccessDialog(result);
+  } catch (error: any) {
+    console.error(error);
+    const detail = await parseBatchUploadErrorDetail(error);
+    ElMessage.error(detail?.message || '批量上传失败');
+    if (detail) {
+      openBatchUploadErrorDialog(detail);
+    }
+  } finally {
+    uploadingYearBatchData.value = false;
+  }
+};
+
 const resetForm = () => {
   yearStartMonth.value = '';
   yearEndMonth.value = '';
@@ -1427,9 +1784,15 @@ const resetForm = () => {
   yearUploadDatasetType.value = 'people';
   yearUploadMonth.value = '';
   yearUploadFile.value = null;
+  yearBatchUploadDatasetType.value = 'people';
+  yearBatchUploadFile.value = null;
   yearMissingPeopleMonths.value = [];
   yearMissingTrafficMonths.value = [];
+  yearBatchUploadResult.value = null;
+  yearBatchUploadErrorDetail.value = null;
+  yearBatchUploadDialogVisible.value = false;
   if(fileInput_yearUpload.value) fileInput_yearUpload.value.value = '';
+  if(fileInput_yearBatchUpload.value) fileInput_yearBatchUpload.value.value = '';
   ElMessage.info('已重置');
 };
 
@@ -2189,6 +2552,12 @@ const formatDate = (dateStr: string): string => {
   gap: 12px;
 }
 
+.year-upload-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .year-upload-panel {
   padding: 16px;
   border-radius: 12px;
@@ -2197,6 +2566,11 @@ const formatDate = (dateStr: string): string => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.year-batch-upload-panel {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
 }
 
 .year-upload-grid {
@@ -2211,6 +2585,18 @@ const formatDate = (dateStr: string): string => {
 
 .year-upload-actions {
   margin-top: 0;
+}
+
+.batch-upload-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .year-missing-panel {
@@ -2301,6 +2687,105 @@ const formatDate = (dateStr: string): string => {
   padding: 2px;
 }
 
+.batch-result-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.batch-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.batch-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.batch-summary-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.batch-summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.batch-warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.batch-warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.batch-result-table {
+  width: 100%;
+}
+
+.batch-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.batch-missing-columns,
+.batch-row-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.batch-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.batch-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batch-row-errors-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.batch-row-errors-tip {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 .upload-group {
   display: flex;
   flex-direction: column;
@@ -2323,15 +2808,23 @@ const formatDate = (dateStr: string): string => {
 }
 
 @media (max-width: 768px) {
+  .year-upload-panels,
   .month-selector-group,
   .year-upload-grid,
   .year-files-grid,
+  .batch-summary-grid,
   .file-grid {
     grid-template-columns: 1fr;
+  }
+
+  .batch-row-errors-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
 @media (max-width: 1500px) {
+  .year-upload-panels,
   .year-files-grid {
     grid-template-columns: 1fr;
   }
