@@ -83,32 +83,33 @@
           </div>
         </div> -->
         <div class="hero-actions">
-          <router-link to="/knowledge-qa" class="btn btn-module">
+          <router-link to="/knowledge-qa" class="btn btn-module home-module-qa">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Search /></el-icon>
             <span>业务问答</span>
           </router-link>
-          <router-link to="/conversation" class="btn btn-module">
+          <router-link to="/conversation" class="btn btn-module home-module-conversation">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><ChatDotRound /></el-icon>
             <span>智能对话</span>
           </router-link>
-          <router-link to="/exam" class="btn btn-module">
+          <router-link to="/exam" class="btn btn-module home-module-exam">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Reading /></el-icon>
             <span>边检智学</span>
           </router-link>
           <router-link to="/smart-office-v2" class="btn btn-module">
+          <router-link to="/smart-office" class="btn btn-module home-module-office">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Document /></el-icon>
             <span>公文助手</span>
           </router-link>
-          <router-link to="/immigration-12367" class="btn btn-module">
+          <router-link to="/immigration-12367" class="btn btn-module home-module-immigration">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Phone /></el-icon>
             <span>12367 助手</span>
           </router-link>
-          <router-link to="/data-analysis" class="btn btn-module">
+          <router-link to="/data-analysis" class="btn btn-module home-module-analysis">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><DataLine /></el-icon>
             <span>数研报告</span>

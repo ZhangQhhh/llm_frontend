@@ -43,6 +43,9 @@ export const API_ENDPOINTS = {
     DOWNGRADE_ADMIN: `/api/admin/downgrade-admin/`,
     RESET_ADMIN_PASSWORD: `/api/admin/reset-admin-password/`,
     UPGRADE_ADMIN: `/api/admin/upgrade-admin/`,
+    UPDATE_USERNAME: `/api/admin/users/update-username/`,
+    UPDATE_ID_CARD_NUMBER: `/api/admin/users/update-id-card-number/`,
+    UPDATE_POLICE_ID: `/api/admin/users/update-police-id/`,
     SET_BJZX_ADMIN: `/api/admin/users/set-bjzx-admin/`,  // 设置边检智学管理员
     IP_BLACKLIST_LIST: `/api/admin/ip-blacklist/`,
     IP_BLACKLIST_ADD: `/api/admin/ip-blacklist/`,
@@ -147,7 +150,11 @@ export const API_ENDPOINTS = {
     TOTAL_FORECAST_HISTORY: `/entryExit/forecast-total/history`,
     TRAFFIC_TOOLS_FORECAST_HISTORY: `/entryExit/forecast-traffic-tools/history`,
     YEAR_DATA_UPLOAD: `/entryExit/year-data/upload`,
+    YEAR_DATA_UPLOAD_BATCH: `/entryExit/year-data/upload-batch`,
     YEAR_DATA_FILES: `/entryExit/year-data/files`,
+    YEAR_DATA_FILE_DELETE: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}`,
+    YEAR_DATA_FILE_DOWNLOAD: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}/download`,
+    YEAR_DATA_FILE_ACTIVATE: (recordId: string | number) => `/entryExit/year-data/files/${encodeURIComponent(String(recordId))}/activate`,
     YEAR_REPORT_VALIDATE: `/entryExit/year-report/validate`,
     YEAR_REPORT_GENERATE: `/entryExit/year-report/generate`,
     YEAR_REPORT_PROGRESS: (jobId: string) => `/entryExit/year-report/progress/${jobId}`

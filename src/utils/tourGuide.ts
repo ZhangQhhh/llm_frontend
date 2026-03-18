@@ -15,7 +15,7 @@ declare class DriverClass {
 }
 
 export interface TourStep {
-  element: string;
+  element: string | string[];
   title: string;
   description: string;
   position?: 'left' | 'right' | 'top' | 'bottom';
@@ -49,44 +49,60 @@ export class TourGuide {
         description: '这是您的智能工作助手平台，集成了多种AI服务功能，让您的工作更加高效便捷。接下来我将为您详细介绍各项功能。'
       },
       {
-        element: '.nav-help',
-        title: '帮助中心',
-        description: '这里是您的学习起点！包含详细的功能介绍、使用指南和常见问题解答。遇到问题时可以随时查阅。'
+        element: '.hero-title',
+        title: '首页主入口',
+        description: '这里是系统首页，集中展示了平台定位和主要能力，第一次使用时可以先从这里快速了解系统。'
       },
       {
-        element: '.nav-knowledge-qa',
+        element: '.hero-subtitle',
+        title: '平台定位',
+        description: '系统以大语言模型和专业知识库为基础，主要服务于边检业务问答、学习和办公场景。'
+      },
+      {
+        element: '.home-module-qa',
         title: '业务问答 - 核心功能',
-        description: '智能问答系统，可以回答边检相关的各种问题。支持复杂查询，提供准确答案和参考来源。适合快速获取专业知识。'
+        description: '智能问答系统，可以回答边检相关的各种问题。支持复杂查询，提供准确答案和参考来源。适合快速获取专业知识。',
+        position: 'bottom'
       },
       {
-        element: '.nav-conversation',
+        element: '.home-module-conversation',
         title: '智能对话 - 深度交流',
-        description: '支持连续对话的AI助手，能理解上下文，记住对话历史。适合深入探讨复杂问题或进行长时间的专业咨询。'
+        description: '支持连续对话的AI助手，能理解上下文，记住对话历史。适合深入探讨复杂问题或进行长时间的专业咨询。',
+        position: 'bottom'
       },
       {
-        element: '.nav-exam',
+        element: '.home-module-exam',
         title: '边检智学 - 学习助手',
-        description: 'AI驱动的个性化学习系统，提供题目练习、详细解析和知识点梳理。帮助您系统性地学习边检业务知识。'
+        description: 'AI驱动的个性化学习系统，提供题目练习、详细解析和知识点梳理。帮助您系统性地学习边检业务知识。',
+        position: 'bottom'
       },
       {
-        element: '.nav-smart-office',
+        element: '.home-module-office',
         title: '公文助手 - 效率工具',
-        description: '集成多种办公工具，包括文档处理、数据分析、报告生成等功能，大幅提升日常工作效率。'
+        description: '集成多种办公工具，包括文档处理、数据分析、报告生成等功能，大幅提升日常工作效率。',
+        position: 'bottom'
       },
       {
-        element: '.nav-immigration',
+        element: '.home-module-immigration',
         title: '12367 助手 - 专业咨询',
-        description: '专门针对移民局12367咨询热线的智能助手，提供准确的政策解读和业务指导。'
+        description: '专门针对移民局12367咨询热线的智能助手，提供准确的政策解读和业务指导。',
+        position: 'bottom'
       },
       {
-        element: '.nav-data-analysis',
+        element: '.home-module-analysis',
         title: '数研报告 - 数据分析',
-        description: '专业的数据分析工具，提供数据可视化、趋势分析和智能报告生成功能，帮助您深入理解业务数据。'
+        description: '专业的数据分析工具，提供数据可视化、趋势分析和智能报告生成功能，帮助您深入理解业务数据。',
+        position: 'bottom'
       },
       {
         element: '.navbar-right',
         title: '个人中心 - 账户管理',
         description: '管理您的个人信息、查看使用历史、访问专业工具。根据您的权限级别，这里还可能包含管理功能。'
+      },
+      {
+        element: '.tour-guide-button',
+        title: '重新打开导览',
+        description: '如果后续还想再看一次页面说明，可以点击右下角的页面导览按钮随时重新启动。'
       },
       {
         element: 'body',
@@ -418,20 +434,41 @@ export class TourGuide {
 
   private startTour(tourName: string, steps: TourStep[]) {
     this.currentTour = tourName;
-    
-    // 检查第一个元素是否存在
-    const firstElement = document.querySelector(steps[0]?.element);
-    if (!firstElement) {
-      console.warn(`导览元素未找到: ${steps[0]?.element}`);
+
+    const resolvedSteps = steps
+      .map((step) => {
+        const selectors = Array.isArray(step.element) ? step.element : [step.element];
+        const matchedSelector = selectors.find((selector) => {
+          try {
+            return !!document.querySelector(selector);
+          } catch {
+            return false;
+          }
+        });
+
+        if (!matchedSelector) {
+          console.warn(`导览元素未找到: ${selectors.join(' | ')}`);
+          return null;
+        }
+
+        return {
+          ...step,
+          element: matchedSelector
+        };
+      })
+      .filter((step): step is TourStep & { element: string } => !!step);
+
+    if (resolvedSteps.length === 0) {
       return;
     }
-    
-    // 简化步骤格式，使用 driver.js 期望的格式
-    const driverSteps = steps.map(step => ({
+
+    const driverSteps = resolvedSteps.map(step => ({
       element: step.element,
       popover: {
         title: step.title,
-        description: step.description
+        description: step.description,
+        side: step.position || 'bottom',
+        align: 'center'
       }
     }));
 

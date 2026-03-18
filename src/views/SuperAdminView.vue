@@ -349,6 +349,102 @@
             </el-table>
           </el-card>
 
+          <el-card class="card user-edit-card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span>用户信息修改</span>
+                <div class="card-actions">
+                  <el-input
+                    v-model="userEditKeyword"
+                    size="small"
+                    placeholder="搜索用户ID / 用户名 / 警号 / 邮箱"
+                    clearable
+                    @clear="applyUserEditSearch"
+                    @keyup.enter="applyUserEditSearch"
+                  >
+                    <template #prefix>
+                      <el-icon><Search /></el-icon>
+                    </template>
+                  </el-input>
+                  <el-button type="primary" plain @click="loadAllUsers" :loading="loadingAllUsers" :icon="Refresh" size="small">
+                    刷新
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-alert
+              title="仅超级管理员可修改普通用户和普通管理员的基础信息，超级管理员账号不在此处展示。"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 1rem"
+            />
+
+            <div v-if="loadingAllUsers" class="list-loading">
+              <el-skeleton :rows="4" animated />
+            </div>
+            <el-empty v-else-if="filteredEditableUsers.length === 0" description="暂无可修改用户">
+              <el-button type="primary" plain @click="loadAllUsers">刷新数据</el-button>
+            </el-empty>
+            <el-table
+              v-else
+              :data="filteredEditableUsers"
+              border
+              stripe
+              size="small"
+              max-height="360"
+              class="user-edit-table"
+            >
+              <el-table-column prop="id" label="用户ID" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="username" label="用户名" min-width="140" show-overflow-tooltip />
+              <el-table-column label="角色" width="120">
+                <template #default="scope">
+                  <el-tag :type="getUserRoleTagType(scope.row.role)" size="small">
+                    {{ getUserRoleText(scope.row.role) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="警号" min-width="120" show-overflow-tooltip>
+                <template #default="scope">
+                  {{ scope.row.policeId || scope.row.police_id || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="身份证号" min-width="170" show-overflow-tooltip>
+                <template #default="scope">
+                  <span v-if="scope.row.idCardNumber || scope.row.id_card_number">
+                    {{ maskIdCard(scope.row.idCardNumber || scope.row.id_card_number) }}
+                  </span>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="120">
+                <template #default="scope">
+                  <el-tag :type="getUserStatusTagType(scope.row.status)" size="small">
+                    {{ getUserStatusText(scope.row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip>
+                <template #default="scope">
+                  {{ scope.row.email || '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="130" fixed="right">
+                <template #default="scope">
+                  <el-button
+                    type="primary"
+                    plain
+                    size="small"
+                    @click="openUserEditDrawer(scope.row)"
+                  >
+                    修改信息
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
           <!-- 提升用户为管理员 -->
           <el-card class="card" shadow="hover">
             <template #header>
@@ -671,6 +767,123 @@
         </el-space>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="editingUserDrawerVisible"
+      title="修改用户信息"
+      size="520px"
+      :close-on-click-modal="false"
+      @close="handleEditDrawerClose"
+    >
+      <template v-if="selectedEditableUser">
+        <div class="edit-user-summary">
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="用户ID">
+              {{ selectedEditableUser.id || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="当前用户名">
+              {{ selectedEditableUser.username || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="当前角色">
+              <el-tag :type="getUserRoleTagType(selectedEditableUser.role)" size="small">
+                {{ getUserRoleText(selectedEditableUser.role) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="当前警号">
+              {{ selectedEditableUser.policeId || selectedEditableUser.police_id || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="当前身份证号">
+              {{ selectedEditableUser.idCardNumber || selectedEditableUser.id_card_number || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="当前邮箱">
+              {{ selectedEditableUser.email || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="当前状态">
+              <el-tag :type="getUserStatusTagType(selectedEditableUser.status)" size="small">
+                {{ getUserStatusText(selectedEditableUser.status) }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <el-alert
+          title="三个字段独立提交，保存成功后会同步刷新用户列表。"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 1rem"
+        />
+
+        <el-form
+          ref="userEditFormRef"
+          :model="userEditForm"
+          :rules="userEditRules"
+          label-width="96px"
+          status-icon
+        >
+          <div class="edit-user-section">
+            <div class="edit-user-section__title">修改用户名</div>
+            <el-form-item label="新用户名" prop="newUsername">
+              <el-input
+                v-model="userEditForm.newUsername"
+                placeholder="请输入新用户名"
+                clearable
+              />
+            </el-form-item>
+            <div class="edit-user-actions">
+              <el-button
+                type="primary"
+                @click="handleUpdateUsername"
+                :loading="userEditSubmitting.username"
+              >
+                保存用户名
+              </el-button>
+            </div>
+          </div>
+
+          <div class="edit-user-section">
+            <div class="edit-user-section__title">修改身份证号</div>
+            <el-form-item label="新身份证号" prop="newIdCardNumber">
+              <el-input
+                v-model="userEditForm.newIdCardNumber"
+                maxlength="18"
+                placeholder="请输入新身份证号"
+                clearable
+              />
+            </el-form-item>
+            <div class="edit-user-actions">
+              <el-button
+                type="primary"
+                @click="handleUpdateIdCardNumber"
+                :loading="userEditSubmitting.idCardNumber"
+              >
+                保存身份证号
+              </el-button>
+            </div>
+          </div>
+
+          <div class="edit-user-section">
+            <div class="edit-user-section__title">修改警号</div>
+            <el-form-item label="新警号" prop="newPoliceId">
+              <el-input
+                v-model="userEditForm.newPoliceId"
+                placeholder="请输入新警号"
+                clearable
+              />
+            </el-form-item>
+            <div class="edit-user-actions">
+              <el-button
+                type="primary"
+                @click="handleUpdatePoliceId"
+                :loading="userEditSubmitting.policeId"
+              >
+                保存警号
+              </el-button>
+            </div>
+          </div>
+        </el-form>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -691,10 +904,12 @@ interface CreateAdminPayload {
 }
 
 interface AdminUser {
-  id?: string
+  id?: string | number
   username: string
   policeId?: string
   police_id?: string
+  idCardNumber?: string
+  id_card_number?: string
   email?: string
   role?: string
   created_at?: string
@@ -717,6 +932,16 @@ interface IpBlacklistItem {
   updated_by?: string
 }
 
+interface UserEditForm {
+  newUsername: string
+  newIdCardNumber: string
+  newPoliceId: string
+}
+
+type EditableTargetUser = AdminUser & {
+  id: string | number
+}
+
 export default defineComponent({
   name: 'SuperAdminView',
   setup() {
@@ -737,6 +962,7 @@ export default defineComponent({
     const allUsers = ref<AdminUser[]>([])
     const loadingAllUsers = ref(false)
     const userResetKeyword = ref('')
+    const userEditKeyword = ref('')
     const pendingUsers = ref<AdminUser[]>([])
     const loadingPending = ref(false)
     const approvalLoadingId = ref<string | null>(null)
@@ -750,6 +976,19 @@ export default defineComponent({
     const resetPasswordForm = reactive({
       newPassword: '',
       confirmPassword: ''
+    })
+    const editingUserDrawerVisible = ref(false)
+    const userEditFormRef = ref<FormInstance>()
+    const selectedEditableUser = ref<AdminUser | null>(null)
+    const userEditSubmitting = reactive({
+      username: false,
+      idCardNumber: false,
+      policeId: false
+    })
+    const userEditForm = reactive<UserEditForm>({
+      newUsername: '',
+      newIdCardNumber: '',
+      newPoliceId: ''
     })
 
     // 提升用户相关状态
@@ -841,6 +1080,31 @@ export default defineComponent({
       ]
     })
 
+    const userEditRules = reactive<FormRules<UserEditForm>>({
+      newUsername: [
+        { required: true, message: '请输入新用户名', trigger: 'blur' },
+        { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }
+      ],
+      newIdCardNumber: [
+        { required: true, message: '请输入新身份证号', trigger: 'blur' },
+        {
+          validator: (_rule, value, callback) => {
+            const idCardRegex = /(^\d{15}$)|(^\d{18}$)|(^\d{17}(\d|X|x)$)/
+            if (!idCardRegex.test(value)) {
+              callback(new Error('身份证号格式不正确'))
+            } else {
+              callback()
+            }
+          },
+          trigger: 'blur'
+        }
+      ],
+      newPoliceId: [
+        { required: true, message: '请输入新警号', trigger: 'blur' },
+        { pattern: /^[0-9]+$/, message: '警号只能包含数字', trigger: 'blur' }
+      ]
+    })
+
     const upgradeRules = reactive<FormRules>({
       username: [
         { required: true, message: '请输入用户名', trigger: 'blur' },
@@ -923,6 +1187,12 @@ export default defineComponent({
           const raw = response.data?.data?.list || response.data?.data?.users || response.data || []
           const list = Array.isArray(raw) ? raw : (raw.items || [])
           allUsers.value = list
+          if (selectedEditableUser.value?.id !== undefined) {
+            const latestSelectedUser = list.find((user: AdminUser) => String(user.id ?? '') === String(selectedEditableUser.value?.id ?? ''))
+            if (latestSelectedUser) {
+              selectedEditableUser.value = { ...latestSelectedUser }
+            }
+          }
         } else {
           throw new Error(response.data?.message || '加载用户列表失败')
         }
@@ -991,12 +1261,37 @@ export default defineComponent({
       })
     })
 
+    const normalizeRole = (role?: string) => String(role || '').toLowerCase()
+
+    const isEditableUser = (user: AdminUser) => {
+      const role = normalizeRole(user.role)
+      return role === 'user' || role === 'admin'
+    }
+
+    const editableUsers = computed(() => allUsers.value.filter((user) => isEditableUser(user)))
+
+    const filteredEditableUsers = computed(() => {
+      const keyword = userEditKeyword.value.trim().toLowerCase()
+      if (!keyword) return editableUsers.value
+      return editableUsers.value.filter((user) => {
+        const id = String(user.id || '').toLowerCase()
+        const username = user.username?.toLowerCase() || ''
+        const policeId = String(user.policeId || user.police_id || '').toLowerCase()
+        const email = user.email?.toLowerCase() || ''
+        return id.includes(keyword) || username.includes(keyword) || policeId.includes(keyword) || email.includes(keyword)
+      })
+    })
+
     const applySearch = () => {
       searchKeyword.value = searchKeyword.value.trim()
     }
 
     const applyUserResetSearch = () => {
       userResetKeyword.value = userResetKeyword.value.trim()
+    }
+
+    const applyUserEditSearch = () => {
+      userEditKeyword.value = userEditKeyword.value.trim()
     }
 
     const loadPendingUsers = async () => {
@@ -1020,7 +1315,7 @@ export default defineComponent({
     }
 
     const approveUser = async (user: AdminUser) => {
-      approvalLoadingId.value = user.id || user.username
+      approvalLoadingId.value = String(user.id ?? user.username)
       try {
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.APPROVE_USER), {
           method: 'POST',
@@ -1051,7 +1346,7 @@ export default defineComponent({
             cancelButtonText: '取消'
           }
         )
-        rejectLoadingId.value = user.id || user.username
+        rejectLoadingId.value = String(user.id ?? user.username)
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.ADMIN.REJECT_USER), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1121,6 +1416,192 @@ export default defineComponent({
         ElMessage.error(error?.message || '重置密码失败，请稍后重试')
       } finally {
         resettingPassword.value = false
+      }
+    }
+
+    const resetUserEditForm = () => {
+      userEditForm.newUsername = ''
+      userEditForm.newIdCardNumber = ''
+      userEditForm.newPoliceId = ''
+    }
+
+    const openUserEditDrawer = (user: AdminUser) => {
+      if (!isEditableUser(user)) {
+        ElMessage.warning('超级管理员账号不支持在此处修改')
+        return
+      }
+      selectedEditableUser.value = { ...user }
+      userEditForm.newUsername = user.username || ''
+      userEditForm.newIdCardNumber = user.idCardNumber || user.id_card_number || ''
+      userEditForm.newPoliceId = user.policeId || user.police_id || ''
+      editingUserDrawerVisible.value = true
+      setTimeout(() => {
+        userEditFormRef.value?.clearValidate()
+      }, 0)
+    }
+
+    const handleEditDrawerClose = () => {
+      selectedEditableUser.value = null
+      resetUserEditForm()
+      userEditFormRef.value?.clearValidate()
+    }
+
+    const validateUserEditField = async (field: keyof UserEditForm) => {
+      if (!userEditFormRef.value) return true
+      return userEditFormRef.value.validateField(field).then(() => true).catch(() => false)
+    }
+
+    const getEditableUserTarget = (): EditableTargetUser | null => {
+      if (!selectedEditableUser.value) {
+        ElMessage.warning('请先选择目标用户')
+        return null
+      }
+      if (selectedEditableUser.value.id === undefined || selectedEditableUser.value.id === null || selectedEditableUser.value.id === '') {
+        ElMessage.error('目标用户缺少用户ID，无法提交修改')
+        return null
+      }
+      if (!isEditableUser(selectedEditableUser.value)) {
+        ElMessage.error('超级管理员账号不支持在此处修改')
+        return null
+      }
+      return selectedEditableUser.value as EditableTargetUser
+    }
+
+    const syncEditedUserField = (userId: string | number, patch: Partial<AdminUser>) => {
+      allUsers.value = allUsers.value.map((user) => (
+        String(user.id ?? '') === String(userId) ? { ...user, ...patch } : user
+      ))
+
+      if (selectedEditableUser.value && String(selectedEditableUser.value.id ?? '') === String(userId)) {
+        selectedEditableUser.value = {
+          ...selectedEditableUser.value,
+          ...patch
+        }
+      }
+    }
+
+    const handleUpdateUsername = async () => {
+      const target = getEditableUserTarget()
+      if (!target) return
+
+      const isValid = await validateUserEditField('newUsername')
+      if (!isValid) return
+
+      const newUsername = userEditForm.newUsername.trim()
+      if (newUsername === target.username) {
+        ElMessage.warning('用户名未发生变化')
+        return
+      }
+
+      userEditSubmitting.username = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.UPDATE_USERNAME), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: target.id,
+            newUsername
+          })
+        })
+
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          syncEditedUserField(target.id, { username: newUsername })
+          userEditForm.newUsername = newUsername
+          ElMessage.success('用户名修改成功')
+          await loadAllUsers()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '用户名修改失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '用户名修改失败，请稍后重试')
+      } finally {
+        userEditSubmitting.username = false
+      }
+    }
+
+    const handleUpdateIdCardNumber = async () => {
+      const target = getEditableUserTarget()
+      if (!target) return
+
+      const isValid = await validateUserEditField('newIdCardNumber')
+      if (!isValid) return
+
+      const currentIdCardNumber = target.idCardNumber || target.id_card_number || ''
+      const newIdCardNumber = userEditForm.newIdCardNumber.trim()
+      if (newIdCardNumber === currentIdCardNumber) {
+        ElMessage.warning('身份证号未发生变化')
+        return
+      }
+
+      userEditSubmitting.idCardNumber = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.UPDATE_ID_CARD_NUMBER), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: target.id,
+            newIdCardNumber
+          })
+        })
+
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          syncEditedUserField(target.id, {
+            idCardNumber: newIdCardNumber,
+            id_card_number: newIdCardNumber
+          })
+          userEditForm.newIdCardNumber = newIdCardNumber
+          ElMessage.success('身份证号修改成功')
+          await loadAllUsers()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '身份证号修改失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '身份证号修改失败，请稍后重试')
+      } finally {
+        userEditSubmitting.idCardNumber = false
+      }
+    }
+
+    const handleUpdatePoliceId = async () => {
+      const target = getEditableUserTarget()
+      if (!target) return
+
+      const isValid = await validateUserEditField('newPoliceId')
+      if (!isValid) return
+
+      const currentPoliceId = target.policeId || target.police_id || ''
+      const newPoliceId = userEditForm.newPoliceId.trim()
+      if (newPoliceId === currentPoliceId) {
+        ElMessage.warning('警号未发生变化')
+        return
+      }
+
+      userEditSubmitting.policeId = true
+      try {
+        const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.UPDATE_POLICE_ID), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: target.id,
+            newPoliceId
+          })
+        })
+
+        if (response.ok && (response.data?.code === 200 || response.data?.success)) {
+          syncEditedUserField(target.id, {
+            policeId: newPoliceId,
+            police_id: newPoliceId
+          })
+          userEditForm.newPoliceId = newPoliceId
+          ElMessage.success('警号修改成功')
+          await loadAllUsers()
+        } else {
+          throw new Error(response.data?.message || response.data?.detail || '警号修改失败，请稍后重试')
+        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '警号修改失败，请稍后重试')
+      } finally {
+        userEditSubmitting.policeId = false
       }
     }
 
@@ -1393,14 +1874,21 @@ export default defineComponent({
 
     const getUserRoleText = (role?: string, isBjzxAdmin?: boolean) => {
       const normalized = String(role || '').toLowerCase()
+    const getUserRoleText = (role?: string) => {
+      const normalized = normalizeRole(role)
       if (normalized === 'super_admin') return '超级管理员'
       if (normalized === 'admin') return '管理员'
       if (isBjzxAdmin) return '边检智学管理员'
       return '普通用户'
     }
 
+<<<<<<< HEAD
     const getUserRoleTagType = (role?: string, isBjzxAdmin?: boolean) => {
       const normalized = String(role || '').toLowerCase()
+=======
+    const getUserRoleTagType = (role?: string) => {
+      const normalized = normalizeRole(role)
+>>>>>>> 18b32bdf5ef202a8e630dd1db55cbb5d46c561af
       if (normalized === 'super_admin') return 'danger'
       if (normalized === 'admin') return 'success'
       if (isBjzxAdmin) return 'warning'
@@ -1444,8 +1932,11 @@ export default defineComponent({
       allUsers,
       loadingAllUsers,
       userResetKeyword,
+      userEditKeyword,
       filteredAdmins,
       filteredResetUsers,
+      editableUsers,
+      filteredEditableUsers,
       pendingUsers,
       loadingPending,
       approvalLoadingId,
@@ -1456,6 +1947,12 @@ export default defineComponent({
       resetPasswordRules,
       currentResetAdmin,
       resettingPassword,
+      editingUserDrawerVisible,
+      userEditFormRef,
+      selectedEditableUser,
+      userEditSubmitting,
+      userEditForm,
+      userEditRules,
       upgradeFormRef,
       upgradeForm,
       upgradeRules,
@@ -1479,16 +1976,24 @@ export default defineComponent({
       handleDowngrade,
       applySearch,
       applyUserResetSearch,
+      applyUserEditSearch,
       loadPendingUsers,
       approveUser,
       rejectUser,
       openResetPasswordDialog,
       handleResetDialogClose,
       handleResetPassword,
+      openUserEditDrawer,
+      handleEditDrawerClose,
+      handleUpdateUsername,
+      handleUpdateIdCardNumber,
+      handleUpdatePoliceId,
       handleUpgrade,
       resetUpgradeForm,
       formatDate,
       maskIdCard,
+      normalizeRole,
+      isEditableUser,
       getUserRoleText,
       getUserRoleTagType,
       getUserStatusText,
@@ -1730,5 +2235,36 @@ export default defineComponent({
 
 .user-reset-table {
   margin-top: 0.5rem;
+}
+
+.user-edit-table {
+  margin-top: 0.5rem;
+}
+
+.edit-user-summary {
+  margin-bottom: 1rem;
+}
+
+.edit-user-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f9fafb;
+}
+
+.edit-user-section + .edit-user-section {
+  margin-top: 1rem;
+}
+
+.edit-user-section__title {
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.edit-user-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
