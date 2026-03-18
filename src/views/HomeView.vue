@@ -98,7 +98,7 @@
             <el-icon class="module-icon"><Reading /></el-icon>
             <span>边检智学</span>
           </router-link>
-          <router-link to="/smart-office" class="btn btn-module">
+          <router-link to="/smart-office-v2" class="btn btn-module">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Document /></el-icon>
             <span>公文助手</span>
@@ -128,12 +128,12 @@
           <div class="card-text">数研报告</div>
           <div class="card-progress"></div>
         </a>
-        <a href="/office" class="floating-card card-2">
+        <router-link to="/smart-office-v2" class="floating-card card-2">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><OfficeBuilding /></el-icon></div>
           <div class="card-text">公文助手</div>
           <div class="card-progress"></div>
-        </a>
+        </router-link>
         <router-link to="/exam" class="floating-card card-3">
           <div class="card-glow"></div>
           <div class="card-icon"><el-icon><Reading /></el-icon></div>

@@ -486,8 +486,8 @@
           
           <el-table-column prop="role" label="角色" width="120" sortable>
             <template #default="{ row }">
-              <el-tag :type="getRoleTagType(row.role)" size="small">
-                {{ getRoleText(row.role) }}
+              <el-tag :type="getRoleTagType(row.role, !!row.isBjzxAdmin)" size="small">
+                {{ getRoleText(row.role, !!row.isBjzxAdmin) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -596,8 +596,8 @@
           <el-descriptions-item label="用户ID">{{ currentUser.id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="用户名">{{ currentUser.username }}</el-descriptions-item>
           <el-descriptions-item label="角色">
-            <el-tag :type="getRoleTagType(currentUser.role)" size="small">
-              {{ getRoleText(currentUser.role) }}
+            <el-tag :type="getRoleTagType(currentUser.role, !!currentUser.isBjzxAdmin)" size="small">
+              {{ getRoleText(currentUser.role, !!currentUser.isBjzxAdmin) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="状态">
@@ -1060,16 +1060,18 @@ const getStatusText = (status?: number) => {
 }
 
 // 角色标签类型
-const getRoleTagType = (role?: string) => {
+const getRoleTagType = (role?: string, isBjzxAdmin?: boolean) => {
   const r = normalizeRole(role)
   if (r === 'super_admin') return 'danger'
   if (r === 'admin') return 'warning'
+  if (isBjzxAdmin) return 'success'
   return ''
 }
 
 // 角色文本
-const getRoleText = (role?: string) => {
+const getRoleText = (role?: string, isBjzxAdmin?: boolean) => {
   const r = normalizeRole(role)
+  if (r === 'user' && isBjzxAdmin) return '边检智学管理员'
   const map: Record<string, string> = {
     super_admin: '超级管理员',
     admin: '管理员',
@@ -2122,7 +2124,7 @@ const generateCSV = (data: DashboardUser[]) => {
       user.id || '',
       user.username || '',
       user.email || '',
-      getRoleText(user.role),
+      getRoleText(user.role, !!user.isBjzxAdmin),
       getStatusText(user.status),
       formatDate(user.created_at),
       formatDate(user.last_login_at) || '从未登录'

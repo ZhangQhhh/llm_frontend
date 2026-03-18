@@ -213,6 +213,16 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/smart-office-v2',
+    name: 'smart-office-v2',
+    component: () => import('../views/SmartOfficeV2View.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '公文写作助手',
+      pageCode: 'PAGE_013'
+    }
+  },
+  {
     path: '/immigration-12367',
     name: 'immigration-12367',
     component: Immigration12367View,
@@ -377,7 +387,9 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 如果有 token 且需要权限检查，确保用户信息已加载
-  if (token && (to.meta.requiresAdmin || to.meta.requiresSuperAdmin || to.meta.requiresAdminRole)) {
+  // 🔥 修复：pageCode 路由也需要加载用户信息，否则 isPrivileged 始终为 false，
+  //         导致管理员也被 pageCode 权限拦截
+  if (token && (to.meta.requiresAdmin || to.meta.requiresSuperAdmin || to.meta.requiresAdminRole || to.meta.pageCode)) {
     const isLoggedIn = (store.state as any).user.is_login
 
     if (!isLoggedIn) {

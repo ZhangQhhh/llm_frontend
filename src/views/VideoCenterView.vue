@@ -361,12 +361,18 @@
       class="video-player-dialog"
     >
       <div class="video-player-container">
+        <div v-if="videoLoading" class="video-loading-overlay">
+          <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+          <p>视频加载中，格式转换可能需要较长时间，请耐心等待...</p>
+        </div>
         <video
+          v-show="!videoLoading"
           ref="videoPlayer"
           :src="currentResourceUrl"
           controls
           autoplay
           class="video-player"
+          @canplay="handleVideoCanPlay"
           @error="handleVideoError"
         >
           您的浏览器不支持视频播放
@@ -890,11 +896,11 @@ const acceptFileTypes = computed(() => {
 const uploadTipText = computed(() => {
   switch (uploadForm.value.fileType) {
     case 'video':
-      return '支持 mp4、avi、mov、mkv 等格式，最大 5000MB'
+      return '支持 mp4、avi、mov、mkv 等格式，最大 10000MB'
     case 'pdf':
-      return '支持 PDF 格式，最大 100MB'
+      return '支持 PDF 格式，最大 1000MB'
     case 'ppt':
-      return '支持 ppt、pptx 格式，最大 100MB'
+      return '支持 ppt、pptx 格式，最大 1000MB'
     default:
       return '请选择文件'
   }
@@ -905,6 +911,7 @@ const playerDialogVisible = ref(false)
 const pdfDialogVisible = ref(false)
 const pptDialogVisible = ref(false)
 const pptLoading = ref(false)
+const videoLoading = ref(false)
 const currentResource = ref<any>(null)
 const currentResourceUrl = ref('')
 const videoPlayer = ref<HTMLVideoElement | null>(null)
@@ -988,6 +995,7 @@ async function handleUpload() {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
+      timeout: 1800000, // 30分钟超时，支持大文件上传
       onUploadProgress: (progressEvent: any) => {
         if (progressEvent.total) {
           uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
@@ -1022,7 +1030,8 @@ function openResource(resource: any) {
   const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
   
   if (resource.file_type === 'video') {
-    // 视频播放
+    // 视频播放（后端自动转码不兼容格式）
+    videoLoading.value = !isBrowserPlayable(resource)
     currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
     playerDialogVisible.value = true
   } else if (resource.file_type === 'pdf') {
@@ -1047,6 +1056,7 @@ function handlePlayerClose(done: () => void) {
   }
   currentResourceUrl.value = ''
   currentResource.value = null
+  videoLoading.value = false
   done()
   setTimeout(() => {
     isClosingPlayer.value = false
@@ -1073,45 +1083,56 @@ function handlePptLoad() {
   pptLoading.value = false
 }
 
+// 浏览器原生支持的视频格式（扩展名）
+const BROWSER_PLAYABLE_EXTS = ['mp4', 'webm', 'ogg', 'ogv', 'm4v']
+
+// 判断文件是否为浏览器可播放的视频格式
+function isBrowserPlayable(resource: any): boolean {
+  const filename = (resource.original_filename || resource.filename || '').toLowerCase()
+  const ext = filename.split('.').pop() || ''
+  return BROWSER_PLAYABLE_EXTS.includes(ext)
+}
+
+// 视频可以播放时隐藏loading
+function handleVideoCanPlay() {
+  videoLoading.value = false
+}
+
 // 视频播放错误处理
 function handleVideoError() {
+  videoLoading.value = false
   if (isClosingPlayer.value || !currentResourceUrl.value) {
     return
+  }
+  const resource = currentResource.value
+  if (resource) {
+    const filename = (resource.original_filename || resource.filename || '').toLowerCase()
+    const ext = filename.split('.').pop() || ''
+    if (!BROWSER_PLAYABLE_EXTS.includes(ext)) {
+      ElMessage.error(`视频格式转换失败(.${ext})，请确保服务器已安装FFmpeg，或下载后使用本地播放器观看`)
+      return
+    }
   }
   ElMessage.error('视频加载失败，请稍后重试')
 }
 
-// 下载资料
-async function downloadResource(resource: any) {
+// 下载资料（使用直接URL下载，避免blob内存加载延迟）
+function downloadResource(resource: any) {
   if (!resource) return
   
-  try {
-    const response = await llmHttp.get(`/resources/${resource.id}/download`, {
-      responseType: 'blob'
-    })
-    
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    
-    // 根据文件类型设置默认扩展名
-    let defaultExt = ''
-    switch (resource.file_type) {
-      case 'video': defaultExt = '.mp4'; break
-      case 'pdf': defaultExt = '.pdf'; break
-      case 'ppt': defaultExt = '.pptx'; break
-    }
-    link.download = resource.original_filename || resource.filename || `${resource.title}${defaultExt}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    
-    ElMessage.success('下载开始')
-  } catch (error: any) {
-    console.error('下载失败:', error)
-    ElMessage.error('下载失败')
-  }
+  const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
+  const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
+  const downloadUrl = `${baseUrl}/resources/${resource.id}/download?token=${token}`
+  
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = resource.original_filename || resource.filename || resource.title
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  
+  ElMessage.success('下载已开始')
 }
 
 // 打开编辑对话框
@@ -1765,6 +1786,23 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  min-height: 300px;
+}
+
+.video-loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 400px;
+  color: #ccc;
+}
+
+.video-loading-overlay p {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 .video-player {

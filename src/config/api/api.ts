@@ -10,6 +10,9 @@ export const OCR_BASE_URL = process.env.VUE_APP_OCR_BASE_URL || 'http://53.3.1.2
 // 数研报告API前缀：从环境变量读取
 export const DAV_PREFIX = process.env.VUE_APP_DAV_PREFIX || '';
 
+// 公文写作助手（official_document）服务URL
+export const OFFDO_BASE_URL = process.env.VUE_APP_OFFDO_BASE_URL || '/offdo';
+
 // 定义所有API端点
 export const API_ENDPOINTS = {
   ADMIN: {

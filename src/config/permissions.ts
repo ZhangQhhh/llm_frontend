@@ -6,6 +6,7 @@
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',  // 超级管理员
   ADMIN = 'admin',               // 管理员
+  BJZX_ADMIN = 'bjzx_admin',    // 边检智学管理员
   USER = 'user'                  // 普通用户
 }
 
@@ -13,6 +14,7 @@ export enum UserRole {
 export const RoleNames: Record<UserRole, string> = {
   [UserRole.SUPER_ADMIN]: '超级管理员',
   [UserRole.ADMIN]: '管理员',
+  [UserRole.BJZX_ADMIN]: '边检智学管理员',
   [UserRole.USER]: '普通用户'
 };
 
@@ -30,6 +32,13 @@ export const RolePermissions = {
     canAccessConversation: true,
     canAccessKnowledge: true,
     canManageUsers: true,
+    canManageSystem: false
+  },
+  [UserRole.BJZX_ADMIN]: {
+    canAccessAdmin: true,
+    canAccessConversation: true,
+    canAccessKnowledge: true,
+    canManageUsers: false,
     canManageSystem: false
   },
   [UserRole.USER]: {

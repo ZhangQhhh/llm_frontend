@@ -1364,6 +1364,7 @@ export default defineComponent({
       force_maximize: true,
       beforeunload_warning: true,
       max_switch_count: 3,
+      vnc_port_detection: true,
     })
     const antiCheatConfigLoaded = ref(false)
 
@@ -1392,6 +1393,127 @@ export default defineComponent({
     const initialWindowSize = ref({ width: 0, height: 0 })  // 初始窗口大小
     const resizeIntervalId = ref<number | null>(null)  // 窗口缩小持续检测定时器
     const isWindowShrunk = ref(false)  // 窗口是否处于缩小状态
+
+    // ======= VNC 端口检测相关 =======
+    const vncCheckResult = reactive({
+      checked: false,
+      detected: false,
+      openPorts: [] as number[],
+    })
+
+    // fetch 探测端口耗时
+    const probeFetch = (port: number, timeoutMs = 1000): Promise<number> => {
+      return new Promise((resolve) => {
+        const start = performance.now()
+        const controller = new AbortController()
+        const timer = setTimeout(() => {
+          controller.abort()
+          resolve(performance.now() - start)
+        }, timeoutMs)
+        fetch(`http://127.0.0.1:${port}`, { mode: 'no-cors', signal: controller.signal })
+          .then(() => { clearTimeout(timer); resolve(performance.now() - start) })
+          .catch(() => { clearTimeout(timer); resolve(performance.now() - start) })
+      })
+    }
+
+    // WebSocket 探测端口耗时（补充手段，对非HTTP服务更敏感）
+    const probeWS = (port: number, timeoutMs = 1000): Promise<number> => {
+      return new Promise((resolve) => {
+        const start = performance.now()
+        let done = false
+        const finish = () => { if (!done) { done = true; resolve(performance.now() - start) } }
+        try {
+          const ws = new WebSocket(`ws://127.0.0.1:${port}`)
+          const timer = setTimeout(() => { try { ws.close() } catch(e) { /* ignore */ } finish() }, timeoutMs)
+          ws.onopen = () => { clearTimeout(timer); try { ws.close() } catch(e) { /* ignore */ } finish() }
+          ws.onerror = () => { clearTimeout(timer); try { ws.close() } catch(e) { /* ignore */ } finish() }
+        } catch (e) { finish() }
+      })
+    }
+
+    // 扫描 VNC 端口：自适应双模式检测
+    // 模式A（普通网络）：关闭端口快速拒绝，开放端口慢 → 比基线慢的是开放
+    // 模式B（防火墙丢包）：关闭端口超时，开放端口快速响应 → 比基线快的是开放
+    const scanVncPorts = async (): Promise<number[]> => {
+      const portsToScan = [5900, 5901, 5902, 5903, 5904, 5905, 5906, 5907, 5908, 5909, 5910]
+      const controlPorts = [19876, 19877, 19878]
+
+      // 第一步：全部端口（控制+VNC）并行探测，一次搞定
+      const allPorts = [...controlPorts, ...portsToScan]
+      const allResults = await Promise.all(
+        allPorts.map(async (port) => {
+          const [ft, wt] = await Promise.all([probeFetch(port, 1500), probeWS(port, 1500)])
+          return { port, ft, wt, minTime: Math.min(ft, wt) }
+        })
+      )
+
+      // 提取控制端口和 VNC 端口结果
+      const controlResults = allResults.filter(r => controlPorts.includes(r.port))
+      const vncResults = allResults.filter(r => portsToScan.includes(r.port))
+      const controlMedian = controlResults.map(r => r.minTime).sort((a, b) => a - b)[1] // 中位数
+
+      // 判断模式：控制端口超时(>900ms) = 防火墙丢包模式
+      const firewallMode = controlMedian > 900
+      console.log(`[VNC] 控制端口: ${controlResults.map(r => `${r.port}=${r.ft.toFixed(0)}/${r.wt.toFixed(0)}ms`).join(', ')}`)
+      console.log(`[VNC] 模式: ${firewallMode ? 'B(防火墙丢包)' : 'A(普通网络)'}, 控制基线=${controlMedian.toFixed(0)}ms`)
+
+      // 第二步：根据模式判断每个 VNC 端口
+      const suspected: number[] = []
+      for (const r of vncResults) {
+        let isOpen = false
+        if (firewallMode) {
+          // 防火墙模式：开放端口响应远快于超时的控制端口（差距>50%）
+          isOpen = r.minTime < controlMedian * 0.5
+        } else {
+          // 普通模式：开放端口响应远慢于快速拒绝的控制端口（>4倍且>30ms）
+          isOpen = r.minTime > controlMedian * 4 && r.minTime > 30
+        }
+        const tag = isOpen ? '疑似开放' : '关闭'
+        console.log(`[VNC] 端口 ${r.port}: fetch=${r.ft.toFixed(0)}ms ws=${r.wt.toFixed(0)}ms min=${r.minTime.toFixed(0)}ms → ${tag}`)
+        if (isOpen) suspected.push(r.port)
+      }
+      if (suspected.length === 0) return []
+
+      // 第三步：疑似端口并行复查
+      console.log(`[VNC] 复查 ${suspected.length} 个疑似端口: ${suspected.join(',')}`)
+      const recheckResults = await Promise.all(
+        suspected.map(async (port) => {
+          const [ft, wt] = await Promise.all([probeFetch(port, 1500), probeWS(port, 1500)])
+          const minTime = Math.min(ft, wt)
+          let stillOpen = false
+          if (firewallMode) {
+            stillOpen = minTime < controlMedian * 0.5
+          } else {
+            stillOpen = minTime > controlMedian * 4 && minTime > 30
+          }
+          console.log(`[VNC] 复查 ${port}: fetch=${ft.toFixed(0)}ms ws=${wt.toFixed(0)}ms → ${stillOpen ? '确认开放' : '排除误判'}`)
+          return { port, stillOpen }
+        })
+      )
+      return recheckResults.filter(r => r.stillOpen).map(r => r.port)
+    }
+
+    // 检查 VNC 端口（开考前调用）
+    const checkVncPorts = async (): Promise<boolean> => {
+      try {
+        console.log('[防作弊] 正在扫描 VNC 端口 (5900-5910)...')
+        const openPorts = await scanVncPorts()
+        vncCheckResult.checked = true
+        vncCheckResult.openPorts = openPorts
+        vncCheckResult.detected = openPorts.length > 0
+        if (openPorts.length > 0) {
+          console.warn('[防作弊] 检测到 VNC 端口开放:', openPorts)
+        } else {
+          console.log('[防作弊] VNC 端口扫描通过，未检测到远程桌面')
+        }
+        return !vncCheckResult.detected
+      } catch (e) {
+        console.error('[防作弊] VNC 端口检测出错:', e)
+        vncCheckResult.checked = true
+        vncCheckResult.detected = false
+        return true  // 出错时不阻拦
+      }
+    }
 
     // ======= 错题本相关 =======
     const wrongBook = ref<any[]>([])  // 错题本列表
@@ -1857,12 +1979,34 @@ export default defineComponent({
       return []
     }
 
-    // 规范化题目数据（确保 options 为 list 格式）
+    // 将 <NEWLINE> 标记转换为真实换行符
+    const stripNL = (s: string) => s ? s.replace(/<NEWLINE>/g, '\n') : s
+
+    // 规范化题目数据（确保 options 为 list 格式，并将 <NEWLINE> 转为真实换行符）
     const normalizeQuestions = (items: any[]): any[] => {
-      return items.map(q => ({
-        ...q,
-        options: normalizeOptions(q.options)
-      }))
+      return items.map(q => {
+        const normalized: any = {
+          ...q,
+          options: normalizeOptions(q.options)
+        }
+        if (normalized.stem) normalized.stem = stripNL(normalized.stem)
+        if (normalized.answer) normalized.answer = stripNL(normalized.answer)
+        if (normalized.explain) normalized.explain = stripNL(normalized.explain)
+        if (normalized.analysis) normalized.analysis = stripNL(normalized.analysis)
+        if (normalized.correct_answer) normalized.correct_answer = stripNL(normalized.correct_answer)
+        if (normalized.comment) normalized.comment = stripNL(normalized.comment)
+        if (normalized.my_answer && typeof normalized.my_answer === 'string') normalized.my_answer = stripNL(normalized.my_answer)
+        if (Array.isArray(normalized.options)) {
+          normalized.options = normalized.options.map((opt: any) => ({
+            ...opt,
+            text: opt.text ? stripNL(opt.text) : opt.text
+          }))
+        }
+        if (Array.isArray(normalized.knowledge_clauses)) {
+          normalized.knowledge_clauses = normalized.knowledge_clauses.map((c: string) => stripNL(c))
+        }
+        return normalized
+      })
     }
 
     // 计算简答题章节编号
@@ -1875,15 +2019,15 @@ export default defineComponent({
       return numbers[num] || '四'
     }
 
-    // 将 <NEWLINE> 标识符转换为换行显示
+    // 将文本转换为安全的 HTML 显示（换行符转为 <br>）
     const formatText = (text: string | undefined | null): string => {
       if (!text) return ''
-      // 先转义 HTML 特殊字符，再将 <NEWLINE> 替换为 <br>
       return text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/&lt;NEWLINE&gt;/g, '<br>')
+        .replace(/\n/g, '<br>')
     }
 
     // 格式化解析文本：渲染 markdown 并过滤"参考来源"和进度提示
@@ -1917,7 +2061,7 @@ export default defineComponent({
       if (idx > -1) {
         answersState.value[qid] = current.filter((l: string) => l !== label)
       } else {
-        answersState.value[qid] = [...current, label]
+        answersState.value[qid] = [...current, label].sort()
       }
       // 答案变化后触发防抖保存
       debounceSave()
@@ -2017,7 +2161,7 @@ export default defineComponent({
         const answer = answersState.value[q.qid]
         let labels: string[] = []
         if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
-          labels = Array.isArray(answer) ? answer : []
+          labels = Array.isArray(answer) ? [...answer].sort() : []
         } else {
           labels = answer ? [answer] : []
         }
@@ -2793,6 +2937,21 @@ export default defineComponent({
         ElMessage.warning('请先登录后再开始考试')
         return
       }
+      // VNC 端口检测（非练习模式 + 防作弊开启 + vnc检测开启时）
+      if (antiCheatConfig.enabled && antiCheatConfig.vnc_port_detection && !isPracticeMode.value) {
+        starting.value = true
+        const vncOk = await checkVncPorts()
+        if (!vncOk) {
+          starting.value = false
+          ElMessage.error(`检测到远程桌面软件正在运行（端口：${vncCheckResult.openPorts.join(', ')}），请关闭 VNC/远程桌面后再开始考试`)
+          // 记录到切屏日志
+          switchLogs.value.push({
+            time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+            type: `VNC端口检测拦截(端口:${vncCheckResult.openPorts.join(',')})`
+          })
+          return
+        }
+      }
       starting.value = true
       try {
         // 开始考试 - username 就是登录时输入的警号
@@ -2890,7 +3049,7 @@ export default defineComponent({
         const answer = answersState.value[q.qid]
         let labels: string[] = []
         if (q.qtype === 'multi' || q.qtype === 'indeterminate') {
-          labels = Array.isArray(answer) ? answer : []
+          labels = Array.isArray(answer) ? [...answer].sort() : []
         } else {
           labels = answer ? [answer] : []
         }
@@ -3102,7 +3261,24 @@ export default defineComponent({
       try {
         const data = await mcqFetch(`${API_ENDPOINTS.WRONG_QUESTIONS.LIST}?student_id=${encodeURIComponent(studentId)}`)
         if (data.ok) {
-          wrongBook.value = data.questions || []
+          wrongBook.value = (data.questions || []).map((q: any) => {
+            const item = { ...q }
+            if (item.stem) item.stem = stripNL(item.stem)
+            if (item.answer) item.answer = stripNL(item.answer)
+            if (item.explain) item.explain = stripNL(item.explain)
+            if (item.my_answer && typeof item.my_answer === 'string') item.my_answer = stripNL(item.my_answer)
+            if (item.saq_comment) item.saq_comment = stripNL(item.saq_comment)
+            if (Array.isArray(item.options)) {
+              item.options = item.options.map((opt: any) => ({
+                ...opt,
+                text: opt.text ? stripNL(opt.text) : opt.text
+              }))
+            }
+            if (Array.isArray(item.knowledge_clauses)) {
+              item.knowledge_clauses = item.knowledge_clauses.map((c: string) => stripNL(c))
+            }
+            return item
+          })
           wrongBookTotal.value = data.total || 0
         }
       } catch (error: any) {
@@ -3598,6 +3774,8 @@ export default defineComponent({
       maxSwitchCount,
       switchWarningVisible,
       closeSwitchWarning,
+      // VNC 端口检测
+      vncCheckResult,
       // 随机练习相关
       practiceConfig,
       practiceTotalCount,

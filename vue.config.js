@@ -16,6 +16,11 @@ module.exports = defineConfig({
         ws: true,
         changeOrigin: true
       },
+      '/offdo': {
+        target: 'http://localhost:5173',
+        changeOrigin: true,
+        pathRewrite: { '^/offdo': '' }
+      },
       '/api/llm': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,

@@ -90,9 +90,10 @@ export default {
   // namespaced: true, // 如果你使用了模块命名空间，可以打开这个
   state,
   getters: {
-    // 获取用户角色
+    // 获取用户角色（边检智学管理员优先于普通用户显示）
     userRole(state: UserState): UserRole | null {
       if (!state.role) return null;
+      if (state.isBjzxAdmin && state.role === 'user') return UserRole.BJZX_ADMIN;
       return state.role as UserRole;
     },
     // 检查是否为管理员

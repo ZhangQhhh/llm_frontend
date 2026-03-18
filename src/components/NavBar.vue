@@ -236,17 +236,13 @@ export default defineComponent({
       const role = userRole.value
       if (role === UserRole.SUPER_ADMIN) return 'danger'
       if (role === UserRole.ADMIN) return 'warning'
-      if (isBjzxAdmin.value) return 'success'
+      if (role === UserRole.BJZX_ADMIN) return 'success'
       return 'info'
     })
 
     // 角色文本
     const roleText = computed(() => {
       const role = userRole.value as UserRole
-      // 如果是边检智学管理员但不是管理员角色，显示边检智学管理员
-      if (isBjzxAdmin.value && role !== UserRole.ADMIN && role !== UserRole.SUPER_ADMIN) {
-        return '边检智学管理员'
-      }
       return role ? RoleNames[role] : '普通用户'
     })
 

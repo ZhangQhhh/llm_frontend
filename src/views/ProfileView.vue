@@ -151,6 +151,7 @@ export default defineComponent({
       const role = userRole.value;
       if (role === UserRole.SUPER_ADMIN) return 'danger';
       if (role === UserRole.ADMIN) return 'warning';
+      if (role === UserRole.BJZX_ADMIN) return 'success';
       return 'info';
     });
     

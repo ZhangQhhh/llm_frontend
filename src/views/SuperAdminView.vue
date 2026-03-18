@@ -316,8 +316,8 @@
               </el-table-column>
               <el-table-column label="角色" width="120">
                 <template #default="scope">
-                  <el-tag :type="getUserRoleTagType(scope.row.role)" size="small">
-                    {{ getUserRoleText(scope.row.role) }}
+                  <el-tag :type="getUserRoleTagType(scope.row.role, scope.row.isBjzxAdmin)" size="small">
+                    {{ getUserRoleText(scope.row.role, scope.row.isBjzxAdmin) }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -1391,17 +1391,19 @@ export default defineComponent({
       return idCard.slice(0, 6) + '********' + idCard.slice(-4)
     }
 
-    const getUserRoleText = (role?: string) => {
+    const getUserRoleText = (role?: string, isBjzxAdmin?: boolean) => {
       const normalized = String(role || '').toLowerCase()
       if (normalized === 'super_admin') return '超级管理员'
       if (normalized === 'admin') return '管理员'
+      if (isBjzxAdmin) return '边检智学管理员'
       return '普通用户'
     }
 
-    const getUserRoleTagType = (role?: string) => {
+    const getUserRoleTagType = (role?: string, isBjzxAdmin?: boolean) => {
       const normalized = String(role || '').toLowerCase()
       if (normalized === 'super_admin') return 'danger'
       if (normalized === 'admin') return 'success'
+      if (isBjzxAdmin) return 'warning'
       return 'info'
     }
 

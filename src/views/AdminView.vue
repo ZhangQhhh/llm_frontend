@@ -18,6 +18,18 @@
               <el-tag type="warning" v-if="pendingUsers.length > 0">
                 待审核：{{ pendingUsers.length }} 个账号
               </el-tag>
+              <el-input
+                v-model="pendingSearch"
+                size="small"
+                placeholder="搜索用户名/警号"
+                clearable
+                style="width: 200px; margin-left: auto;"
+                @input="pendingPage = 1"
+              >
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
             </div>
 
             <div v-if="loadingPending" style="text-align: center; padding: 40px">
@@ -26,7 +38,7 @@
             <el-empty v-else-if="pendingUsers.length === 0" description="暂无待审核账号" />
             <el-table
               v-else
-              :data="pendingUsers"
+              :data="pagedPending"
               border
               size="small"
               stripe
@@ -70,6 +82,16 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div style="margin-top: 12px; display: flex; justify-content: center;">
+              <el-pagination
+                v-model:current-page="pendingPage"
+                v-model:page-size="pendingPageSize"
+                :page-sizes="[10, 20, 50]"
+                :total="filteredPending.length"
+                layout="total, sizes, prev, pager, next"
+                small
+              />
+            </div>
           </div>
         </el-tab-pane>
 
@@ -118,6 +140,36 @@
         <!-- ==================== 题库管理（MCQ 对接） ==================== -->
         <el-tab-pane v-if="showBjzxTabs" label="题库管理" name="questions">
           <div class="tab-content mcq-tab-content">
+
+            <!-- 题库选择器 -->
+            <div class="bank-selector-bar" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 16px; background: #f5f7fa; border-radius: 8px;">
+              <span style="font-weight: 600; color: #303133; white-space: nowrap;">当前题库：</span>
+              <el-select
+                v-model="currentBankId"
+                placeholder="暂无题库，请新建"
+                size="default"
+                filterable
+                style="width: 220px"
+                @change="onBankChange"
+              >
+                <el-option
+                  v-for="b in banksList"
+                  :key="b.id"
+                  :label="`${b.name}（${b.question_count ?? 0} 题）`"
+                  :value="b.id"
+                />
+              </el-select>
+              <el-button size="small" type="primary" plain @click="showCreateBankDialog">
+                <el-icon><Plus /></el-icon> 新建题库
+              </el-button>
+              <el-button size="small" plain @click="showRenameBankDialog" :disabled="!currentBankId">
+                <el-icon><Edit /></el-icon> 重命名
+              </el-button>
+              <el-button size="small" type="danger" plain @click="deleteCurrentBank" :disabled="!currentBankId">
+                <el-icon><Delete /></el-icon> 删除题库
+              </el-button>
+              <el-button size="small" :icon="Refresh" @click="loadBanksList" :loading="loadingBanks">刷新</el-button>
+            </div>
 
             <!-- 顶部工具栏 -->
             <div class="mcq-toolbar">
@@ -1003,6 +1055,7 @@
                       autocomplete="off"
                       style="width: 500px;"
                       size="default"
+                      @change="paperQuestionPage = 1"
                     >
                       <el-option
                         v-for="kp in availableKnowledgePoints"
@@ -1115,7 +1168,7 @@
               
               <!-- 筛选和搜索 -->
               <div class="action-bar" style="margin-bottom: 12px;">
-                <el-radio-group v-model="paperQuestionFilter" size="small">
+                <el-radio-group v-model="paperQuestionFilter" size="small" @change="paperQuestionPage = 1">
                   <el-radio-button value="all">全部</el-radio-button>
                   <el-radio-button value="single">单选题</el-radio-button>
                   <el-radio-button value="multi">多选题</el-radio-button>
@@ -1127,6 +1180,7 @@
                   clearable
                   style="width: 250px; margin-left: 12px;"
                   size="small"
+                  @input="paperQuestionPage = 1"
                 >
                   <template #prefix>
                     <el-icon><Search /></el-icon>
@@ -1150,7 +1204,7 @@
               </div>
               <div v-else class="paper-question-list">
                 <div
-                  v-for="(q, idx) in filteredPaperQuestions"
+                  v-for="(q, idx) in pagedPaperQuestions"
                   :key="q.qid"
                   class="paper-question-item"
                   :class="{ selected: selectedPaperQuestions.includes(q.qid) }"
@@ -1256,6 +1310,16 @@
                   </div>
                 </div>
               </div>
+              <div style="margin-top: 12px; display: flex; justify-content: center;">
+                <el-pagination
+                  v-model:current-page="paperQuestionPage"
+                  v-model:page-size="paperQuestionPageSize"
+                  :page-sizes="[20, 50, 100]"
+                  :total="filteredPaperQuestions.length"
+                  layout="total, sizes, prev, pager, next"
+                  small
+                />
+              </div>
             </el-card>
             
             <!-- 试卷列表 -->
@@ -1301,7 +1365,10 @@
                 <span style="color: #909399; font-size: 12px;">（可修改试卷内容并批量解析）</span>
               </div>
               
-              <el-table :data="paperList" stripe border style="width: 100%">
+              <div style="margin-bottom: 12px;">
+                <el-input v-model="paperListSearch" placeholder="搜索试卷名称" clearable size="small" style="width: 260px;" :prefix-icon="Search" @input="paperListPage = 1" />
+              </div>
+              <el-table :data="pagedPaperList" stripe border style="width: 100%">
                 <el-table-column prop="title" label="试卷名称" min-width="200" />
                 <el-table-column prop="paper_id" label="文件名" min-width="250" />
                 <el-table-column label="练习可见" width="120">
@@ -1327,6 +1394,16 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <div style="margin-top: 12px; display: flex; justify-content: center;">
+                <el-pagination
+                  v-model:current-page="paperListPage"
+                  v-model:page-size="paperListPageSize"
+                  :page-sizes="[10, 20, 50]"
+                  :total="filteredPaperList.length"
+                  layout="total, sizes, prev, pager, next"
+                  small
+                />
+              </div>
             </el-card>
             
             <!-- 上传试卷预览编辑对话框 -->
@@ -1763,9 +1840,9 @@
         <el-tab-pane v-if="showBjzxTabs" label="成绩导出" name="export">
           <div class="tab-content">
             <div class="action-bar">
-              <el-select v-model="selectedExportExam" placeholder="选择考试场次" style="width: 400px" @change="onExportExamChange">
+              <el-select v-model="selectedExportExam" placeholder="选择考试场次" filterable style="width: 480px" @change="onExportExamChange">
                 <el-option 
-                  v-for="exam in publishedExams" 
+                  v-for="exam in sortedPublishedExams" 
                   :key="exam.exam_id" 
                   :label="`${exam.exam_name} (${exam.paper_title})`" 
                   :value="exam.exam_id"
@@ -1932,8 +2009,11 @@
                     <span style="margin-left: auto; color: #909399; font-size: 13px;">共 {{ gradesStats.details?.length || 0 }} 人</span>
                   </div>
                 </template>
-                <el-table :data="gradesStats.details || []" border stripe max-height="400" style="width: 100%">
-                  <el-table-column type="index" label="排名" width="70" />
+                <div style="margin-bottom: 12px;">
+                  <el-input v-model="gradesSearch" placeholder="搜索姓名/学号" clearable size="small" style="width: 240px;" :prefix-icon="Search" @input="gradesPage = 1" />
+                </div>
+                <el-table :data="pagedGradesDetails" border stripe max-height="400" style="width: 100%">
+                  <el-table-column type="index" label="排名" width="70" :index="(idx) => (gradesPage - 1) * gradesPageSize + idx + 1" />
                   <el-table-column prop="student_name" label="学生姓名" min-width="120" />
                   <el-table-column prop="student_id" label="学号/警号" min-width="140" />
                   <el-table-column prop="mcq_score" label="选择题" width="100" sortable>
@@ -1970,6 +2050,16 @@
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 12px; display: flex; justify-content: center;">
+                  <el-pagination
+                    v-model:current-page="gradesPage"
+                    v-model:page-size="gradesPageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="filteredGradesDetails.length"
+                    layout="total, sizes, prev, pager, next"
+                    small
+                  />
+                </div>
               </el-card>
             </div>
             
@@ -2088,9 +2178,12 @@
                 </div>
               </template>
               
-              <el-empty v-if="publishedExams.length === 0" description="暂无已发布的考试" />
+              <div style="margin-bottom: 12px;">
+                <el-input v-model="examSearch" placeholder="搜索考试名称/试卷" clearable size="small" style="width: 260px;" :prefix-icon="Search" @input="examPage = 1" />
+              </div>
+              <el-empty v-if="filteredExams.length === 0" description="暂无已发布的考试" />
               
-              <el-table v-else :data="publishedExams" border stripe style="width: 100%">
+              <el-table v-else :data="pagedExams" border stripe style="width: 100%">
                 <el-table-column prop="exam_name" label="考试名称" min-width="180" />
                 <el-table-column prop="paper_title" label="试卷" min-width="150" />
                 <el-table-column label="考试时间" min-width="280">
@@ -2141,6 +2234,16 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <div style="margin-top: 12px; display: flex; justify-content: center;">
+                <el-pagination
+                  v-model:current-page="examPage"
+                  v-model:page-size="examPageSize"
+                  :page-sizes="[10, 20, 50]"
+                  :total="filteredExams.length"
+                  layout="total, sizes, prev, pager, next"
+                  small
+                />
+              </div>
             </el-card>
           </div>
         </el-tab-pane>
@@ -2218,6 +2321,16 @@
                   </div>
                 </el-form-item>
 
+                <el-divider content-position="left">远程桌面检测</el-divider>
+
+                <!-- VNC 端口检测 -->
+                <el-form-item label="VNC 端口检测">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-switch v-model="antiCheatConfig.vnc_port_detection" :disabled="!antiCheatConfig.enabled" />
+                    <span style="color: #606266; font-size: 13px;">开考前扫描 VNC 端口（5900-5910），检测到则禁止开考</span>
+                  </div>
+                </el-form-item>
+
                 <el-divider content-position="left">切屏限制</el-divider>
 
                 <!-- 最大切屏次数 -->
@@ -2254,6 +2367,7 @@
                     <p><strong>强制最大化窗口：</strong>考试开始前弹窗要求考生将浏览器窗口最大化，未最大化则无法进入考试。</p>
                     <p><strong>页面关闭警告：</strong>考试进行中关闭或刷新页面时弹出浏览器原生确认对话框。</p>
                     <p><strong>最大切屏次数：</strong>超过设定次数后系统将自动提交试卷，每次切屏会弹出警告并记录。</p>
+                    <p><strong>VNC 端口检测：</strong>开考前扫描本机 5900-5910 端口（VNC 默认端口），如检测到端口开放则禁止进入正式考试。练习模式不受影响。</p>
                   </div>
                 </el-collapse-item>
               </el-collapse>
@@ -2294,7 +2408,7 @@
           </el-empty>
           <el-table
             v-else
-            :data="filteredUsers"
+            :data="pagedUsers"
             border
             size="small"
             stripe
@@ -2306,8 +2420,8 @@
             </el-table-column>
             <el-table-column prop="role" label="角色" min-width="120">
               <template #default="scope">
-                <el-tag :type="scope.row.role === 'admin' ? 'warning' : 'info'">
-                  {{ roleName(scope.row.role) }}
+                <el-tag :type="scope.row.isBjzxAdmin ? 'success' : (scope.row.role === 'admin' ? 'warning' : 'info')">
+                  {{ roleName(scope.row.role, scope.row.isBjzxAdmin) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -2352,6 +2466,16 @@
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top: 12px; display: flex; justify-content: center;">
+            <el-pagination
+              v-model:current-page="userPage"
+              v-model:page-size="userPageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="filteredUsers.length"
+              layout="total, sizes, prev, pager, next"
+              small
+            />
+          </div>
         </div>
       </el-card>
 
@@ -2730,6 +2854,125 @@ export default defineComponent({
     const resettingPassword = ref(false)
 
     // ======= 题库管理（MCQ） =======
+    // --- 题库选择器 ---
+    const currentBankId = ref('default')
+    const banksList = ref<Array<{id: string; name: string; question_count?: number; created_at?: string}>>([])
+    const loadingBanks = ref(false)
+
+    const loadBanksList = async () => {
+      loadingBanks.value = true
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/banks`, { method: 'GET', headers: getAuthHeaders(false) })
+        const j = await r.json()
+        if (j?.ok && Array.isArray(j.banks)) {
+          banksList.value = j.banks
+          // 如果题库列表为空，清空当前选择
+          if (banksList.value.length === 0) {
+            currentBankId.value = ''
+          } else if (!banksList.value.find(b => b.id === currentBankId.value)) {
+            // 如果当前选中的题库不存在，切换到第一个题库
+            currentBankId.value = banksList.value[0].id
+          }
+        }
+      } catch (e: any) {
+        console.warn('加载题库列表失败:', e)
+      } finally {
+        loadingBanks.value = false
+      }
+    }
+
+    const onBankChange = () => {
+      loadQuestions()
+      loadDeletedQuestions()
+    }
+
+    const showCreateBankDialog = async () => {
+      try {
+        const { value: name } = await ElMessageBox.prompt('请输入新题库名称', '新建题库', {
+          confirmButtonText: '创建',
+          cancelButtonText: '取消',
+          inputPattern: /\S+/,
+          inputErrorMessage: '名称不能为空',
+        })
+        const r = await fetch(`${MCQ_BASE_URL}/banks`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ name }),
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          ElMessage.success(`题库 "${name}" 创建成功`)
+          await loadBanksList()
+          currentBankId.value = j.bank.id
+          onBankChange()
+        } else {
+          ElMessage.error(j?.msg || '创建失败')
+        }
+      } catch (e: any) {
+        if (e !== 'cancel') ElMessage.error(e?.message || '创建失败')
+      }
+    }
+
+    const showRenameBankDialog = async () => {
+      const current = banksList.value.find(b => b.id === currentBankId.value)
+      if (!current) return
+      try {
+        const { value: newName } = await ElMessageBox.prompt('请输入新名称', '重命名题库', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          inputValue: current.name,
+          inputPattern: /\S+/,
+          inputErrorMessage: '名称不能为空',
+        })
+        const r = await fetch(`${MCQ_BASE_URL}/banks/${currentBankId.value}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ name: newName }),
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          ElMessage.success('重命名成功')
+          await loadBanksList()
+        } else {
+          ElMessage.error(j?.msg || '重命名失败')
+        }
+      } catch (e: any) {
+        if (e !== 'cancel') ElMessage.error(e?.message || '重命名失败')
+      }
+    }
+
+    const deleteCurrentBank = async () => {
+      const current = banksList.value.find(b => b.id === currentBankId.value)
+      if (!current) return
+      try {
+        await ElMessageBox.confirm(
+          `确定删除题库 "${current.name}" 吗？该题库下的所有题目将被永久删除！`,
+          '删除题库',
+          { confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'error' }
+        )
+        const r = await fetch(`${MCQ_BASE_URL}/banks/${currentBankId.value}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          ElMessage.success(`已删除题库 "${current.name}"，移除 ${j.removed_count || 0} 道题目`)
+          await loadBanksList()
+          // 如果还有其他题库，切换到第一个；否则清空选择
+          if (banksList.value.length > 0) {
+            currentBankId.value = banksList.value[0].id
+          } else {
+            currentBankId.value = ''
+          }
+          onBankChange()
+        } else {
+          ElMessage.error(j?.msg || '删除失败')
+        }
+      } catch (e: any) {
+        if (e !== 'cancel') ElMessage.error(e?.message || '删除失败')
+      }
+    }
+
     const uploadRef = ref<any>(null)
     const uploadFile = ref<File | null>(null)
     const normalizeOptions = (opts: any, optionImages?: Record<string, QuestionImage[]>): Array<{ label: string; text: string; images?: QuestionImage[] }> => {
@@ -3063,6 +3306,18 @@ export default defineComponent({
     const loadingPaperList = ref(false)
     const deletingPaper = reactive<Record<string, boolean>>({})
     const togglingVisibility = reactive<Record<string, boolean>>({})
+    const paperListSearch = ref('')
+    const paperListPage = ref(1)
+    const paperListPageSize = ref(10)
+    const filteredPaperList = computed(() => {
+      const keyword = paperListSearch.value.trim().toLowerCase()
+      if (!keyword) return [...paperList.value]
+      return paperList.value.filter(p => p.title.toLowerCase().includes(keyword) || p.paper_id.toLowerCase().includes(keyword))
+    })
+    const pagedPaperList = computed(() => {
+      const start = (paperListPage.value - 1) * paperListPageSize.value
+      return filteredPaperList.value.slice(start, start + paperListPageSize.value)
+    })
     const exportPapers = ref<Paper[]>([])
     const selectedExportPaper = ref('')
     const selectedExportExam = ref('')
@@ -3078,6 +3333,8 @@ export default defineComponent({
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
     const selectedKnowledgePoints = ref<string[]>([])  // 知识点筛选
+    const paperQuestionPage = ref(1)
+    const paperQuestionPageSize = ref(50)
 
     // 试卷生成模式
     const paperGenerateMode = ref<'manual' | 'random'>('manual')
@@ -3199,6 +3456,26 @@ export default defineComponent({
     const loadingPublished = ref(false)
     const cancelingExam = reactive<Record<string, boolean>>({})
     const deletingExam = reactive<Record<string, boolean>>({})
+    const examSearch = ref('')
+    const examPage = ref(1)
+    const examPageSize = ref(10)
+    const filteredExams = computed(() => {
+      const keyword = examSearch.value.trim().toLowerCase()
+      const list = keyword
+        ? publishedExams.value.filter(e =>
+            (e.exam_name || '').toLowerCase().includes(keyword) ||
+            (e.paper_title || '').toLowerCase().includes(keyword)
+          )
+        : [...publishedExams.value]
+      return list.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+    })
+    const sortedPublishedExams = computed(() => {
+      return [...publishedExams.value].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+    })
+    const pagedExams = computed(() => {
+      const start = (examPage.value - 1) * examPageSize.value
+      return filteredExams.value.slice(start, start + examPageSize.value)
+    })
 
     // ======= 防作弊配置相关 =======
     const antiCheatConfig = reactive({
@@ -3209,6 +3486,7 @@ export default defineComponent({
       force_maximize: true,
       beforeunload_warning: true,
       max_switch_count: 3,
+      vnc_port_detection: true,
     })
     const loadingAntiCheat = ref(false)
     const savingAntiCheat = ref(false)
@@ -3436,6 +3714,22 @@ export default defineComponent({
     // ======= 成绩统计相关 =======
     const gradesStats = ref<any>(null)
     const loadingGradesStats = ref(false)
+    const gradesSearch = ref('')
+    const gradesPage = ref(1)
+    const gradesPageSize = ref(20)
+    const filteredGradesDetails = computed(() => {
+      const details = gradesStats.value?.details || []
+      const keyword = gradesSearch.value.trim().toLowerCase()
+      if (!keyword) return [...details]
+      return details.filter((d: any) =>
+        (d.student_name || '').toLowerCase().includes(keyword) ||
+        (d.student_id || '').toLowerCase().includes(keyword)
+      )
+    })
+    const pagedGradesDetails = computed(() => {
+      const start = (gradesPage.value - 1) * gradesPageSize.value
+      return filteredGradesDetails.value.slice(start, start + gradesPageSize.value)
+    })
     
     // 分数分布计算
     const scoreDistribution = computed(() => {
@@ -3708,10 +4002,15 @@ export default defineComponent({
       return result
     })
 
-    // 切换全选试卷题目
+    const pagedPaperQuestions = computed(() => {
+      const start = (paperQuestionPage.value - 1) * paperQuestionPageSize.value
+      return filteredPaperQuestions.value.slice(start, start + paperQuestionPageSize.value)
+    })
+
+    // 切换全选试卷题目（全选当前页）
     const toggleSelectAllPaperQuestions = () => {
       if (selectAllPaperQuestions.value) {
-        selectedPaperQuestions.value = filteredPaperQuestions.value.map(q => q.qid)
+        selectedPaperQuestions.value = pagedPaperQuestions.value.map(q => q.qid)
       } else {
         selectedPaperQuestions.value = []
       }
@@ -3724,15 +4023,21 @@ export default defineComponent({
       email?: string
       role?: string
       status?: number  // 1=正常，0=待审核，-1=封禁，-2=审核未通过
+      isBjzxAdmin?: boolean
     }
 
     const users = ref<ManagedUser[]>([])
     const loadingUsers = ref(false)
     const actionLoadingId = ref<string | number | null>(null)
+    const userPage = ref(1)
+    const userPageSize = ref(20)
     const pendingUsers = ref<ManagedUser[]>([])
     const loadingPending = ref(false)
     const approvalLoadingId = ref<string | number | null>(null)
     const rejectLoadingId = ref<string | number | null>(null)
+    const pendingSearch = ref('')
+    const pendingPage = ref(1)
+    const pendingPageSize = ref(20)
 
 
     const getStatusTagType = (status: string) => {
@@ -3887,12 +4192,12 @@ export default defineComponent({
         // 合并选择题和简答题
         const upsertPayload = [...mcqPayload, ...saqPayload]
 
-        // 3）检查重复题目
+        // 3）检查重复题目（仅在当前题库内查重）
         uploadMessage.value = '检查重复题目中…'
         const checkRes = await fetch(`${MCQ_BASE_URL}/bank/check_duplicates`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ items: upsertPayload }),
+          body: JSON.stringify({ items: upsertPayload, bank_id: currentBankId.value }),
         })
         const checkData = await checkRes.json()
         
@@ -3980,12 +4285,12 @@ export default defineComponent({
           }
         }
 
-        // 5）执行保存
+        // 5）执行保存（到当前题库）
         uploadMessage.value = '保存中…'
         const rs = await fetch(`${MCQ_BASE_URL}/bank/bulk_upsert`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ items: finalPayload }),
+          body: JSON.stringify({ items: finalPayload, bank_id: currentBankId.value }),
         })
         const saved = await rs.json()
         if (!saved || saved.ok === false) {
@@ -4036,6 +4341,7 @@ export default defineComponent({
         }
         uploadMessage.value = msg
         ElMessage.success('上传成功')
+        loadBanksList()  // 刷新题库列表（更新题目数量）
       } catch (e: any) {
         const msg = e?.message || String(e) || '未知错误'
         uploadMessage.value = '上传失败：' + msg
@@ -4059,7 +4365,8 @@ export default defineComponent({
           thinking: thinking.value, 
           rerank_top_n: topN.value, 
           use_insert_block: insertBlock.value,
-          target_statuses: parseTargetStatuses.value  // 传递选中的目标状态
+          target_statuses: parseTargetStatuses.value,  // 传递选中的目标状态
+          bank_id: currentBankId.value,  // 指定题库
         }
         const r = await fetch(`${MCQ_BASE_URL}/explain_batch_async`, { method:'POST', headers: getAuthHeaders(), body: JSON.stringify(req) })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '创建任务失败')
@@ -4355,8 +4662,8 @@ export default defineComponent({
     const loadQuestions = async () => {
       loadingQuestions.value = true
       try {
-        // 不分页(page=0)，加载图片数据
-        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true`, { method: 'GET', headers: getAuthHeaders(false) })
+        // 不分页(page=0)，加载图片数据，按题库筛选
+        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true&bank_id=${encodeURIComponent(currentBankId.value)}`, { method: 'GET', headers: getAuthHeaders(false) })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
@@ -4594,7 +4901,7 @@ export default defineComponent({
       loadingDeleted.value = true
       recycleMessage.value = '加载中...'
       try {
-        const resp = await fetch(`${MCQ_BASE_URL}/bank/deleted`, {
+        const resp = await fetch(`${MCQ_BASE_URL}/bank/deleted?bank_id=${encodeURIComponent(currentBankId.value)}`, {
           headers: getAuthHeaders(false)
         })
         const data = await resp.json()
@@ -4773,7 +5080,8 @@ export default defineComponent({
           headers: getAuthHeaders(),
           body: JSON.stringify({
             user: store.state.user.username,
-            isBjzxAdmin: isBjzxAdmin.value
+            isBjzxAdmin: isBjzxAdmin.value,
+            bank_id: currentBankId.value
           })
         })
         const data = await resp.json()
@@ -4793,7 +5101,7 @@ export default defineComponent({
     const exportBankDocx = async () => {
       exportingBank.value = true
       try {
-        const r = await fetch(`${MCQ_BASE_URL}/bank/export_docx`)
+        const r = await fetch(`${MCQ_BASE_URL}/bank/export_docx?bank_id=${encodeURIComponent(currentBankId.value)}`)
         const blob = await r.blob()
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
@@ -4812,13 +5120,14 @@ export default defineComponent({
       const f = input?.files?.[0]; if (!f) return
       importingBank.value = true
       try {
-        const fd = new FormData(); fd.append('file', f)
+        const fd = new FormData(); fd.append('file', f); fd.append('bank_id', currentBankId.value)
         const r = await fetch(`${MCQ_BASE_URL}/bank/import_docx`, { method:'POST', body: fd })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '导入失败')
         // 显示更详细的导入结果
         const msg = j.msg || `导入成功：更新 ${j.updated||0} 题，新增 ${j.added||0} 题`
         ElMessage.success(msg)
         await loadQuestions()
+        loadBanksList()
       } catch(e:any) { ElMessage.error(`导入失败：${e?.message||e}`) }
       finally { importingBank.value = false; if (bankImportRef.value) bankImportRef.value.value='' }
     }
@@ -4831,6 +5140,27 @@ export default defineComponent({
       openInNewTab(url2)
     }
     const isEditing = (id: string) => editingId.value === id
+
+    // 将 <NEWLINE> 标记转换为真实换行符（用于试卷编辑等场景）
+    const stripNewlineTags = (text: string): string => {
+      if (!text) return text
+      return text.replace(/<NEWLINE>/g, '\n')
+    }
+    // 将试卷题目所有文本字段中的 <NEWLINE> 转换为真实换行符
+    const stripPaperItemNewlines = (item: any) => {
+      if (!item) return
+      if (item.stem) item.stem = stripNewlineTags(item.stem)
+      if (item.answer) item.answer = stripNewlineTags(item.answer)
+      if (item.explain) item.explain = stripNewlineTags(item.explain)
+      if (item.options) {
+        for (const k of Object.keys(item.options)) {
+          if (item.options[k]) item.options[k] = stripNewlineTags(item.options[k])
+        }
+      }
+      if (Array.isArray(item.knowledge_clauses)) {
+        item.knowledge_clauses = item.knowledge_clauses.map((c: string) => stripNewlineTags(c))
+      }
+    }
 
     // 清理 markdown 符号用于编辑框显示
     const cleanMarkdownForEdit = (text: string): string => {
@@ -5423,7 +5753,8 @@ export default defineComponent({
       let requestBody: any = { 
         name,
         score_config: scoreConfig,
-        password: generatePaperPassword.value.trim()
+        password: generatePaperPassword.value.trim(),
+        bank_id: currentBankId.value,
       }
       
       if (paperGenerateMode.value === 'random') {
@@ -5986,6 +6317,8 @@ export default defineComponent({
         // 填充编辑数据
         uploadedPaperTitle.value = j.title || ''
         uploadedPaperItems.value = j.items || []
+        // 将所有文本字段中的 <NEWLINE> 转换为真实换行符
+        uploadedPaperItems.value.forEach((item: any) => stripPaperItemNewlines(item))
         
         // 设置分数配置
         const scoreConfig = j.score_config || {}
@@ -6235,7 +6568,7 @@ export default defineComponent({
               const idx = res.idx
               if (typeof idx === 'number' && idx >= 0 && idx < uploadedPaperItems.value.length) {
                 if (res.ok !== false && res.explain) {
-                  uploadedPaperItems.value[idx].explain = res.explain
+                  uploadedPaperItems.value[idx].explain = stripNewlineTags(res.explain)
                 }
               }
             })
@@ -6316,7 +6649,7 @@ export default defineComponent({
         const j = await r.json()
         
         if (j?.results && j.results.length > 0 && j.results[0].explain) {
-          uploadedPaperItems.value[idx].explain = j.results[0].explain
+          uploadedPaperItems.value[idx].explain = stripNewlineTags(j.results[0].explain)
           ElMessage.success('解析完成')
         } else {
           throw new Error(j?.msg || '解析失败')
@@ -6795,6 +7128,10 @@ export default defineComponent({
         const data = await response.json()
         if (data?.ok) {
           ElMessage.success('已删除考试')
+          if (selectedExportExam.value === exam.exam_id) {
+            selectedExportExam.value = ''
+            gradesStats.value = null
+          }
           loadPublishedExams()
         } else {
           throw new Error(data?.msg || '删除失败')
@@ -6806,6 +7143,10 @@ export default defineComponent({
       } finally {
         deletingExam[exam.exam_id] = false
       }
+    }
+
+    const deleteExamFromExport = async (exam: any) => {
+      await deleteExam(exam)
     }
 
     const getExamStatusType = (status: string) => {
@@ -6820,10 +7161,11 @@ export default defineComponent({
 
     const normalizeRole = (role?: string) => (role || '').toLowerCase()
 
-    const roleName = (role?: string) => {
+    const roleName = (role?: string, isBjzxAdmin?: boolean) => {
       const key = normalizeRole(role)
       if (key === UserRole.SUPER_ADMIN) return RoleNames[UserRole.SUPER_ADMIN]
       if (key === UserRole.ADMIN) return RoleNames[UserRole.ADMIN]
+      if (key === UserRole.USER && isBjzxAdmin) return RoleNames[UserRole.BJZX_ADMIN]
       if (key === UserRole.USER) return RoleNames[UserRole.USER]
       return role || '未知角色'
     }
@@ -6859,7 +7201,7 @@ export default defineComponent({
 
     const filteredUsers = computed(() => {
       const keyword = userSearch.value.trim().toLowerCase()
-      if (!keyword) return users.value
+      if (!keyword) return [...users.value]
       return users.value.filter((user) => {
         const username = user.username?.toLowerCase() || ''
         const email = user.email?.toLowerCase() || ''
@@ -6867,8 +7209,29 @@ export default defineComponent({
       })
     })
 
+    const pagedUsers = computed(() => {
+      const start = (userPage.value - 1) * userPageSize.value
+      return filteredUsers.value.slice(start, start + userPageSize.value)
+    })
+
+    const filteredPending = computed(() => {
+      const keyword = pendingSearch.value.trim().toLowerCase()
+      if (!keyword) return [...pendingUsers.value]
+      return pendingUsers.value.filter((u) => {
+        const username = u.username?.toLowerCase() || ''
+        const policeId = ((u as any).policeId || (u as any).police_id || '').toLowerCase()
+        return username.includes(keyword) || policeId.includes(keyword)
+      })
+    })
+
+    const pagedPending = computed(() => {
+      const start = (pendingPage.value - 1) * pendingPageSize.value
+      return filteredPending.value.slice(start, start + pendingPageSize.value)
+    })
+
     const applyUserSearch = () => {
       userSearch.value = userSearch.value.trim()
+      userPage.value = 1
     }
 
     const isRegularUser = (user: ManagedUser) => normalizeRole(user.role) === UserRole.USER
@@ -7050,6 +7413,7 @@ export default defineComponent({
 
     onMounted(() => {
       if (showBjzxTabs.value) {
+        loadBanksList()
         loadQuestions()
         loadExportPapers()
         loadPaperList()
@@ -7074,8 +7438,11 @@ export default defineComponent({
       username, roleText, activeTab, myOldPassword, myNewPassword, resetUsername, resetPassword, resetPasswordConfirm,
       selectedResetUserId, resetUserOptions, onResetUserChange,
       showAdminTabs, showBjzxTabs,
+      // 题库选择器
+      currentBankId, banksList, loadingBanks, loadBanksList, onBankChange,
+      showCreateBankDialog, showRenameBankDialog, deleteCurrentBank,
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
-      pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId,
+      pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId, pendingSearch, pendingPage, pendingPageSize, filteredPending, pagedPending,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
       approveAll, createPaper, loadExportPapers, exportZip, exportDocx, exportXlsx, exportingXlsx, isEditing,editRow,
@@ -7106,10 +7473,10 @@ export default defineComponent({
       singleScore, multiScore, indeterminateScore, saqScore, saqScoreMode, saqCustomScores, saqClauseScores, distributeScore, getSaqClauseTotal,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       selectedKnowledgePoints, availableKnowledgePoints, mergedKnowledgePointOptions,
-      approvedQuestions, filteredPaperQuestions, toggleSelectAllPaperQuestions, isMultiChoice,
-      paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility, isSuperAdminUser, generatePaperPassword,
+      approvedQuestions, filteredPaperQuestions, pagedPaperQuestions, paperQuestionPage, paperQuestionPageSize, toggleSelectAllPaperQuestions, isMultiChoice,
+      paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility, isSuperAdminUser, generatePaperPassword, paperListSearch, paperListPage, paperListPageSize, filteredPaperList, pagedPaperList,
       exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
-      userSearch, users, loadingUsers, actionLoadingId,
+      userSearch, users, loadingUsers, actionLoadingId, userPage, userPageSize, pagedUsers,
       // 试卷生成模式
       paperGenerateMode, randomSingleCount, randomMultiCount, randomSaqCount, randomIndeterminateSingleCount, randomIndeterminateMultiCount, randomIndeterminateCount,
       singleApprovedCount, multiApprovedCount, saqApprovedCount,
@@ -7136,8 +7503,8 @@ export default defineComponent({
       paperExplaining, paperExplainMsg, paperTaskId, paperParseTargets, paperItemExplaining,
       explainPaperItemsAsync, stopPaperExplainTask, explainSinglePaperItem,
       // 考试发布相关
-      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam, deletingExam,
-      publishExam, loadPublishedExams, cancelExam, deleteExam, getExamStatusType, getExamStatusText, Bell, Plus,
+      publishForm, publishing, publishMessage, publishedExams, loadingPublished, cancelingExam, deletingExam, examSearch, examPage, examPageSize, filteredExams, pagedExams, sortedPublishedExams,
+      publishExam, loadPublishedExams, cancelExam, deleteExam, deleteExamFromExport, getExamStatusType, getExamStatusText, Bell, Plus,
       // 分组相关（从接口动态加载）
       groupOptions, loadingGroupList,
       // 知识点/考点预设选项
@@ -7155,7 +7522,7 @@ export default defineComponent({
       // 简答题评分
       goToSaqGrading, Edit,
       // 成绩统计相关
-      gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats,
+      gradesStats, loadingGradesStats, scoreDistribution, loadGradesStats, gradesSearch, gradesPage, gradesPageSize, filteredGradesDetails, pagedGradesDetails,
       // 易错知识点统计
       topKpErrors, getKpBarWidth, getKpBarColor, Warning, Delete,
       // 错题Top10统计
