@@ -363,7 +363,20 @@
       <div class="video-player-container">
         <div v-if="videoLoading" class="video-loading-overlay">
           <el-icon class="is-loading" :size="40"><Loading /></el-icon>
-          <p>视频加载中，格式转换可能需要较长时间，请耐心等待...</p>
+          <template v-if="transcodeProgress > 0 && transcodeProgress < 100">
+            <p style="margin-top: 16px; font-size: 14px;">视频转码中...</p>
+            <el-progress
+              :percentage="transcodeProgress"
+              :stroke-width="10"
+              style="width: 300px; margin-top: 12px;"
+              :format="(p: number) => p.toFixed(1) + '%'"
+            />
+            <p v-if="transcodeEta" style="margin-top: 8px; font-size: 12px; color: #999;">
+              {{ transcodeEta }}
+              <span v-if="transcodeSpeed"> · 速度 {{ transcodeSpeed }}</span>
+            </p>
+          </template>
+          <p v-else style="margin-top: 16px; font-size: 14px;">视频加载中，请耐心等待...</p>
         </div>
         <video
           v-show="!videoLoading"
@@ -912,6 +925,10 @@ const pdfDialogVisible = ref(false)
 const pptDialogVisible = ref(false)
 const pptLoading = ref(false)
 const videoLoading = ref(false)
+const transcodeProgress = ref(0)
+const transcodeEta = ref('')
+const transcodeSpeed = ref('')
+const transcodePollingTimer = ref<any>(null)
 const currentResource = ref<any>(null)
 const currentResourceUrl = ref('')
 const videoPlayer = ref<HTMLVideoElement | null>(null)
@@ -1030,10 +1047,21 @@ function openResource(resource: any) {
   const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
   
   if (resource.file_type === 'video') {
-    // 视频播放（后端自动转码不兼容格式）
-    videoLoading.value = !isBrowserPlayable(resource)
-    currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
-    playerDialogVisible.value = true
+    // 视频播放
+    const needsTranscode = resource.transcode_status === 'converting' || resource.transcode_status === 'pending'
+    videoLoading.value = needsTranscode || !isBrowserPlayable(resource)
+    transcodeProgress.value = 0
+    transcodeEta.value = ''
+    transcodeSpeed.value = ''
+    
+    if (needsTranscode) {
+      // 正在转码中，先显示进度，不加载视频流
+      playerDialogVisible.value = true
+      startTranscodePolling(resource.id)
+    } else {
+      currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
+      playerDialogVisible.value = true
+    }
   } else if (resource.file_type === 'pdf') {
     // PDF预览
     currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/preview?token=${token}`
@@ -1050,6 +1078,7 @@ function openResource(resource: any) {
 // 关闭视频播放器
 function handlePlayerClose(done: () => void) {
   isClosingPlayer.value = true
+  stopTranscodePolling()
   if (videoPlayer.value) {
     videoPlayer.value.pause()
     videoPlayer.value.src = ''
@@ -1057,6 +1086,9 @@ function handlePlayerClose(done: () => void) {
   currentResourceUrl.value = ''
   currentResource.value = null
   videoLoading.value = false
+  transcodeProgress.value = 0
+  transcodeEta.value = ''
+  transcodeSpeed.value = ''
   done()
   setTimeout(() => {
     isClosingPlayer.value = false
@@ -1100,20 +1132,87 @@ function handleVideoCanPlay() {
 
 // 视频播放错误处理
 function handleVideoError() {
-  videoLoading.value = false
   if (isClosingPlayer.value || !currentResourceUrl.value) {
+    videoLoading.value = false
     return
   }
   const resource = currentResource.value
   if (resource) {
+    // 如果是需要转码的视频，启动进度轮询
+    const transcodeStatus = resource.transcode_status
+    if (transcodeStatus === 'converting' || transcodeStatus === 'pending') {
+      videoLoading.value = true
+      startTranscodePolling(resource.id)
+      return
+    }
+    if (transcodeStatus === 'failed') {
+      videoLoading.value = false
+      ElMessage.error('视频转码失败，请确保服务器已安装FFmpeg，或下载后使用本地播放器观看')
+      return
+    }
     const filename = (resource.original_filename || resource.filename || '').toLowerCase()
     const ext = filename.split('.').pop() || ''
     if (!BROWSER_PLAYABLE_EXTS.includes(ext)) {
-      ElMessage.error(`视频格式转换失败(.${ext})，请确保服务器已安装FFmpeg，或下载后使用本地播放器观看`)
+      // 可能正在转码，启动轮询
+      videoLoading.value = true
+      startTranscodePolling(resource.id)
       return
     }
   }
+  videoLoading.value = false
   ElMessage.error('视频加载失败，请稍后重试')
+}
+
+// 启动转码进度轮询
+function startTranscodePolling(resourceId: string) {
+  stopTranscodePolling()
+  const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
+  const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
+  
+  const poll = async () => {
+    try {
+      const res = await fetch(`${baseUrl}/resources/${resourceId}/transcode-progress`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.ok && data.data) {
+        const { percent, speed, eta, status } = data.data
+        transcodeProgress.value = percent
+        transcodeEta.value = eta
+        transcodeSpeed.value = speed
+        
+        if (status === 'done' || status === 'not_needed') {
+          // 转码完成，加载视频
+          stopTranscodePolling()
+          transcodeProgress.value = 100
+          const resource = currentResource.value
+          if (resource && playerDialogVisible.value) {
+            currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
+          }
+          return
+        }
+        if (status === 'failed') {
+          stopTranscodePolling()
+          videoLoading.value = false
+          ElMessage.error('视频转码失败，请下载后使用本地播放器观看')
+          return
+        }
+      }
+    } catch (e) {
+      // 轮询失败，静默处理
+    }
+  }
+  
+  poll()  // 立即执行一次
+  transcodePollingTimer.value = setInterval(poll, 2000)  // 每2秒轮询
+}
+
+// 停止转码进度轮询
+function stopTranscodePolling() {
+  if (transcodePollingTimer.value) {
+    clearInterval(transcodePollingTimer.value)
+    transcodePollingTimer.value = null
+  }
 }
 
 // 下载资料（使用直接URL下载，避免blob内存加载延迟）
