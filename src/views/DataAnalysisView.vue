@@ -454,146 +454,150 @@
             <el-dialog
               v-model="yearBatchUploadDialogVisible"
               width="720px"
+              top="6vh"
+              append-to-body
               destroy-on-close
               class="batch-result-dialog"
               :title="yearBatchUploadDialogTitle"
             >
-              <div v-if="yearBatchUploadJob" class="batch-result-content">
-                <div class="batch-summary-grid">
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">源文件</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.sourceFileName || '-' }}</span>
+              <div class="batch-result-scroll">
+                <div v-if="yearBatchUploadJob" class="batch-result-content">
+                  <div class="batch-summary-grid">
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">源文件</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.sourceFileName || '-' }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">数据类型</span>
+                      <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadJob.datasetType) }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">任务 ID</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.jobId }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">任务状态</span>
+                      <span class="batch-summary-value">
+                        <el-tag size="small" :type="getBatchUploadStatusType(yearBatchUploadJob.status)">
+                          {{ getBatchUploadStatusLabel(yearBatchUploadJob.status) }}
+                        </el-tag>
+                      </span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">Sheet 进度</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.processedSheets }}/{{ yearBatchUploadJob.totalSheets }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">行进度</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.processedRows }}/{{ yearBatchUploadJob.totalRows }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">错误数</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.errorCount }}</span>
+                    </div>
+                    <div class="batch-summary-item">
+                      <span class="batch-summary-label">警告数</span>
+                      <span class="batch-summary-value">{{ yearBatchUploadJob.warningCount }}</span>
+                    </div>
                   </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">数据类型</span>
-                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadJob.datasetType) }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">任务 ID</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.jobId }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">任务状态</span>
-                    <span class="batch-summary-value">
-                      <el-tag size="small" :type="getBatchUploadStatusType(yearBatchUploadJob.status)">
-                        {{ getBatchUploadStatusLabel(yearBatchUploadJob.status) }}
-                      </el-tag>
-                    </span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">Sheet 进度</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.processedSheets }}/{{ yearBatchUploadJob.totalSheets }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">行进度</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.processedRows }}/{{ yearBatchUploadJob.totalRows }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">错误数</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.errorCount }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">警告数</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadJob.warningCount }}</span>
-                  </div>
-                </div>
 
-                <div class="batch-progress-panel">
-                  <div class="batch-progress-header">
-                    <span class="batch-section-title">任务进度</span>
-                    <span class="batch-progress-value">{{ yearBatchUploadJob.percent }}%</span>
+                  <div class="batch-progress-panel">
+                    <div class="batch-progress-header">
+                      <span class="batch-section-title">任务进度</span>
+                      <span class="batch-progress-value">{{ yearBatchUploadJob.percent }}%</span>
+                    </div>
+                    <el-progress
+                      :percentage="yearBatchUploadJob.percent"
+                      :status="yearBatchUploadJob.status === 'FAILED' ? 'exception' : yearBatchUploadJob.status === 'SUCCEEDED' ? 'success' : undefined"
+                    />
+                    <div class="batch-progress-meta">
+                      <span>阶段：{{ yearBatchUploadJob.stage || '-' }}</span>
+                      <span>当前 Sheet：{{ yearBatchUploadJob.currentSheet || '无' }}</span>
+                      <span v-if="yearBatchUploadJob.reused">本次请求复用了已有任务结果</span>
+                    </div>
                   </div>
-                  <el-progress
-                    :percentage="yearBatchUploadJob.percent"
-                    :status="yearBatchUploadJob.status === 'FAILED' ? 'exception' : yearBatchUploadJob.status === 'SUCCEEDED' ? 'success' : undefined"
-                  />
-                  <div class="batch-progress-meta">
-                    <span>阶段：{{ yearBatchUploadJob.stage || '-' }}</span>
-                    <span>当前 Sheet：{{ yearBatchUploadJob.currentSheet || '无' }}</span>
-                    <span v-if="yearBatchUploadJob.reused">本次请求复用了已有任务结果</span>
-                  </div>
-                </div>
 
-                <div v-if="yearBatchUploadJob.failureReason" class="batch-error-banner">
-                  <el-icon><InfoFilled /></el-icon>
-                  <span>{{ yearBatchUploadJob.failureReason }}</span>
-                </div>
-
-                <div v-if="yearBatchUploadJob.warnings.length" class="batch-warning-list">
-                  <div v-for="warning in yearBatchUploadJob.warnings" :key="warning" class="batch-warning-item">
+                  <div v-if="yearBatchUploadJob.failureReason" class="batch-error-banner">
                     <el-icon><InfoFilled /></el-icon>
-                    <span>{{ warning }}</span>
+                    <span>{{ yearBatchUploadJob.failureReason }}</span>
+                  </div>
+
+                  <div v-if="yearBatchUploadJob.warnings.length" class="batch-warning-list">
+                    <div v-for="warning in yearBatchUploadJob.warnings" :key="warning" class="batch-warning-item">
+                      <el-icon><InfoFilled /></el-icon>
+                      <span>{{ warning }}</span>
+                    </div>
+                  </div>
+
+                  <div class="batch-table-section">
+                    <div class="batch-row-errors-header">
+                      <span class="batch-section-title">成功月份</span>
+                      <span class="batch-row-errors-tip">仅当月份无错误时才会提交新版本</span>
+                    </div>
+                    <el-table
+                      :data="yearBatchUploadJob.importedMonths"
+                      size="small"
+                      border
+                      class="batch-result-table"
+                      empty-text="暂无成功月份"
+                    >
+                      <el-table-column prop="monthId" label="月份" min-width="120" />
+                      <el-table-column prop="rowCount" label="写入行数" min-width="120" />
+                      <el-table-column prop="version" label="版本" min-width="100" />
+                      <el-table-column prop="recordId" label="记录 ID" min-width="220" show-overflow-tooltip />
+                    </el-table>
+                  </div>
+
+                  <div class="batch-table-section">
+                    <div class="batch-row-errors-header">
+                      <span class="batch-section-title">失败月份</span>
+                      <span class="batch-row-errors-tip">失败月份会保留当前生效版本不变</span>
+                    </div>
+                    <el-table
+                      :data="yearBatchUploadJob.failedMonths"
+                      size="small"
+                      border
+                      class="batch-result-table"
+                      empty-text="暂无失败月份"
+                    >
+                      <el-table-column prop="monthId" label="月份" min-width="120" />
+                      <el-table-column prop="rowCount" label="有效行数" min-width="120" />
+                      <el-table-column prop="errorRows" label="错误行数" min-width="120" />
+                      <el-table-column prop="status" label="状态" min-width="120" />
+                    </el-table>
+                  </div>
+
+                  <div class="batch-table-section">
+                    <div class="batch-row-errors-header">
+                      <span class="batch-section-title">月份明细</span>
+                      <span class="batch-row-errors-tip">展示每个月份的累计处理情况</span>
+                    </div>
+                    <el-table
+                      :data="yearBatchUploadJob.months"
+                      size="small"
+                      border
+                      class="batch-result-table"
+                      empty-text="暂无月份明细"
+                    >
+                      <el-table-column prop="monthId" label="月份" min-width="110" />
+                      <el-table-column prop="totalRows" label="总行数" min-width="90" />
+                      <el-table-column prop="validRows" label="有效行数" min-width="100" />
+                      <el-table-column prop="errorRows" label="错误行数" min-width="100" />
+                      <el-table-column prop="status" label="状态" min-width="110" />
+                      <el-table-column label="Sheet" min-width="160" show-overflow-tooltip>
+                        <template #default="{ row }">
+                          {{ Array.isArray(row.sheetNames) ? row.sheetNames.join(', ') : '-' }}
+                        </template>
+                      </el-table-column>
+                    </el-table>
                   </div>
                 </div>
 
-                <div class="batch-table-section">
-                  <div class="batch-row-errors-header">
-                    <span class="batch-section-title">成功月份</span>
-                    <span class="batch-row-errors-tip">仅当月份无错误时才会提交新版本</span>
+                <div v-else-if="yearBatchUploadRequestError" class="batch-result-content">
+                  <div class="batch-error-banner">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>{{ yearBatchUploadRequestError }}</span>
                   </div>
-                  <el-table
-                    :data="yearBatchUploadJob.importedMonths"
-                    size="small"
-                    border
-                    class="batch-result-table"
-                    empty-text="暂无成功月份"
-                  >
-                    <el-table-column prop="monthId" label="月份" min-width="120" />
-                    <el-table-column prop="rowCount" label="写入行数" min-width="120" />
-                    <el-table-column prop="version" label="版本" min-width="100" />
-                    <el-table-column prop="recordId" label="记录 ID" min-width="220" show-overflow-tooltip />
-                  </el-table>
-                </div>
-
-                <div class="batch-table-section">
-                  <div class="batch-row-errors-header">
-                    <span class="batch-section-title">失败月份</span>
-                    <span class="batch-row-errors-tip">失败月份会保留当前生效版本不变</span>
-                  </div>
-                  <el-table
-                    :data="yearBatchUploadJob.failedMonths"
-                    size="small"
-                    border
-                    class="batch-result-table"
-                    empty-text="暂无失败月份"
-                  >
-                    <el-table-column prop="monthId" label="月份" min-width="120" />
-                    <el-table-column prop="rowCount" label="有效行数" min-width="120" />
-                    <el-table-column prop="errorRows" label="错误行数" min-width="120" />
-                    <el-table-column prop="status" label="状态" min-width="120" />
-                  </el-table>
-                </div>
-
-                <div class="batch-table-section">
-                  <div class="batch-row-errors-header">
-                    <span class="batch-section-title">月份明细</span>
-                    <span class="batch-row-errors-tip">展示每个月份的累计处理情况</span>
-                  </div>
-                  <el-table
-                    :data="yearBatchUploadJob.months"
-                    size="small"
-                    border
-                    class="batch-result-table"
-                    empty-text="暂无月份明细"
-                  >
-                    <el-table-column prop="monthId" label="月份" min-width="110" />
-                    <el-table-column prop="totalRows" label="总行数" min-width="90" />
-                    <el-table-column prop="validRows" label="有效行数" min-width="100" />
-                    <el-table-column prop="errorRows" label="错误行数" min-width="100" />
-                    <el-table-column prop="status" label="状态" min-width="110" />
-                    <el-table-column label="Sheet" min-width="160" show-overflow-tooltip>
-                      <template #default="{ row }">
-                        {{ Array.isArray(row.sheetNames) ? row.sheetNames.join(', ') : '-' }}
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </div>
-              </div>
-
-              <div v-else-if="yearBatchUploadRequestError" class="batch-result-content">
-                <div class="batch-error-banner">
-                  <el-icon><InfoFilled /></el-icon>
-                  <span>{{ yearBatchUploadRequestError }}</span>
                 </div>
               </div>
 
@@ -3072,6 +3076,42 @@ const formatDate = (dateStr: string): string => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.batch-result-scroll {
+  max-height: calc(88vh - 180px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.batch-result-dialog :deep(.el-overlay-dialog) {
+  overflow-y: auto;
+  padding: 6vh 16px;
+  box-sizing: border-box;
+}
+
+.batch-result-dialog :deep(.el-dialog) {
+  width: min(720px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: 88vh;
+  margin: 0 auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.batch-result-dialog :deep(.el-dialog__header) {
+  flex-shrink: 0;
+}
+
+.batch-result-dialog :deep(.el-dialog__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.batch-result-dialog :deep(.el-dialog__footer) {
+  flex-shrink: 0;
 }
 
 .batch-summary-grid {
