@@ -1873,8 +1873,6 @@ export default defineComponent({
     }
 
     const getUserRoleText = (role?: string, isBjzxAdmin?: boolean) => {
-      const normalized = String(role || '').toLowerCase()
-    const getUserRoleText = (role?: string) => {
       const normalized = normalizeRole(role)
       if (normalized === 'super_admin') return '超级管理员'
       if (normalized === 'admin') return '管理员'
@@ -1882,13 +1880,8 @@ export default defineComponent({
       return '普通用户'
     }
 
-<<<<<<< HEAD
     const getUserRoleTagType = (role?: string, isBjzxAdmin?: boolean) => {
-      const normalized = String(role || '').toLowerCase()
-=======
-    const getUserRoleTagType = (role?: string) => {
       const normalized = normalizeRole(role)
->>>>>>> 18b32bdf5ef202a8e630dd1db55cbb5d46c561af
       if (normalized === 'super_admin') return 'danger'
       if (normalized === 'admin') return 'success'
       if (isBjzxAdmin) return 'warning'
