@@ -2,7 +2,7 @@
 export class PerformanceMonitor {
   private static instance: PerformanceMonitor;
   private observers: PerformanceObserver[] = [];
-  private memoryInterval: NodeJS.Timeout | null = null;
+  private memoryInterval: ReturnType<typeof setInterval> | null = null;
 
   static getInstance(): PerformanceMonitor {
     if (!PerformanceMonitor.instance) {

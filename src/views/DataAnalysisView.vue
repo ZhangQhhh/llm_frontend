@@ -205,7 +205,7 @@
                   </div>
                   <div class="batch-upload-tip">
                     <el-icon><InfoFilled /></el-icon>
-                    <span>仅支持 toad 模板，支持 .xls/.xlsx，后端会自动按日期拆月并跳过模板说明行。</span>
+                    <span>仅支持 toad 模板。上传后会创建后台导入任务；大文件优先使用 .xlsx，后端会按月份拆分并生成错误明细。</span>
                   </div>
                   <div class="action-buttons year-upload-actions">
                     <el-button
@@ -397,97 +397,168 @@
               width="720px"
               destroy-on-close
               class="batch-result-dialog"
-              :title="yearBatchUploadDialogMode === 'success' ? '批量上传结果' : '批量上传失败详情'"
+              :title="yearBatchUploadDialogTitle"
             >
-              <div v-if="yearBatchUploadDialogMode === 'success' && yearBatchUploadResult" class="batch-result-content">
+              <div v-if="yearBatchUploadJob" class="batch-result-content">
                 <div class="batch-summary-grid">
                   <div class="batch-summary-item">
                     <span class="batch-summary-label">源文件</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadResult.sourceFileName }}</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.sourceFileName || '-' }}</span>
                   </div>
                   <div class="batch-summary-item">
                     <span class="batch-summary-label">数据类型</span>
-                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadResult.datasetType) }}</span>
+                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadJob.datasetType) }}</span>
                   </div>
                   <div class="batch-summary-item">
-                    <span class="batch-summary-label">导入月份数</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadResult.importedMonthCount }}</span>
+                    <span class="batch-summary-label">任务 ID</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.jobId }}</span>
                   </div>
                   <div class="batch-summary-item">
-                    <span class="batch-summary-label">数据行数</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadResult.totalRows }}</span>
+                    <span class="batch-summary-label">任务状态</span>
+                    <span class="batch-summary-value">
+                      <el-tag size="small" :type="getBatchUploadStatusType(yearBatchUploadJob.status)">
+                        {{ getBatchUploadStatusLabel(yearBatchUploadJob.status) }}
+                      </el-tag>
+                    </span>
                   </div>
-                  <div class="batch-summary-item selector-item-wide">
-                    <span class="batch-summary-label">批次号</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadResult.batchId || '-' }}</span>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">Sheet 进度</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.processedSheets }}/{{ yearBatchUploadJob.totalSheets }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">行进度</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.processedRows }}/{{ yearBatchUploadJob.totalRows }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">错误数</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.errorCount }}</span>
+                  </div>
+                  <div class="batch-summary-item">
+                    <span class="batch-summary-label">警告数</span>
+                    <span class="batch-summary-value">{{ yearBatchUploadJob.warningCount }}</span>
                   </div>
                 </div>
 
-                <div v-if="yearBatchUploadResult.warnings.length" class="batch-warning-list">
-                  <div v-for="warning in yearBatchUploadResult.warnings" :key="warning" class="batch-warning-item">
+                <div class="batch-progress-panel">
+                  <div class="batch-progress-header">
+                    <span class="batch-section-title">任务进度</span>
+                    <span class="batch-progress-value">{{ yearBatchUploadJob.percent }}%</span>
+                  </div>
+                  <el-progress
+                    :percentage="yearBatchUploadJob.percent"
+                    :status="yearBatchUploadJob.status === 'FAILED' ? 'exception' : yearBatchUploadJob.status === 'SUCCEEDED' ? 'success' : undefined"
+                  />
+                  <div class="batch-progress-meta">
+                    <span>阶段：{{ yearBatchUploadJob.stage || '-' }}</span>
+                    <span>当前 Sheet：{{ yearBatchUploadJob.currentSheet || '无' }}</span>
+                    <span v-if="yearBatchUploadJob.reused">本次请求复用了已有任务结果</span>
+                  </div>
+                </div>
+
+                <div v-if="yearBatchUploadJob.failureReason" class="batch-error-banner">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>{{ yearBatchUploadJob.failureReason }}</span>
+                </div>
+
+                <div v-if="yearBatchUploadJob.warnings.length" class="batch-warning-list">
+                  <div v-for="warning in yearBatchUploadJob.warnings" :key="warning" class="batch-warning-item">
                     <el-icon><InfoFilled /></el-icon>
                     <span>{{ warning }}</span>
                   </div>
                 </div>
 
-                <el-table
-                  :data="yearBatchUploadResult.importedMonths"
-                  size="small"
-                  border
-                  class="batch-result-table"
-                  empty-text="未返回拆月结果"
-                >
-                  <el-table-column prop="monthId" label="月份" min-width="120" />
-                  <el-table-column prop="rowCount" label="写入行数" min-width="120" />
-                  <el-table-column prop="version" label="版本" min-width="100" />
-                  <el-table-column prop="recordId" label="记录 ID" min-width="220" show-overflow-tooltip />
-                </el-table>
-              </div>
-
-              <div v-else-if="yearBatchUploadErrorDetail" class="batch-result-content">
-                <div class="batch-error-banner">
-                  <el-icon><InfoFilled /></el-icon>
-                  <span>{{ yearBatchUploadErrorDetail.message }}</span>
-                </div>
-
-                <div class="batch-summary-grid">
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">源文件</span>
-                    <span class="batch-summary-value">{{ yearBatchUploadErrorDetail.sourceFileName || '-' }}</span>
-                  </div>
-                  <div class="batch-summary-item">
-                    <span class="batch-summary-label">数据类型</span>
-                    <span class="batch-summary-value">{{ getDatasetTypeLabel(yearBatchUploadErrorDetail.datasetType) }}</span>
-                  </div>
-                </div>
-
-                <div v-if="yearBatchUploadErrorDetail.missingColumns.length" class="batch-missing-columns">
-                  <span class="batch-section-title">缺失字段</span>
-                  <div class="batch-tag-list">
-                    <el-tag v-for="column in yearBatchUploadErrorDetail.missingColumns" :key="column" type="danger" effect="plain">
-                      {{ column }}
-                    </el-tag>
-                  </div>
-                </div>
-
-                <div class="batch-row-errors">
+                <div class="batch-table-section">
                   <div class="batch-row-errors-header">
-                    <span class="batch-section-title">行级错误</span>
-                    <span class="batch-row-errors-tip">最多展示前 20 条错误</span>
+                    <span class="batch-section-title">成功月份</span>
+                    <span class="batch-row-errors-tip">仅当月份无错误时才会提交新版本</span>
                   </div>
                   <el-table
-                    :data="yearBatchUploadErrorDetail.rowErrors"
+                    :data="yearBatchUploadJob.importedMonths"
                     size="small"
                     border
-                    empty-text="未返回行级错误"
+                    class="batch-result-table"
+                    empty-text="暂无成功月份"
                   >
-                    <el-table-column prop="row" label="行号" min-width="100" />
-                    <el-table-column prop="message" label="错误原因" min-width="320" show-overflow-tooltip />
+                    <el-table-column prop="monthId" label="月份" min-width="120" />
+                    <el-table-column prop="rowCount" label="写入行数" min-width="120" />
+                    <el-table-column prop="version" label="版本" min-width="100" />
+                    <el-table-column prop="recordId" label="记录 ID" min-width="220" show-overflow-tooltip />
+                  </el-table>
+                </div>
+
+                <div class="batch-table-section">
+                  <div class="batch-row-errors-header">
+                    <span class="batch-section-title">失败月份</span>
+                    <span class="batch-row-errors-tip">失败月份会保留当前生效版本不变</span>
+                  </div>
+                  <el-table
+                    :data="yearBatchUploadJob.failedMonths"
+                    size="small"
+                    border
+                    class="batch-result-table"
+                    empty-text="暂无失败月份"
+                  >
+                    <el-table-column prop="monthId" label="月份" min-width="120" />
+                    <el-table-column prop="rowCount" label="有效行数" min-width="120" />
+                    <el-table-column prop="errorRows" label="错误行数" min-width="120" />
+                    <el-table-column prop="status" label="状态" min-width="120" />
+                  </el-table>
+                </div>
+
+                <div class="batch-table-section">
+                  <div class="batch-row-errors-header">
+                    <span class="batch-section-title">月份明细</span>
+                    <span class="batch-row-errors-tip">展示每个月份的累计处理情况</span>
+                  </div>
+                  <el-table
+                    :data="yearBatchUploadJob.months"
+                    size="small"
+                    border
+                    class="batch-result-table"
+                    empty-text="暂无月份明细"
+                  >
+                    <el-table-column prop="monthId" label="月份" min-width="110" />
+                    <el-table-column prop="totalRows" label="总行数" min-width="90" />
+                    <el-table-column prop="validRows" label="有效行数" min-width="100" />
+                    <el-table-column prop="errorRows" label="错误行数" min-width="100" />
+                    <el-table-column prop="status" label="状态" min-width="110" />
+                    <el-table-column label="Sheet" min-width="160" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        {{ Array.isArray(row.sheetNames) ? row.sheetNames.join(', ') : '-' }}
+                      </template>
+                    </el-table-column>
                   </el-table>
                 </div>
               </div>
 
+              <div v-else-if="yearBatchUploadRequestError" class="batch-result-content">
+                <div class="batch-error-banner">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>{{ yearBatchUploadRequestError }}</span>
+                </div>
+              </div>
+
               <template #footer>
+                <el-button v-if="yearBatchUploadJob?.jobId" @click="refreshYearBatchUploadJob">
+                  刷新状态
+                </el-button>
+                <el-button
+                  v-if="yearBatchUploadJob?.errorFileAvailable"
+                  type="warning"
+                  plain
+                  @click="handleDownloadYearBatchImportErrors"
+                >
+                  下载错误明细
+                </el-button>
+                <el-button
+                  v-if="yearBatchUploadJobRunning"
+                  type="danger"
+                  plain
+                  :loading="cancelingYearBatchImportJob"
+                  @click="handleCancelYearBatchImportJob"
+                >
+                  取消任务
+                </el-button>
                 <el-button @click="yearBatchUploadDialogVisible = false">关闭</el-button>
               </template>
             </el-dialog>
@@ -818,13 +889,14 @@ const yearBatchUploadDatasetType = ref<YearDatasetType>('people');
 const yearBatchUploadFile = ref<File | null>(null);
 const uploadingYearData = ref(false);
 const uploadingYearBatchData = ref(false);
+const cancelingYearBatchImportJob = ref(false);
 const yearMissingPeopleMonths = ref<string[]>([]);
 const yearMissingTrafficMonths = ref<string[]>([]);
 const yearApiUseCompatPrefix = ref(false);
 const yearBatchUploadDialogVisible = ref(false);
-const yearBatchUploadDialogMode = ref<'success' | 'error'>('success');
-const yearBatchUploadResult = ref<BatchUploadResult | null>(null);
-const yearBatchUploadErrorDetail = ref<BatchUploadErrorDetail | null>(null);
+const yearBatchUploadJob = ref<BatchUploadJobResult | null>(null);
+const yearBatchUploadRequestError = ref('');
+let yearBatchUploadPollingTimer: ReturnType<typeof window.setTimeout> | null = null;
 
 const generating = ref(false);
 const progressPercent = ref(0);
@@ -864,6 +936,16 @@ interface TemplateFile {
   url: string;
 }
 
+type BatchImportJobStatus =
+  | 'PENDING'
+  | 'PARSING'
+  | 'VALIDATING'
+  | 'FINALIZING'
+  | 'SUCCEEDED'
+  | 'PARTIAL_SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELED';
+
 interface BatchUploadMonthItem {
   monthId: string;
   rowCount: number;
@@ -871,27 +953,55 @@ interface BatchUploadMonthItem {
   version: number;
 }
 
-interface BatchUploadResult {
-  batchId: string;
+interface BatchUploadFailedMonthItem {
+  monthId: string;
+  rowCount: number;
+  errorRows: number;
+  status: string;
+}
+
+interface BatchUploadJobMonthItem {
+  monthId: string;
+  totalRows: number;
+  validRows: number;
+  errorRows: number;
+  warningCount: number;
+  sheetNames: string[];
+  status: string;
+  recordId?: string;
+  version?: number;
+}
+
+interface BatchUploadJobResult {
+  jobId: string;
+  status: BatchImportJobStatus;
+  stage: string;
   datasetType: YearDatasetType;
   sourceFileName: string;
+  fileSize: number;
+  checksum: string;
+  uploadedBy: string;
+  createdAt: string;
+  startedAt: string;
+  finishedAt: string;
+  updatedAt: string;
+  failureReason: string;
+  totalSheets: number;
+  processedSheets: number;
+  skippedSheets: number;
   totalRows: number;
-  importedMonthCount: number;
+  processedRows: number;
+  errorCount: number;
+  warningCount: number;
+  percent: number;
+  currentSheet: string;
   importedMonths: BatchUploadMonthItem[];
+  failedMonths: BatchUploadFailedMonthItem[];
+  months: BatchUploadJobMonthItem[];
   warnings: string[];
-}
-
-interface BatchUploadErrorRowItem {
-  row: number | string;
-  message: string;
-}
-
-interface BatchUploadErrorDetail {
-  message: string;
-  datasetType?: YearDatasetType;
-  sourceFileName?: string;
-  missingColumns: string[];
-  rowErrors: BatchUploadErrorRowItem[];
+  errorFileAvailable: boolean;
+  reused: boolean;
+  cancelRequested: boolean;
 }
 
 interface YearDataFileItem {
@@ -974,6 +1084,21 @@ const canUploadYearData = computed(() =>
 const canUploadYearBatchData = computed(() =>
   Boolean(yearBatchUploadFile.value && !uploadingYearBatchData.value)
 );
+
+const yearBatchUploadJobRunning = computed(() => {
+  const status = yearBatchUploadJob.value?.status;
+  return status === 'PENDING' || status === 'PARSING' || status === 'VALIDATING' || status === 'FINALIZING';
+});
+
+const yearBatchUploadDialogTitle = computed(() => {
+  if (yearBatchUploadRequestError.value) return '批量上传失败';
+  const status = yearBatchUploadJob.value?.status;
+  if (status === 'PARTIAL_SUCCEEDED') return '批量上传完成（部分成功）';
+  if (status === 'SUCCEEDED') return '批量上传完成';
+  if (status === 'FAILED') return '批量上传失败';
+  if (status === 'CANCELED') return '批量上传已取消';
+  return '批量上传任务';
+});
 
 const forecastTitle = computed(() =>
   forecastType.value === 'traffic' ? '交通工具预测' : '出入境总人数预测'
@@ -1277,6 +1402,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
+  clearYearBatchUploadPolling();
   if (chartInstance) {
     chartInstance.dispose();
   }
@@ -1604,75 +1730,163 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
   return error?.message || null;
 };
 
-const normalizeBatchUploadResult = (payload: any): BatchUploadResult => {
+const normalizeBatchUploadJob = (payload: any): BatchUploadJobResult => {
   const data = payload?.data || payload || {};
   const importedMonths = Array.isArray(data.importedMonths) ? data.importedMonths : [];
+  const failedMonths = Array.isArray(data.failedMonths) ? data.failedMonths : [];
+  const months = Array.isArray(data.months) ? data.months : [];
   return {
-    batchId: String(data.batchId || ''),
+    jobId: String(data.jobId || ''),
+    status: String(data.status || 'PENDING') as BatchImportJobStatus,
+    stage: String(data.stage || ''),
     datasetType: (data.datasetType || 'people') as YearDatasetType,
     sourceFileName: String(data.sourceFileName || ''),
+    fileSize: Number(data.fileSize || 0),
+    checksum: String(data.checksum || ''),
+    uploadedBy: String(data.uploadedBy || ''),
+    createdAt: String(data.createdAt || ''),
+    startedAt: String(data.startedAt || ''),
+    finishedAt: String(data.finishedAt || ''),
+    updatedAt: String(data.updatedAt || ''),
+    failureReason: String(data.failureReason || ''),
+    totalSheets: Number(data.totalSheets || 0),
+    processedSheets: Number(data.processedSheets || 0),
+    skippedSheets: Number(data.skippedSheets || 0),
     totalRows: Number(data.totalRows || 0),
-    importedMonthCount: Number(data.importedMonthCount || importedMonths.length || 0),
+    processedRows: Number(data.processedRows || 0),
+    errorCount: Number(data.errorCount || 0),
+    warningCount: Number(data.warningCount || 0),
+    percent: Number(data.percent || 0),
+    currentSheet: String(data.currentSheet || ''),
     importedMonths: importedMonths.map((item: any) => ({
       monthId: String(item?.monthId || ''),
       rowCount: Number(item?.rowCount || 0),
       recordId: String(item?.recordId || ''),
       version: Number(item?.version || 0)
     })),
-    warnings: Array.isArray(data.warnings) ? data.warnings.map((item: any) => String(item)) : []
+    failedMonths: failedMonths.map((item: any) => ({
+      monthId: String(item?.monthId || ''),
+      rowCount: Number(item?.rowCount || 0),
+      errorRows: Number(item?.errorRows || 0),
+      status: String(item?.status || '')
+    })),
+    months: months.map((item: any) => ({
+      monthId: String(item?.monthId || ''),
+      totalRows: Number(item?.totalRows || 0),
+      validRows: Number(item?.validRows || 0),
+      errorRows: Number(item?.errorRows || 0),
+      warningCount: Number(item?.warningCount || 0),
+      sheetNames: Array.isArray(item?.sheetNames) ? item.sheetNames.map((sheet: any) => String(sheet)) : [],
+      status: String(item?.status || ''),
+      recordId: item?.recordId ? String(item.recordId) : '',
+      version: Number(item?.version || 0)
+    })),
+    warnings: Array.isArray(data.warnings) ? data.warnings.map((item: any) => String(item)) : [],
+    errorFileAvailable: Boolean(data.errorFileAvailable),
+    reused: Boolean(data.reused),
+    cancelRequested: Boolean(data.cancelRequested)
   };
 };
 
-const normalizeBatchUploadErrorDetail = (payload: any): BatchUploadErrorDetail | null => {
-  if (!payload || typeof payload !== 'object') return null;
-  const data = payload?.data || {};
-  const rowErrors = Array.isArray(data.rowErrors) ? data.rowErrors : [];
-  return {
-    message: payload?.message || data?.message || '批量上传失败',
-    datasetType: (data?.datasetType || payload?.datasetType || undefined) as YearDatasetType | undefined,
-    sourceFileName: data?.sourceFileName || payload?.sourceFileName || '',
-    missingColumns: Array.isArray(data?.missingColumns) ? data.missingColumns.map((item: any) => String(item)) : [],
-    rowErrors: rowErrors.map((item: any) => ({
-      row: item?.row ?? '-',
-      message: String(item?.message || '未知错误')
-    }))
-  };
-};
-
-const parseBatchUploadErrorDetail = async (error: any): Promise<BatchUploadErrorDetail | null> => {
+const parseBatchUploadRequestError = async (error: any): Promise<string> => {
   const blobData = error?.response?.data;
   if (blobData instanceof Blob) {
     const text = await blobData.text();
     try {
-      return normalizeBatchUploadErrorDetail(JSON.parse(text));
+      const payload = JSON.parse(text);
+      return payload?.message || payload?.data?.message || text || error?.message || '批量上传失败';
     } catch {
-      return {
-        message: text || error?.message || '批量上传失败',
-        missingColumns: [],
-        rowErrors: []
-      };
+      return text || error?.message || '批量上传失败';
     }
   }
 
-  return normalizeBatchUploadErrorDetail(error?.response?.data) || {
-    message: error?.message || '批量上传失败',
-    missingColumns: [],
-    rowErrors: []
-  };
+  const payload = error?.response?.data;
+  if (payload && typeof payload === 'object') {
+    return payload?.message || payload?.data?.message || error?.message || '批量上传失败';
+  }
+  return error?.message || '批量上传失败';
 };
 
-const openBatchUploadSuccessDialog = (result: BatchUploadResult) => {
-  yearBatchUploadDialogMode.value = 'success';
-  yearBatchUploadResult.value = result;
-  yearBatchUploadErrorDetail.value = null;
+const clearYearBatchUploadPolling = () => {
+  if (yearBatchUploadPollingTimer !== null) {
+    window.clearTimeout(yearBatchUploadPollingTimer);
+    yearBatchUploadPollingTimer = null;
+  }
+};
+
+const openBatchUploadJobDialog = (job: BatchUploadJobResult) => {
+  yearBatchUploadRequestError.value = '';
+  yearBatchUploadJob.value = job;
   yearBatchUploadDialogVisible.value = true;
 };
 
-const openBatchUploadErrorDialog = (detail: BatchUploadErrorDetail) => {
-  yearBatchUploadDialogMode.value = 'error';
-  yearBatchUploadResult.value = null;
-  yearBatchUploadErrorDetail.value = detail;
+const openBatchUploadRequestErrorDialog = (message: string) => {
+  yearBatchUploadJob.value = null;
+  yearBatchUploadRequestError.value = message;
   yearBatchUploadDialogVisible.value = true;
+};
+
+const getBatchUploadStatusType = (status?: BatchImportJobStatus) => {
+  if (status === 'SUCCEEDED') return 'success';
+  if (status === 'PARTIAL_SUCCEEDED') return 'warning';
+  if (status === 'FAILED') return 'danger';
+  if (status === 'CANCELED') return 'info';
+  return 'info';
+};
+
+const getBatchUploadStatusLabel = (status?: BatchImportJobStatus) => {
+  if (status === 'PENDING') return '待处理';
+  if (status === 'PARSING') return '解析中';
+  if (status === 'VALIDATING') return '校验中';
+  if (status === 'FINALIZING') return '提交中';
+  if (status === 'SUCCEEDED') return '已完成';
+  if (status === 'PARTIAL_SUCCEEDED') return '部分成功';
+  if (status === 'FAILED') return '失败';
+  if (status === 'CANCELED') return '已取消';
+  return status || '-';
+};
+
+const shouldPollBatchUploadJob = (status?: BatchImportJobStatus) =>
+  status === 'PENDING' || status === 'PARSING' || status === 'VALIDATING' || status === 'FINALIZING';
+
+const pollYearBatchUploadJob = async (jobId: string, silent = false) => {
+  const res: any = await requestYearApi({
+    method: 'get',
+    url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_IMPORT_JOB(jobId)
+  });
+  if (!res.data?.success) {
+    throw new Error(res.data?.message || '获取批量上传任务状态失败');
+  }
+
+  const job = normalizeBatchUploadJob(res.data);
+  yearBatchUploadJob.value = job;
+  yearBatchUploadRequestError.value = '';
+
+  if (shouldPollBatchUploadJob(job.status)) {
+    clearYearBatchUploadPolling();
+    yearBatchUploadPollingTimer = window.setTimeout(() => {
+      pollYearBatchUploadJob(jobId).catch((error) => {
+        console.error(error);
+      });
+    }, 1500);
+    return job;
+  }
+
+  clearYearBatchUploadPolling();
+  await loadYearDataFiles();
+
+  if (!silent) {
+    if (job.status === 'SUCCEEDED') {
+      ElMessage.success(`批量上传完成，成功导入 ${job.importedMonths.length} 个月`);
+    } else if (job.status === 'PARTIAL_SUCCEEDED') {
+      ElMessage.warning(`批量上传结束：成功 ${job.importedMonths.length} 个月，失败 ${job.failedMonths.length} 个月`);
+    } else if (job.status === 'FAILED') {
+      ElMessage.error(job.failureReason || '批量上传失败');
+    } else if (job.status === 'CANCELED') {
+      ElMessage.info('批量上传任务已取消');
+    }
+  }
+  return job;
 };
 
 const handleUploadYearData = async () => {
@@ -1730,6 +1944,7 @@ const handleUploadYearBatchData = async () => {
     return;
   }
 
+  clearYearBatchUploadPolling();
   uploadingYearBatchData.value = true;
   try {
     const formData = new FormData();
@@ -1747,36 +1962,89 @@ const handleUploadYearBatchData = async () => {
     });
 
     if (!res.data?.success) {
-      const detail = normalizeBatchUploadErrorDetail(res.data) || {
-        message: res.data?.message || '批量上传失败',
-        missingColumns: [],
-        rowErrors: []
-      };
-      ElMessage.error(detail.message);
-      openBatchUploadErrorDialog(detail);
+      const message = res.data?.message || '批量上传失败';
+      ElMessage.error(message);
+      openBatchUploadRequestErrorDialog(message);
       return;
     }
 
-    const result = normalizeBatchUploadResult(res.data);
+    const job = normalizeBatchUploadJob(res.data);
     yearBatchUploadFile.value = null;
     if (fileInput_yearBatchUpload.value) fileInput_yearBatchUpload.value.value = '';
+    openBatchUploadJobDialog(job);
 
-    ElMessage.success(result.importedMonthCount > 0 ? `批量上传成功，已拆分 ${result.importedMonthCount} 个月` : '批量上传成功');
-    await loadYearDataFiles();
-    openBatchUploadSuccessDialog(result);
+    if (job.reused) {
+      ElMessage.success('检测到同一文件的历史导入任务，已复用原任务结果');
+    } else {
+      ElMessage.success('已创建批量上传任务，正在后台处理中');
+    }
+
+    await pollYearBatchUploadJob(job.jobId);
   } catch (error: any) {
     console.error(error);
-    const detail = await parseBatchUploadErrorDetail(error);
-    ElMessage.error(detail?.message || '批量上传失败');
-    if (detail) {
-      openBatchUploadErrorDialog(detail);
-    }
+    const message = await parseBatchUploadRequestError(error);
+    ElMessage.error(message || '批量上传失败');
+    openBatchUploadRequestErrorDialog(message || '批量上传失败');
   } finally {
     uploadingYearBatchData.value = false;
   }
 };
 
+const refreshYearBatchUploadJob = async () => {
+  if (!yearBatchUploadJob.value?.jobId) return;
+  try {
+    await pollYearBatchUploadJob(yearBatchUploadJob.value.jobId);
+  } catch (error: any) {
+    console.error(error);
+    ElMessage.error(error?.message || '刷新任务状态失败');
+  }
+};
+
+const handleDownloadYearBatchImportErrors = async () => {
+  if (!yearBatchUploadJob.value?.jobId) return;
+  try {
+    const res: any = await requestYearApi({
+      method: 'get',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_IMPORT_JOB_ERRORS(yearBatchUploadJob.value.jobId),
+      responseType: 'blob'
+    });
+    downloadReportBlob(res.data, res.headers, `${yearBatchUploadJob.value.jobId}_errors.csv`);
+  } catch (error: any) {
+    console.error(error);
+    ElMessage.error(error?.message || '下载错误明细失败');
+  }
+};
+
+const handleCancelYearBatchImportJob = async () => {
+  if (!yearBatchUploadJob.value?.jobId || !yearBatchUploadJobRunning.value) return;
+  try {
+    await ElMessageBox.confirm('确认取消当前批量上传任务吗？', '取消任务', {
+      confirmButtonText: '取消任务',
+      cancelButtonText: '继续执行',
+      type: 'warning'
+    });
+    cancelingYearBatchImportJob.value = true;
+    const res: any = await requestYearApi({
+      method: 'post',
+      url: API_ENDPOINTS.LLM_SUMMARY.YEAR_DATA_IMPORT_JOB_CANCEL(yearBatchUploadJob.value.jobId)
+    });
+    if (!res.data?.success) {
+      ElMessage.error(res.data?.message || '取消任务失败');
+      return;
+    }
+    ElMessage.success('已发送取消请求');
+    await refreshYearBatchUploadJob();
+  } catch (error: any) {
+    if (error === 'cancel') return;
+    console.error(error);
+    ElMessage.error(error?.message || '取消任务失败');
+  } finally {
+    cancelingYearBatchImportJob.value = false;
+  }
+};
+
 const resetForm = () => {
+  clearYearBatchUploadPolling();
   yearStartMonth.value = '';
   yearEndMonth.value = '';
   yearReportType.value = 'comprehensive';
@@ -1786,10 +2054,11 @@ const resetForm = () => {
   yearUploadFile.value = null;
   yearBatchUploadDatasetType.value = 'people';
   yearBatchUploadFile.value = null;
+  cancelingYearBatchImportJob.value = false;
   yearMissingPeopleMonths.value = [];
   yearMissingTrafficMonths.value = [];
-  yearBatchUploadResult.value = null;
-  yearBatchUploadErrorDetail.value = null;
+  yearBatchUploadJob.value = null;
+  yearBatchUploadRequestError.value = '';
   yearBatchUploadDialogVisible.value = false;
   if(fileInput_yearUpload.value) fileInput_yearUpload.value.value = '';
   if(fileInput_yearBatchUpload.value) fileInput_yearBatchUpload.value.value = '';
@@ -2747,6 +3016,34 @@ const formatDate = (dateStr: string): string => {
   color: #92400e;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.batch-progress-panel,
+.batch-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.batch-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.batch-progress-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.batch-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .batch-result-table {
