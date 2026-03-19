@@ -98,8 +98,7 @@
             <el-icon class="module-icon"><Reading /></el-icon>
             <span>边检智学</span>
           </router-link>
-          <router-link to="/smart-office-v2" class="btn btn-module">
-          <router-link to="/smart-office" class="btn btn-module home-module-office">
+          <router-link to="/smart-office-v2" class="btn btn-module home-module-office">
             <span class="btn-shine"></span>
             <el-icon class="module-icon"><Document /></el-icon>
             <span>公文助手</span>
