@@ -784,7 +784,7 @@ import {
 } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import { davHttp } from '@/config/api/http';
-import { API_ENDPOINTS, LLM_BASE_URL } from '@/config/api/api';
+import { API_ENDPOINTS } from '@/config/api/api';
 const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
 const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
 const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
@@ -2005,13 +2005,23 @@ const loadDocuments = async () => {
   }
 };
 
+const resolveDavDocumentUrl = (path: string) => {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const baseUrl = String(davHttp.defaults.baseURL || '').replace(/\/$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  return `${baseUrl}${normalizedPath}`;
+};
+
 const previewDocument = (doc: DocumentItem) => {
-  const url = LLM_BASE_URL + doc.previewUrl;
+  const url = resolveDavDocumentUrl(doc.previewUrl);
   window.open(url, '_blank');
 };
 
 const downloadDocument = (doc: DocumentItem) => {
-  const url = LLM_BASE_URL + doc.downloadUrl;
+  const url = resolveDavDocumentUrl(doc.downloadUrl);
   const link = document.createElement('a');
   link.href = url;
   link.download = doc.name;
