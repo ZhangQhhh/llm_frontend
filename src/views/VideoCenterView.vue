@@ -363,7 +363,7 @@
       <div class="video-player-container">
         <div v-if="videoLoading" class="video-loading-overlay">
           <el-icon class="is-loading" :size="40"><Loading /></el-icon>
-          <template v-if="transcodeProgress > 0 && transcodeProgress < 100">
+          <template v-if="transcodePollingTimer">
             <p style="margin-top: 16px; font-size: 14px;">视频转码中...</p>
             <el-progress
               :percentage="transcodeProgress"
@@ -379,9 +379,9 @@
           <p v-else style="margin-top: 16px; font-size: 14px;">视频加载中，请耐心等待...</p>
         </div>
         <video
-          v-show="!videoLoading"
+          v-show="!videoLoading && currentResourceUrl"
           ref="videoPlayer"
-          :src="currentResourceUrl"
+          :src="currentResourceUrl || undefined"
           controls
           autoplay
           class="video-player"
@@ -1131,34 +1131,67 @@ function handleVideoCanPlay() {
 }
 
 // 视频播放错误处理
-function handleVideoError() {
-  if (isClosingPlayer.value || !currentResourceUrl.value) {
+async function handleVideoError() {
+  if (isClosingPlayer.value) {
     videoLoading.value = false
     return
   }
-  const resource = currentResource.value
-  if (resource) {
-    // 如果是需要转码的视频，启动进度轮询
-    const transcodeStatus = resource.transcode_status
-    if (transcodeStatus === 'converting' || transcodeStatus === 'pending') {
-      videoLoading.value = true
-      startTranscodePolling(resource.id)
-      return
-    }
-    if (transcodeStatus === 'failed') {
-      videoLoading.value = false
-      ElMessage.error('视频转码失败，请确保服务器已安装FFmpeg，或下载后使用本地播放器观看')
-      return
-    }
-    const filename = (resource.original_filename || resource.filename || '').toLowerCase()
-    const ext = filename.split('.').pop() || ''
-    if (!BROWSER_PLAYABLE_EXTS.includes(ext)) {
-      // 可能正在转码，启动轮询
-      videoLoading.value = true
-      startTranscodePolling(resource.id)
-      return
-    }
+  // 正在轮询转码进度中，或没有设置URL，忽略错误
+  if (transcodePollingTimer.value || !currentResourceUrl.value) {
+    return
   }
+  const resource = currentResource.value
+  if (!resource) {
+    videoLoading.value = false
+    ElMessage.error('视频加载失败，请稍后重试')
+    return
+  }
+  
+  // 清除当前URL，防止video元素重复触发error
+  currentResourceUrl.value = ''
+  
+  // 通过API查询真实转码状态（比本地meta更准确）
+  try {
+    const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
+    const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
+    const res = await fetch(`${baseUrl}/resources/${resource.id}/transcode-progress`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await res.json()
+    if (data.ok && data.data) {
+      const { status } = data.data
+      if (status === 'converting' || status === 'pending') {
+        // 正在转码中，启动轮询显示进度
+        videoLoading.value = true
+        startTranscodePolling(resource.id)
+        return
+      }
+      if (status === 'done' || status === 'not_needed') {
+        // 转码已完成但视频仍加载失败，可能是其他问题
+        videoLoading.value = false
+        ElMessage.error('视频加载失败，请稍后重试')
+        return
+      }
+      if (status === 'failed') {
+        videoLoading.value = false
+        ElMessage.error('视频转码失败，请下载后使用本地播放器观看')
+        return
+      }
+    }
+  } catch (e) {
+    // 查询失败，用扩展名兜底判断
+  }
+  
+  // API查询失败时的兜底：检查扩展名
+  const filename = (resource.original_filename || resource.filename || '').toLowerCase()
+  const ext = filename.split('.').pop() || ''
+  if (!BROWSER_PLAYABLE_EXTS.includes(ext)) {
+    // 非浏览器兼容格式，可能需要转码，启动轮询
+    videoLoading.value = true
+    startTranscodePolling(resource.id)
+    return
+  }
+  
   videoLoading.value = false
   ElMessage.error('视频加载失败，请稍后重试')
 }
@@ -1185,10 +1218,19 @@ function startTranscodePolling(resourceId: string) {
           // 转码完成，加载视频
           stopTranscodePolling()
           transcodeProgress.value = 100
+          // 刷新列表中该资料的转码状态
           const resource = currentResource.value
-          if (resource && playerDialogVisible.value) {
-            currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
+          if (resource) {
+            resource.transcode_status = 'done'
           }
+          // 短暂延迟后设置URL，确保UI状态已更新
+          setTimeout(() => {
+            const res = currentResource.value
+            if (res && playerDialogVisible.value) {
+              videoLoading.value = true
+              currentResourceUrl.value = `${baseUrl}/resources/${res.id}/stream?token=${token}`
+            }
+          }, 500)
           return
         }
         if (status === 'failed') {
