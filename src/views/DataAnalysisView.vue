@@ -217,6 +217,65 @@
                       批量上传总表
                     </el-button>
                   </div>
+                  <div v-if="yearBatchUploadJob || yearBatchUploadRequestError" class="batch-inline-status">
+                    <div class="batch-inline-header">
+                      <span class="batch-inline-title">当前导入任务</span>
+                      <el-tag
+                        v-if="yearBatchUploadJob"
+                        size="small"
+                        :type="getBatchUploadStatusType(yearBatchUploadJob.status)"
+                      >
+                        {{ getBatchUploadStatusLabel(yearBatchUploadJob.status) }}
+                      </el-tag>
+                    </div>
+
+                    <div v-if="yearBatchUploadJob" class="batch-inline-body">
+                      <div class="batch-inline-meta">
+                        <span>任务ID：{{ yearBatchUploadJob.jobId }}</span>
+                        <span>阶段：{{ yearBatchUploadJob.stage || '-' }}</span>
+                        <span>当前Sheet：{{ yearBatchUploadJob.currentSheet || '无' }}</span>
+                      </div>
+                      <el-progress
+                        :percentage="yearBatchUploadJob.percent"
+                        :status="yearBatchUploadJob.status === 'FAILED' ? 'exception' : yearBatchUploadJob.status === 'SUCCEEDED' ? 'success' : undefined"
+                      />
+                      <div class="batch-inline-meta">
+                        <span>Sheet：{{ yearBatchUploadJob.processedSheets }}/{{ yearBatchUploadJob.totalSheets }}</span>
+                        <span>行数：{{ yearBatchUploadJob.processedRows }}/{{ yearBatchUploadJob.totalRows }}</span>
+                        <span>错误：{{ yearBatchUploadJob.errorCount }}</span>
+                      </div>
+                      <div class="batch-inline-actions">
+                        <el-button size="small" @click="refreshYearBatchUploadJob">刷新状态</el-button>
+                        <el-button
+                          v-if="yearBatchUploadJob.errorFileAvailable"
+                          size="small"
+                          type="warning"
+                          plain
+                          @click="handleDownloadYearBatchImportErrors"
+                        >
+                          下载错误明细
+                        </el-button>
+                        <el-button
+                          v-if="yearBatchUploadJobRunning"
+                          size="small"
+                          type="danger"
+                          plain
+                          :loading="cancelingYearBatchImportJob"
+                          @click="handleCancelYearBatchImportJob"
+                        >
+                          取消任务
+                        </el-button>
+                        <el-button size="small" type="primary" plain @click="yearBatchUploadDialogVisible = true">
+                          查看详情
+                        </el-button>
+                      </div>
+                    </div>
+
+                    <div v-else class="batch-error-banner">
+                      <el-icon><InfoFilled /></el-icon>
+                      <span>{{ yearBatchUploadRequestError }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2876,6 +2935,49 @@ const formatDate = (dateStr: string): string => {
   color: #1e40af;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.batch-inline-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.batch-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.batch-inline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.batch-inline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.batch-inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.batch-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .year-missing-panel {
