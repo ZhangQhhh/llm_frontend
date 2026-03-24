@@ -1772,7 +1772,18 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
       if (Array.isArray(data.missingTrafficMonths)) {
         yearMissingTrafficMonths.value = data.missingTrafficMonths;
       }
-      return payload?.message || data?.message || text;
+      const detail = payload?.detail;
+      if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
+      if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+      if (typeof detail === 'string' && detail.trim()) return detail;
+      if (Array.isArray(detail)) {
+        const detailMessage = detail
+          .map((item: any) => item?.msg || item?.message || '')
+          .filter(Boolean)
+          .join('；');
+        if (detailMessage) return detailMessage;
+      }
+      return text;
     } catch {
       return text || null;
     }
@@ -1787,7 +1798,18 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
     if (Array.isArray(data.missingTrafficMonths)) {
       yearMissingTrafficMonths.value = data.missingTrafficMonths;
     }
-    return payload?.message || data?.message || null;
+    const detail = payload?.detail;
+    if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail)) {
+      const detailMessage = detail
+        .map((item: any) => item?.msg || item?.message || '')
+        .filter(Boolean)
+        .join('；');
+      if (detailMessage) return detailMessage;
+    }
+    return null;
   }
 
   return error?.message || null;
