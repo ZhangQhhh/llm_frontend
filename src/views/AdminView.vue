@@ -2958,7 +2958,7 @@ interface Paper {
 export default defineComponent({
   name: 'AdminView',
   // eslint-disable-next-line vue/no-unused-components
-  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit },
+  components: { Loading, Search, Refresh, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, Delete, Warning, Failed },
   setup() {
     const store = useStore()
     const username = computed(() => store.state.user.username)
