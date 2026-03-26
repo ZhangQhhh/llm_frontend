@@ -65,49 +65,98 @@
       </div>
     </div>
 
-    <!-- 考试通知面板 -->
+    <!-- 考试通知面板（可折叠 + 状态筛选 + 分页） -->
     <div v-if="publishedExams.length > 0 && !examStarted" class="notification-panel">
-      <div class="notification-header">
+      <div class="notification-header" @click="notificationCollapsed = !notificationCollapsed">
         <el-icon class="notification-icon"><Bell /></el-icon>
         <span>考试通知</span>
-        <el-button size="small" text @click="loadPublishedExams" :loading="loadingExamNotifications">
+        <el-badge :value="activeExamCount" :hidden="activeExamCount === 0" class="notify-badge" />
+        <span class="header-spacer"></span>
+        <el-button size="small" text @click.stop="loadPublishedExams" :loading="loadingExamNotifications">
           <el-icon><Refresh /></el-icon>
         </el-button>
+        <el-icon class="collapse-arrow" :class="{ collapsed: notificationCollapsed }"><ArrowUp /></el-icon>
       </div>
-      <div class="notification-list">
-        <div
-          v-for="exam in publishedExams"
-          :key="exam.exam_id"
-          class="notification-item"
-          :class="{ active: getExamStatus(exam) === 'active', pending: getExamStatus(exam) === 'pending' }"
-        >
-          <div class="exam-info">
-            <div class="exam-name">{{ exam.exam_name }}</div>
-            <div class="exam-meta">
-              <span>试卷：{{ exam.paper_title }}</span>
-              <span class="divider">|</span>
-              <span>时长：{{ exam.duration_min }}分钟</span>
-            </div>
-            <div class="exam-time">
-              <el-icon><Clock /></el-icon>
-              {{ exam.start_time }} ~ {{ exam.end_time }}
-            </div>
-            <div class="exam-desc" v-if="exam.description">{{ exam.description }}</div>
+
+      <transition name="notify-slide">
+        <div v-show="!notificationCollapsed" class="notification-body">
+          <!-- 显示已结束考试勾选 -->
+          <div v-if="endedExamCount > 0" class="exam-filter-bar">
+            <el-checkbox v-model="showEndedExams" @change="toggleShowEnded" size="small">
+              显示已结束的考试 ({{ endedExamCount }})
+            </el-checkbox>
           </div>
-          <div class="exam-action">
-            <el-tag v-if="getExamStatus(exam) === 'pending'" type="warning" effect="plain">未开始</el-tag>
-            <el-tag v-else-if="getExamStatus(exam) === 'ended'" type="info" effect="plain">已结束</el-tag>
-            <el-button
-              v-else-if="getExamStatus(exam) === 'active'"
-              type="primary"
-              @click="enterPublishedExam(exam)"
-              :loading="enteringExam === exam.exam_id"
+
+          <!-- 考试列表 -->
+          <div class="notification-list">
+            <div v-if="filteredPublishedExams.length === 0" class="exam-empty">
+              暂无考试通知
+            </div>
+            <div
+              v-for="exam in paginatedExams"
+              :key="exam.exam_id"
+              class="notification-item"
+              :class="{
+                active: getExamStatus(exam) === 'active',
+                pending: getExamStatus(exam) === 'pending'
+              }"
             >
-              进入考试
-            </el-button>
+              <div class="exam-info">
+                <div class="exam-name">
+                  <el-tag
+                    v-if="getExamStatus(exam) === 'active'"
+                    type="success" size="small" effect="dark" class="status-tag"
+                  >进行中</el-tag>
+                  <el-tag
+                    v-else-if="getExamStatus(exam) === 'pending'"
+                    type="warning" size="small" effect="plain" class="status-tag"
+                  >未开始</el-tag>
+                  <el-tag
+                    v-else
+                    type="info" size="small" effect="plain" class="status-tag"
+                  >已结束</el-tag>
+                  {{ exam.exam_name }}
+                </div>
+                <div class="exam-meta">
+                  <span>试卷：{{ exam.paper_title }}</span>
+                  <span class="divider">|</span>
+                  <span>时长：{{ exam.duration_min }}分钟</span>
+                </div>
+                <div class="exam-time">
+                  <el-icon><Clock /></el-icon>
+                  {{ exam.start_time }} ~ {{ exam.end_time }}
+                </div>
+                <div class="exam-desc" v-if="exam.description">{{ exam.description }}</div>
+              </div>
+              <div class="exam-action">
+                <el-button
+                  v-if="getExamStatus(exam) === 'active'"
+                  type="primary"
+                  @click="enterPublishedExam(exam)"
+                  :loading="enteringExam === exam.exam_id"
+                >
+                  进入考试
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分页控制 -->
+          <div v-if="examNotificationTotalPages > 1" class="exam-pagination">
+            <el-button
+              size="small" text
+              :disabled="examNotificationPage <= 1"
+              @click="examNotificationPage--"
+            >上一页</el-button>
+            <span class="page-info">{{ examNotificationPage }} / {{ examNotificationTotalPages }}</span>
+            <el-button
+              size="small" text
+              :disabled="examNotificationPage >= examNotificationTotalPages"
+              @click="examNotificationPage++"
+            >下一页</el-button>
           </div>
         </div>
-      </div>
+      </transition>
     </div>
 
     <!-- 主布局 -->
@@ -1127,7 +1176,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, react
 import { useStore } from 'vuex'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading, List, Timer, Trophy } from '@element-plus/icons-vue'
+import { Bell, Refresh, Clock, Reading, CaretRight, InfoFilled, Collection, View, Delete, Loading, List, Timer, Trophy, ArrowUp } from '@element-plus/icons-vue'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -1365,6 +1414,7 @@ export default defineComponent({
       beforeunload_warning: true,
       max_switch_count: 3,
       vnc_port_detection: true,
+      vnc_ports: '5900-5910',
     })
     const antiCheatConfigLoaded = ref(false)
 
@@ -1431,11 +1481,36 @@ export default defineComponent({
       })
     }
 
+    // 解析 VNC 端口配置字符串为端口数组
+    // 支持: "5900-5910" (范围), "5859" (单个), "5900-5910, 5859, 5959" (混合)
+    const parseVncPorts = (portsStr: string): number[] => {
+      const ports: Set<number> = new Set()
+      const segments = portsStr.split(/[,，;；]/).map(s => s.trim()).filter(Boolean)
+      for (const seg of segments) {
+        const rangeMatch = seg.match(/^(\d+)\s*[-~～]\s*(\d+)$/)
+        if (rangeMatch) {
+          const start = parseInt(rangeMatch[1], 10)
+          const end = parseInt(rangeMatch[2], 10)
+          if (start >= 1 && end <= 65535 && start <= end && (end - start) <= 500) {
+            for (let p = start; p <= end; p++) ports.add(p)
+          }
+        } else {
+          const p = parseInt(seg, 10)
+          if (p >= 1 && p <= 65535) ports.add(p)
+        }
+      }
+      return Array.from(ports).sort((a, b) => a - b)
+    }
+
     // 扫描 VNC 端口：自适应双模式检测
     // 模式A（普通网络）：关闭端口快速拒绝，开放端口慢 → 比基线慢的是开放
     // 模式B（防火墙丢包）：关闭端口超时，开放端口快速响应 → 比基线快的是开放
     const scanVncPorts = async (): Promise<number[]> => {
-      const portsToScan = [5900, 5901, 5902, 5903, 5904, 5905, 5906, 5907, 5908, 5909, 5910]
+      const portsToScan = parseVncPorts(antiCheatConfig.vnc_ports || '5900-5910')
+      if (portsToScan.length === 0) {
+        console.warn('[VNC] 端口配置为空，跳过扫描')
+        return []
+      }
       const controlPorts = [19876, 19877, 19878]
 
       // 第一步：全部端口（控制+VNC）并行探测，一次搞定
@@ -1496,7 +1571,7 @@ export default defineComponent({
     // 检查 VNC 端口（开考前调用）
     const checkVncPorts = async (): Promise<boolean> => {
       try {
-        console.log('[防作弊] 正在扫描 VNC 端口 (5900-5910)...')
+        console.log(`[防作弊] 正在扫描 VNC 端口 (${antiCheatConfig.vnc_ports || '5900-5910'})...`)
         const openPorts = await scanVncPorts()
         vncCheckResult.checked = true
         vncCheckResult.openPorts = openPorts
@@ -1645,6 +1720,37 @@ export default defineComponent({
     const publishedExams = ref<any[]>([])
     const loadingExamNotifications = ref(false)
     const enteringExam = ref('')
+    const notificationCollapsed = ref(false)
+    const showEndedExams = ref(false)
+    const examNotificationPage = ref(1)
+    const EXAM_PAGE_SIZE = 3
+
+    // 按状态筛选的考试列表（默认隐藏已结束）
+    const filteredPublishedExams = computed(() => {
+      if (showEndedExams.value) return publishedExams.value
+      return publishedExams.value.filter(e => getExamStatus(e) !== 'ended')
+    })
+
+    // 分页后的考试列表
+    const paginatedExams = computed(() => {
+      const start = (examNotificationPage.value - 1) * EXAM_PAGE_SIZE
+      return filteredPublishedExams.value.slice(start, start + EXAM_PAGE_SIZE)
+    })
+
+    // 通知分页总数
+    const examNotificationTotalPages = computed(() => {
+      return Math.max(1, Math.ceil(filteredPublishedExams.value.length / EXAM_PAGE_SIZE))
+    })
+
+    // 已结束考试数量
+    const endedExamCount = computed(() => {
+      return publishedExams.value.filter(e => getExamStatus(e) === 'ended').length
+    })
+
+    // 进行中考试数量（用于角标）
+    const activeExamCount = computed(() => {
+      return publishedExams.value.filter(e => getExamStatus(e) === 'active').length
+    })
 
     const timerDisplay = computed(() => {
       if (!examStarted.value) return '--:--'
@@ -2171,11 +2277,19 @@ export default defineComponent({
       return answers
     }
 
-    // 保存答题进度到后端
+    // 保存答题进度到后端（带并发控制和失败重试）
+    const pendingSave = ref(false)  // 是否有挂起的保存请求等待执行
+    const saveRetryCount = ref(0)   // 连续失败次数
+    const MAX_SAVE_RETRIES = 3
+    
     const saveProgress = async (force = false) => {
       if (!attemptId.value || submitted.value) return
       // force 模式下（如切屏检测）不受 savingProgress 限制
-      if (!force && savingProgress.value) return
+      if (!force && savingProgress.value) {
+        // 标记有挂起的保存，等当前保存完成后自动执行
+        pendingSave.value = true
+        return
+      }
       
       const answers = collectAnswersForSave()
       // 计算答案hash，避免重复保存相同内容
@@ -2185,6 +2299,7 @@ export default defineComponent({
       }
       
       savingProgress.value = true
+      pendingSave.value = false
       try {
         const data = await mcqFetch(API_ENDPOINTS.EXAM.SAVE_PROGRESS, {
           method: 'POST',
@@ -2195,11 +2310,12 @@ export default defineComponent({
             switch_count: switchCount.value,  // 同时保存切屏次数
             switch_events: switchLogs.value   // 同时保存切屏事件记录
           })
-        })
+        }, 30000)  // 30秒超时（降低默认的120秒，避免长时间占用连接）
         
         if (data.ok) {
           lastSavedAnswersHash.value = currentHash
           lastSaveTime.value = new Date().toLocaleTimeString()
+          saveRetryCount.value = 0  // 重置失败计数
           // 如果返回超时信息，触发自动提交
           if (data.timeout) {
             ElMessage.warning('考试已超时，正在自动提交...')
@@ -2208,15 +2324,26 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error('保存进度失败:', error)
+        saveRetryCount.value++
+        // 失败后指数退避重试（最多3次）
+        if (saveRetryCount.value <= MAX_SAVE_RETRIES) {
+          const delay = Math.min(5000 * Math.pow(2, saveRetryCount.value - 1), 30000)
+          setTimeout(() => saveProgress(true), delay)
+        }
       } finally {
         savingProgress.value = false
+        // 如果有挂起的保存请求，延迟2秒后执行（合并多次请求）
+        if (pendingSave.value) {
+          pendingSave.value = false
+          setTimeout(() => saveProgress(), 2000)
+        }
       }
     }
 
     // 启动自动保存定时器（低配模式60秒，正常模式30秒）
     const startAutoSave = () => {
       if (autoSaveHandle.value) clearInterval(autoSaveHandle.value)
-      const interval = isLowPerformanceMode.value ? 60000 : 30000  // 低配模式60秒，正常30秒
+      const interval = isLowPerformanceMode.value ? 120000 : 60000  // 低配模式120秒，正常60秒（降低并发压力）
       autoSaveHandle.value = window.setInterval(() => {
         saveProgress()
       }, interval)
@@ -2241,7 +2368,7 @@ export default defineComponent({
       }
       debounceSaveHandle.value = window.setTimeout(() => {
         saveProgress()
-      }, 3000)  // 3秒防抖，连续答题时不会频繁触发
+      }, 5000)  // 5秒防抖，降低高并发场景下的请求频率
     }
 
     // 检查是否有未完成的考试
@@ -2660,7 +2787,9 @@ export default defineComponent({
     }
 
     // ========== 考试通知相关函数 ==========
-    const loadPublishedExams = async () => {
+    let _notificationRetryTimer: ReturnType<typeof setTimeout> | null = null
+    const loadPublishedExams = async (retryCount = 0) => {
+      const MAX_RETRIES = 3
       loadingExamNotifications.value = true
       try {
         // 传入用户部门和用户ID，按部门/个人过滤考试通知
@@ -2673,23 +2802,43 @@ export default defineComponent({
         if (params.toString()) url += `?${params.toString()}`
         const data = await mcqFetch(url)
         if (data?.ok !== false) {
-          publishedExams.value = Array.isArray(data.exams) ? data.exams : []
+          const exams = Array.isArray(data.exams) ? data.exams : []
+          // 排序：进行中 > 未开始 > 已结束
+          const order: Record<string, number> = { active: 0, pending: 1, ended: 2 }
+          exams.sort((a: any, b: any) => (order[getExamStatus(a)] ?? 9) - (order[getExamStatus(b)] ?? 9))
+          publishedExams.value = exams
+          examNotificationPage.value = 1
         }
       } catch (error: any) {
         console.error('加载考试通知失败:', error)
+        // 自动重试：失败后指数退避重试（3s, 6s, 12s）
+        if (retryCount < MAX_RETRIES) {
+          const delay = 3000 * Math.pow(2, retryCount)
+          console.log(`考试通知将在 ${delay / 1000}s 后重试 (${retryCount + 1}/${MAX_RETRIES})`)
+          _notificationRetryTimer = setTimeout(() => loadPublishedExams(retryCount + 1), delay)
+          return  // 不清除 loading 状态，等重试完成
+        }
       } finally {
         loadingExamNotifications.value = false
       }
     }
 
-    // 获取考试状态
+    // 获取考试状态（优先使用后端返回的 status，回退到前端时间计算）
     const getExamStatus = (exam: any): string => {
+      if (exam.status && ['active', 'pending', 'ended'].includes(exam.status)) {
+        return exam.status
+      }
       const now = new Date()
       const startTime = new Date(exam.start_time)
       const endTime = new Date(exam.end_time)
       if (now < startTime) return 'pending'
       if (now > endTime) return 'ended'
       return 'active'
+    }
+
+    // 切换显示已结束时重置分页（v-model 已处理 boolean 切换）
+    const toggleShowEnded = () => {
+      examNotificationPage.value = 1
     }
 
     // 进入已发布的考试（正式考试模式，不可重复进入）
@@ -2903,14 +3052,16 @@ export default defineComponent({
         // 重置懒加载状态（低配模式）
         resetLazyLoad()
         
-        // 初始化答案
-        answersState.value = {}
+        // 初始化答案（与 startExam 保持一致：单选/SAQ用空字符串，多选/不定项用数组）
+        const newAnswersState: Record<string, any> = {}
         questions.value.forEach((q: any) => {
-          answersState.value[q.qid] = []
+          newAnswersState[q.qid] = (q.qtype === 'multi' || q.qtype === 'indeterminate') ? [] : ''
         })
+        answersState.value = newAnswersState
         
-        // 启动倒计时
+        // 启动倒计时和自动保存（确保练习进度不会因刷新丢失）
         startTimer()
+        startAutoSave()
 
       } catch (error: any) {
         ElMessage.error('开始随机练习失败：' + (error.message || '未知错误'))
@@ -3618,14 +3769,16 @@ export default defineComponent({
         // 重置懒加载状态（低配模式）
         resetLazyLoad()
         
-        // 初始化答案
-        answersState.value = {}
+        // 初始化答案（与 startExam 保持一致：单选/SAQ用空字符串，多选/不定项用数组）
+        const newAnswersState: Record<string, any> = {}
         questions.value.forEach((q: any) => {
-          answersState.value[q.qid] = []
+          newAnswersState[q.qid] = (q.qtype === 'multi' || q.qtype === 'indeterminate') ? [] : ''
         })
+        answersState.value = newAnswersState
         
-        // 启动倒计时
+        // 启动倒计时和自动保存（确保练习进度不会因刷新丢失）
         startTimer()
+        startAutoSave()
         
       } catch (error: any) {
         ElMessage.error('开始错题练习失败：' + (error.message || '未知错误'))
@@ -3644,13 +3797,13 @@ export default defineComponent({
     })
 
     onMounted(() => {
+      // 错开 API 请求，避免30人同时进入页面导致 150+ 并发请求打崩后端
       loadPapers()
-      loadPublishedExams()  // 加载考试通知
-      loadWrongBook()  // 加载错题本
-      // 加载防作弊配置
       loadAntiCheatConfig()
-      // 检查是否有未完成的考试
-      checkInProgressExam()
+      // 延迟加载非关键数据，错开请求时间
+      setTimeout(() => loadPublishedExams(), 500 + Math.random() * 1000)
+      setTimeout(() => loadWrongBook(), 1000 + Math.random() * 1000)
+      setTimeout(() => checkInProgressExam(), 1500 + Math.random() * 1000)
       // 添加页面关闭前警告
       window.addEventListener('beforeunload', handleBeforeUnload)
       // 添加 pagehide 事件（比 beforeunload 更可靠）
@@ -3665,6 +3818,7 @@ export default defineComponent({
     onUnmounted(() => {
       stopTimer()
       stopAutoSave()
+      if (_notificationRetryTimer) { clearTimeout(_notificationRetryTimer); _notificationRetryTimer = null }
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('pagehide', handlePageHide)
       // 移除防作弊检测
@@ -3769,6 +3923,15 @@ export default defineComponent({
       loadPublishedExams,
       getExamStatus,
       enterPublishedExam,
+      notificationCollapsed,
+      showEndedExams,
+      examNotificationPage,
+      filteredPublishedExams,
+      paginatedExams,
+      examNotificationTotalPages,
+      endedExamCount,
+      activeExamCount,
+      toggleShowEnded,
       // 防作弊相关
       switchCount,
       maxSwitchCount,
@@ -3826,7 +3989,8 @@ export default defineComponent({
       Loading,
       List,
       Timer,
-      Trophy
+      Trophy,
+      ArrowUp
     }
   }
 })
@@ -4004,13 +4168,49 @@ export default defineComponent({
   border-bottom: none;
   color: #fbbf24;
   font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+.notification-header:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(245, 158, 11, 0.08) 100%);
+}
+
+.header-spacer { flex: 1; }
+
+.notify-badge { margin-left: 4px; }
+.notify-badge :deep(.el-badge__content) {
+  background: #ef4444;
+  border: none;
+}
+
+.collapse-arrow {
+  font-size: 16px;
+  transition: transform 0.3s;
+  color: #fbbf24;
+}
+.collapse-arrow.collapsed {
+  transform: rotate(180deg);
 }
 
 .notification-icon {
   font-size: 20px;
 }
 
-.notification-list {
+/* 折叠动画 */
+.notify-slide-enter-active,
+.notify-slide-leave-active {
+  transition: all 0.3s ease;
+  max-height: 600px;
+  overflow: hidden;
+}
+.notify-slide-enter-from,
+.notify-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.notification-body {
   background: rgba(30, 41, 59, 0.9);
   border-radius: 0 0 10px 10px;
   border: 1px solid rgba(96, 165, 250, 0.2);
@@ -4018,12 +4218,33 @@ export default defineComponent({
   overflow: hidden;
 }
 
+/* 已结束考试勾选栏 */
+.exam-filter-bar {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+}
+.exam-filter-bar :deep(.el-checkbox__label) {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.notification-list {
+  overflow: hidden;
+}
+
+.exam-empty {
+  text-align: center;
+  padding: 24px;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .notification-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.08);
   transition: background-color 0.2s;
 }
 
@@ -4041,18 +4262,26 @@ export default defineComponent({
 }
 
 .notification-item.pending {
-  opacity: 0.7;
+  opacity: 0.75;
+}
+
+.status-tag {
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .exam-info {
   flex: 1;
+  min-width: 0;
 }
 
 .exam-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #f1f5f9;
   margin-bottom: 6px;
+  display: flex;
+  align-items: center;
 }
 
 .exam-meta {
@@ -4084,6 +4313,21 @@ export default defineComponent({
 
 .exam-action {
   margin-left: 20px;
+  flex-shrink: 0;
+}
+
+/* 分页控制 */
+.exam-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px 12px;
+  border-top: 1px solid rgba(96, 165, 250, 0.08);
+}
+.exam-pagination .page-info {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .topwrap {

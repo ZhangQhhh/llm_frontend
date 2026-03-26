@@ -1012,17 +1012,17 @@
                   <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <span>
                       <span style="margin-right: 4px;">单选题</span>
-                      <el-input-number v-model="singleScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <el-input-number v-model="singleScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px;">分/题</span>
                     </span>
                     <span>
                       <span style="margin-right: 4px;">多选题</span>
-                      <el-input-number v-model="multiScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <el-input-number v-model="multiScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px;">分/题</span>
                     </span>
                     <span>
                       <span style="margin-right: 4px;">不定项</span>
-                      <el-input-number v-model="indeterminateScore" :min="0" :max="100" :precision="1" size="small" style="width: 80px;" />
+                      <el-input-number v-model="indeterminateScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px;">分/题</span>
                     </span>
                     <span style="display: flex; align-items: center; gap: 8px;">
@@ -1032,7 +1032,7 @@
                         <el-radio-button value="custom">自定义</el-radio-button>
                       </el-radio-group>
                       <template v-if="saqScoreMode === 'uniform'">
-                        <el-input-number v-model="saqScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
+                        <el-input-number v-model="saqScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 100px;" />
                         <span>分/题</span>
                       </template>
                       <span v-else style="color: #909399; font-size: 12px;">（在下方题目列表中设置）</span>
@@ -1528,7 +1528,7 @@
                       </span>
                       <!-- 无知识条款：保持原有单分数输入 -->
                       <span v-else style="display: flex; align-items: center; gap: 4px; margin-left: 8px;">
-                        <el-input-number v-model="item.score" :min="0" :max="100" :precision="1" size="small" style="width: 90px;" placeholder="分数" />
+                        <el-input-number v-model="item.score" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 90px;" placeholder="分数" />
                         <span style="color: #909399; font-size: 12px;">分</span>
                       </span>
                     </template>
@@ -1613,7 +1613,7 @@
                         <template v-if="uploadedSaqScoreMode === 'custom' && item.clause_scores">
                           <el-input-number
                             v-model="item.clause_scores[ci]"
-                            :min="0" :max="100" :precision="1" controls-position="right" size="small" style="width: 80px; flex-shrink: 0;"
+                            :min="0" :max="100" :precision="1" :step="0.1" controls-position="right" size="small" style="width: 80px; flex-shrink: 0;"
                             @change="item.score = item.clause_scores.reduce((s, v) => s + (v || 0), 0)"
                           />
                           <span style="color: #909399; flex-shrink: 0;">分</span>
@@ -1852,6 +1852,9 @@
               <el-button type="primary" @click="exportZip" :loading="exportingZip" :disabled="!selectedExportExam">导出ZIP</el-button>
               <!-- <el-button type="success" @click="exportXlsx" :loading="exportingXlsx" :disabled="!selectedExportExam">导出Excel</el-button> -->
               <el-button @click="exportDocx" :loading="exportingDocx" :disabled="!selectedExportExam">导出DOCX</el-button>
+              <!-- <el-button type="warning" plain @click="openFixAnswerDialog" :disabled="!selectedExportExam || !gradesStats">
+                <el-icon style="margin-right: 2px;"><EditPen /></el-icon>修正答案
+              </el-button> -->
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
             
@@ -2047,6 +2050,11 @@
                         style="margin-left: 4px;"
                         @click="viewCheatDetail(scope.row)"
                       >详情</el-button>
+                    </template>
+                  </el-table-column>
+                  <el-table-column v-if="isSuperAdminUser" label="操作" width="100" fixed="right" align="left">
+                    <template #default="scope">
+                      <el-button size="small" link type="primary" @click="openScoreEditDialog(scope.row)">改分</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -2327,7 +2335,16 @@
                 <el-form-item label="VNC 端口检测">
                   <div style="display: flex; align-items: center; gap: 12px;">
                     <el-switch v-model="antiCheatConfig.vnc_port_detection" :disabled="!antiCheatConfig.enabled" />
-                    <span style="color: #606266; font-size: 13px;">开考前扫描 VNC 端口（5900-5910），检测到则禁止开考</span>
+                    <span style="color: #606266; font-size: 13px;">开考前扫描指定端口，检测到则禁止开考</span>
+                    <el-button
+                      v-if="antiCheatConfig.vnc_port_detection"
+                      :icon="Setting"
+                      circle
+                      size="small"
+                      :disabled="!antiCheatConfig.enabled"
+                      @click="openVncPortsDialog"
+                      title="配置检测端口"
+                    />
                   </div>
                 </el-form-item>
 
@@ -2367,7 +2384,7 @@
                     <p><strong>强制最大化窗口：</strong>考试开始前弹窗要求考生将浏览器窗口最大化，未最大化则无法进入考试。</p>
                     <p><strong>页面关闭警告：</strong>考试进行中关闭或刷新页面时弹出浏览器原生确认对话框。</p>
                     <p><strong>最大切屏次数：</strong>超过设定次数后系统将自动提交试卷，每次切屏会弹出警告并记录。</p>
-                    <p><strong>VNC 端口检测：</strong>开考前扫描本机 5900-5910 端口（VNC 默认端口），如检测到端口开放则禁止进入正式考试。练习模式不受影响。</p>
+                    <p><strong>VNC 端口检测：</strong>开考前扫描管理员配置的端口（默认 5900-5910），支持自定义范围和单个端口。如检测到端口开放则禁止进入正式考试。练习模式不受影响。</p>
                   </div>
                 </el-collapse-item>
               </el-collapse>
@@ -2729,6 +2746,133 @@
         </template>
       </el-dialog>
 
+      <!-- 修正答案对话框 -->
+      <el-dialog
+        v-model="fixAnswerDialogVisible"
+        title="修正选择题答案（批量重算分数）"
+        width="600px"
+        destroy-on-close
+      >
+        <el-alert type="warning" :closable="false" style="margin-bottom: 16px;">
+          修正答案后，该试卷所有考生的该题得分和总分将自动重算。此操作不可撤销，请谨慎操作。
+        </el-alert>
+        <el-form label-width="100px" size="default">
+          <el-form-item label="选择题目">
+            <el-select v-model="fixAnswerForm.question_index" placeholder="请选择要修正的题目" style="width: 100%;" filterable @change="onFixQuestionChange">
+              <el-option
+                v-for="q in mcqQuestionsOverview"
+                :key="q.index"
+                :value="q.index"
+                :label="`第${q.index}题 [${qtypeLabelMap[q.qtype] || q.qtype}] ${q.stem}`"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="fixAnswerForm.question_index" label="当前答案">
+            <el-tag type="info" size="large">{{ fixAnswerSelectedQ?.answer || '-' }}</el-tag>
+          </el-form-item>
+          <el-form-item v-if="fixAnswerForm.question_index && fixAnswerSelectedQ?.options && Object.keys(fixAnswerSelectedQ.options).length" label="选项">
+            <div v-for="(text, label) in fixAnswerSelectedQ.options" :key="label" style="line-height: 1.8;">
+              <strong>{{ label }}.</strong> {{ text }}
+            </div>
+          </el-form-item>
+          <el-form-item v-if="fixAnswerForm.question_index" label="新答案">
+            <el-input v-model="fixAnswerForm.new_answer" placeholder="输入正确答案，如 A / AB / ACD" style="width: 200px;" />
+            <span style="margin-left: 8px; color: #909399; font-size: 12px;">多选题请连写，如 ABD</span>
+          </el-form-item>
+        </el-form>
+        <!-- 执行结果 -->
+        <div v-if="fixAnswerResult" style="margin-top: 12px;">
+          <el-alert :title="`修正完成：影响 ${fixAnswerResult.affected_count} 人`" type="success" :closable="false" style="margin-bottom: 8px;">
+            <div>第{{ fixAnswerResult.question_index }}题 答案: {{ fixAnswerResult.old_answer }} → {{ fixAnswerResult.new_answer }}</div>
+          </el-alert>
+          <el-table :data="fixAnswerResult.score_changes" border size="small" max-height="250" style="width: 100%;">
+            <el-table-column prop="student_name" label="姓名" width="100" />
+            <el-table-column prop="student_id" label="学号" width="120" />
+            <el-table-column label="该题得分" width="120">
+              <template #default="scope">
+                {{ scope.row.old_score }} → <span :style="{ color: scope.row.score_diff > 0 ? '#67c23a' : scope.row.score_diff < 0 ? '#f56c6c' : '#909399', fontWeight: 600 }">{{ scope.row.new_score }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="总分变化" width="140">
+              <template #default="scope">
+                {{ scope.row.old_total?.toFixed(1) }} → <span :style="{ fontWeight: 600 }">{{ scope.row.new_total?.toFixed(1) }}</span>
+                <span v-if="scope.row.score_diff !== 0" :style="{ color: scope.row.score_diff > 0 ? '#67c23a' : '#f56c6c', marginLeft: '4px' }">
+                  ({{ scope.row.score_diff > 0 ? '+' : '' }}{{ scope.row.score_diff }})
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <template #footer>
+          <el-button @click="fixAnswerDialogVisible = false">{{ fixAnswerResult ? '关闭' : '取消' }}</el-button>
+          <el-button v-if="!fixAnswerResult" type="primary" @click="submitFixAnswer" :loading="fixAnswerSaving" :disabled="!fixAnswerForm.question_index || !fixAnswerForm.new_answer">确认修正</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 改分对话框 -->
+      <el-dialog
+        v-model="scoreEditDialogVisible"
+        :title="`修改分数 — ${scoreEditData?.student_name || ''}`"
+        width="420px"
+        destroy-on-close
+      >
+        <template v-if="scoreEditData">
+          <el-form label-width="90px" size="default">
+            <el-form-item label="学生">
+              <span>{{ scoreEditData.student_name }} ({{ scoreEditData.student_id }})</span>
+            </el-form-item>
+            <el-form-item label="选择题分数">
+              <el-input-number v-model="scoreEditForm.mcq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
+              <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_mcq?.toFixed(1) }}</span>
+            </el-form-item>
+            <el-form-item v-if="gradesStats?.has_saq" label="简答题分数">
+              <el-input-number v-model="scoreEditForm.saq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
+              <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_saq?.toFixed(1) }}</span>
+            </el-form-item>
+            <el-form-item label="修改后总分">
+              <span style="font-size: 18px; font-weight: 600; color: #409eff;">
+                {{ ((scoreEditForm.mcq_score || 0) + (scoreEditForm.saq_score || 0)).toFixed(1) }}
+              </span>
+            </el-form-item>
+          </el-form>
+        </template>
+        <template #footer>
+          <el-button v-if="scoreEditData?.has_override" type="warning" plain @click="clearScoreOverride" :loading="scoreEditSaving">恢复原始分数</el-button>
+          <el-button @click="scoreEditDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitScoreOverride" :loading="scoreEditSaving">确认修改</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- VNC 端口配置弹窗 -->
+      <el-dialog v-model="vncPortsDialogVisible" title="VNC 检测端口配置" width="480px" :close-on-click-modal="false">
+        <div style="margin-bottom: 12px; color: #606266; font-size: 13px;">每条可以是单个端口（如 <b>5859</b>）或端口范围（如 <b>5900-5910</b>），端口号限 5800-5999。</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; margin-bottom: 16px;">
+          <el-tag
+            v-for="(entry, idx) in vncPortEntries"
+            :key="idx"
+            closable
+            size="large"
+            @close="removeVncPortEntry(idx)"
+            style="font-size: 14px;"
+          >{{ entry }}</el-tag>
+          <span v-if="vncPortEntries.length === 0" style="color: #c0c4cc; font-size: 13px; line-height: 32px;">暂无端口条目，请添加</span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <el-input
+            v-model="newVncPortEntry"
+            placeholder="输入端口或范围，如 5900-5910 或 5859"
+            size="default"
+            style="flex: 1;"
+            @keyup.enter="addVncPortEntry"
+          />
+          <el-button type="primary" :icon="Plus" @click="addVncPortEntry" size="default">添加</el-button>
+        </div>
+        <template #footer>
+          <el-button @click="vncPortsDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmVncPorts">确定</el-button>
+        </template>
+      </el-dialog>
+
       <!-- 作弊详情对话框 -->
       <el-dialog
         v-model="cheatDetailDialogVisible"
@@ -2771,7 +2915,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted, reactive, watch
 import { useStore } from 'vuex'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, Warning, Delete, Failed } from '@element-plus/icons-vue'
+import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, EditPen, Warning, Delete, Failed, Setting } from '@element-plus/icons-vue'
 import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs, isSuperAdmin } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
@@ -3487,7 +3631,47 @@ export default defineComponent({
       beforeunload_warning: true,
       max_switch_count: 3,
       vnc_port_detection: true,
+      vnc_ports: '5900-5910',
     })
+    const vncPortsDialogVisible = ref(false)
+    const vncPortEntries = ref<string[]>([])
+    const newVncPortEntry = ref('')
+
+    const openVncPortsDialog = () => {
+      const raw = antiCheatConfig.vnc_ports || ''
+      vncPortEntries.value = raw.split(/[,，;；]/).map(s => s.trim()).filter(Boolean)
+      newVncPortEntry.value = ''
+      vncPortsDialogVisible.value = true
+    }
+
+    const addVncPortEntry = () => {
+      const val = newVncPortEntry.value.trim()
+      if (!val) return
+      // validate: single port or range
+      if (/^\d+$/.test(val)) {
+        const p = parseInt(val, 10)
+        if (p < 5800 || p > 5999) { ElMessage.warning('端口号限 5800-5999'); return }
+      } else if (/^\d+\s*[-~～]\s*\d+$/.test(val)) {
+        const parts = val.split(/[-~～]/).map(s => parseInt(s.trim(), 10))
+        if (parts[0] < 5800 || parts[1] > 5999 || parts[0] > parts[1]) { ElMessage.warning('端口范围限 5800-5999'); return }
+      } else {
+        ElMessage.warning('格式无效，请输入单个端口（如 5859）或范围（如 5900-5910）')
+        return
+      }
+      if (vncPortEntries.value.includes(val)) { ElMessage.warning('该条目已存在'); return }
+      vncPortEntries.value.push(val)
+      newVncPortEntry.value = ''
+    }
+
+    const removeVncPortEntry = (idx: number) => {
+      vncPortEntries.value.splice(idx, 1)
+    }
+
+    const confirmVncPorts = () => {
+      antiCheatConfig.vnc_ports = vncPortEntries.value.join(', ')
+      vncPortsDialogVisible.value = false
+    }
+
     const loadingAntiCheat = ref(false)
     const savingAntiCheat = ref(false)
     const antiCheatMessage = ref('')
@@ -3873,6 +4057,148 @@ export default defineComponent({
         cheat_events: row.cheat_events || []
       }
       cheatDetailDialogVisible.value = true
+    }
+
+    // ========== 改分功能 ==========
+    const scoreEditDialogVisible = ref(false)
+    const scoreEditData = ref<any>(null)
+    const scoreEditForm = reactive({ mcq_score: 0, saq_score: 0 })
+    const scoreEditSaving = ref(false)
+
+    const openScoreEditDialog = (row: any) => {
+      scoreEditData.value = {
+        attempt_id: row.attempt_id,
+        student_name: row.student_name,
+        student_id: row.student_id,
+        orig_mcq: row.mcq_score || 0,
+        orig_saq: row.saq_score || 0,
+        has_override: row.has_override || false
+      }
+      scoreEditForm.mcq_score = row.mcq_score || 0
+      scoreEditForm.saq_score = row.saq_score || 0
+      scoreEditDialogVisible.value = true
+    }
+
+    const submitScoreOverride = async () => {
+      if (!scoreEditData.value?.attempt_id) return
+      scoreEditSaving.value = true
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/grades/score_override`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            attempt_id: scoreEditData.value.attempt_id,
+            mcq_score: scoreEditForm.mcq_score,
+            saq_score: scoreEditForm.saq_score
+          })
+        })
+        const j = await resp.json()
+        if (j.ok) {
+          ElMessage.success('分数修改成功')
+          scoreEditDialogVisible.value = false
+          // 刷新成绩数据
+          if (selectedExportExam.value) {
+            onExportExamChange(selectedExportExam.value)
+          }
+        } else {
+          ElMessage.error(j.detail || j.msg || '修改失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('修改失败：' + (e?.message || e))
+      } finally {
+        scoreEditSaving.value = false
+      }
+    }
+
+    const clearScoreOverride = async () => {
+      if (!scoreEditData.value?.attempt_id) return
+      scoreEditSaving.value = true
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/grades/score_override_clear`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            attempt_id: scoreEditData.value.attempt_id
+          })
+        })
+        const j = await resp.json()
+        if (j.ok) {
+          ElMessage.success('已恢复原始分数')
+          scoreEditDialogVisible.value = false
+          if (selectedExportExam.value) {
+            onExportExamChange(selectedExportExam.value)
+          }
+        } else {
+          ElMessage.error(j.detail || j.msg || '恢复失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('恢复失败：' + (e?.message || e))
+      } finally {
+        scoreEditSaving.value = false
+      }
+    }
+
+    // ========== 修正答案功能 ==========
+    const fixAnswerDialogVisible = ref(false)
+    const fixAnswerForm = reactive({ question_index: null as number | null, new_answer: '' })
+    const fixAnswerSaving = ref(false)
+    const fixAnswerResult = ref<any>(null)
+    const qtypeLabelMap: Record<string, string> = { single: '单选', multi: '多选', indeterminate: '不定项', saq: '简答' }
+
+    // 只显示选择题（非SAQ）
+    const mcqQuestionsOverview = computed(() => {
+      return (gradesStats.value?.questions_overview || []).filter((q: any) => q.qtype !== 'saq')
+    })
+
+    const fixAnswerSelectedQ = computed(() => {
+      if (!fixAnswerForm.question_index) return null
+      return (gradesStats.value?.questions_overview || []).find((q: any) => q.index === fixAnswerForm.question_index) || null
+    })
+
+    const openFixAnswerDialog = () => {
+      fixAnswerForm.question_index = null
+      fixAnswerForm.new_answer = ''
+      fixAnswerResult.value = null
+      fixAnswerDialogVisible.value = true
+    }
+
+    const onFixQuestionChange = () => {
+      fixAnswerForm.new_answer = ''
+      fixAnswerResult.value = null
+    }
+
+    const submitFixAnswer = async () => {
+      if (!fixAnswerForm.question_index || !fixAnswerForm.new_answer) return
+      const exam = publishedExams.value.find((e: any) => e.exam_id === selectedExportExam.value)
+      if (!exam) return
+      fixAnswerSaving.value = true
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/grades/fix_answer`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            paper_id: exam.paper_id,
+            exam_id: selectedExportExam.value,
+            question_index: fixAnswerForm.question_index,
+            new_answer: fixAnswerForm.new_answer.toUpperCase().trim()
+          })
+        })
+        const j = await resp.json()
+        if (j.ok) {
+          fixAnswerResult.value = j
+          ElMessage.success(`答案修正成功，影响 ${j.affected_count} 人`)
+          // 刷新成绩数据
+          if (selectedExportExam.value) {
+            onExportExamChange(selectedExportExam.value)
+          }
+        } else {
+          ElMessage.error(j.detail || j.msg || '修正失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('修正失败：' + (e?.message || e))
+      } finally {
+        fixAnswerSaving.value = false
+      }
     }
 
     // 计算错误选项柱状图宽度
@@ -7532,9 +7858,17 @@ export default defineComponent({
       questionDetailDialogVisible, loadingQuestionDetail, questionDetailData, viewQuestionDetail, getWrongChoiceBarWidth,
       // 作弊详情弹窗
       cheatDetailDialogVisible, cheatDetailData, viewCheatDetail,
+      // 改分功能
+      scoreEditDialogVisible, scoreEditData, scoreEditForm, scoreEditSaving,
+      openScoreEditDialog, submitScoreOverride, clearScoreOverride, EditPen,
+      // 修正答案功能
+      fixAnswerDialogVisible, fixAnswerForm, fixAnswerSaving, fixAnswerResult,
+      mcqQuestionsOverview, fixAnswerSelectedQ, qtypeLabelMap,
+      openFixAnswerDialog, onFixQuestionChange, submitFixAnswer,
       // 防作弊配置相关
       antiCheatConfig, loadingAntiCheat, savingAntiCheat, antiCheatMessage,
       loadAntiCheatConfig, saveAntiCheatConfig, isAntiCheatDirty, beforeTabLeave,
+      vncPortsDialogVisible, vncPortEntries, newVncPortEntry, openVncPortsDialog, addVncPortEntry, removeVncPortEntry, confirmVncPorts, Setting,
       // 图标组件
       Upload, Download, MagicStick, Search, Check, Close
     }

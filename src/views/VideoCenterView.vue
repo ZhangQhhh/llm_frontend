@@ -379,9 +379,10 @@
           <p v-else style="margin-top: 16px; font-size: 14px;">视频加载中，请耐心等待...</p>
         </div>
         <video
-          v-show="!videoLoading && currentResourceUrl"
+          v-if="!transcodePollingTimer && currentResourceUrl"
+          v-show="!videoLoading"
           ref="videoPlayer"
-          :src="currentResourceUrl || undefined"
+          :src="currentResourceUrl"
           controls
           autoplay
           class="video-player"
@@ -1047,21 +1048,41 @@ function openResource(resource: any) {
   const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
   
   if (resource.file_type === 'video') {
-    // 视频播放
-    const needsTranscode = resource.transcode_status === 'converting' || resource.transcode_status === 'pending'
-    videoLoading.value = needsTranscode || !isBrowserPlayable(resource)
+    // 视频播放：先查询真实转码状态再决定
+    videoLoading.value = true
     transcodeProgress.value = 0
     transcodeEta.value = ''
     transcodeSpeed.value = ''
+    currentResourceUrl.value = ''
+    playerDialogVisible.value = true
     
-    if (needsTranscode) {
-      // 正在转码中，先显示进度，不加载视频流
-      playerDialogVisible.value = true
-      startTranscodePolling(resource.id)
-    } else {
+    // 异步查询后端真实状态
+    fetch(`${baseUrl}/resources/${resource.id}/transcode-progress`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(r => r.json()).then(data => {
+      console.log('[transcode] openResource progress check:', data)
+      if (data.ok && data.data) {
+        const { status } = data.data
+        if (status === 'converting' || status === 'pending') {
+          // 需要转码，启动进度轮询
+          console.log('[transcode] openResource → needs transcode, starting poll')
+          startTranscodePolling(resource.id)
+          return
+        }
+        if (status === 'failed') {
+          videoLoading.value = false
+          ElMessage.error('视频转码失败，请下载后使用本地播放器观看')
+          return
+        }
+      }
+      // done / not_needed / 其他：直接加载视频流
+      console.log('[transcode] openResource → loading stream directly')
       currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
-      playerDialogVisible.value = true
-    }
+    }).catch(() => {
+      // 查询失败，直接尝试加载流
+      console.warn('[transcode] openResource progress check failed, trying stream')
+      currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/stream?token=${token}`
+    })
   } else if (resource.file_type === 'pdf') {
     // PDF预览
     currentResourceUrl.value = `${baseUrl}/resources/${resource.id}/preview?token=${token}`
@@ -1118,20 +1139,24 @@ function handlePptLoad() {
 // 浏览器原生支持的视频格式（扩展名）
 const BROWSER_PLAYABLE_EXTS = ['mp4', 'webm', 'ogg', 'ogv', 'm4v']
 
-// 判断文件是否为浏览器可播放的视频格式
-function isBrowserPlayable(resource: any): boolean {
-  const filename = (resource.original_filename || resource.filename || '').toLowerCase()
-  const ext = filename.split('.').pop() || ''
-  return BROWSER_PLAYABLE_EXTS.includes(ext)
-}
-
 // 视频可以播放时隐藏loading
 function handleVideoCanPlay() {
+  // 轮询进行中时不允许关闭 loading
+  if (transcodePollingTimer.value) {
+    console.log('[transcode] handleVideoCanPlay ignored - polling active')
+    return
+  }
+  console.log('[transcode] handleVideoCanPlay - hiding loading')
   videoLoading.value = false
 }
 
 // 视频播放错误处理
 async function handleVideoError() {
+  console.log('[transcode] handleVideoError fired', {
+    isClosing: isClosingPlayer.value,
+    polling: !!transcodePollingTimer.value,
+    url: !!currentResourceUrl.value
+  })
   if (isClosingPlayer.value) {
     videoLoading.value = false
     return
@@ -1158,10 +1183,12 @@ async function handleVideoError() {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     const data = await res.json()
+    console.log('[transcode] handleVideoError progress response:', data)
     if (data.ok && data.data) {
       const { status } = data.data
       if (status === 'converting' || status === 'pending') {
         // 正在转码中，启动轮询显示进度
+        console.log('[transcode] starting polling - status:', status)
         videoLoading.value = true
         startTranscodePolling(resource.id)
         return
@@ -1179,7 +1206,8 @@ async function handleVideoError() {
       }
     }
   } catch (e) {
-    // 查询失败，用扩展名兜底判断
+    console.warn('[transcode] handleVideoError progress fetch failed:', e)
+    // 查询失败，用扩展名兆底判断
   }
   
   // API查询失败时的兜底：检查扩展名
@@ -1208,11 +1236,14 @@ function startTranscodePolling(resourceId: string) {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = await res.json()
+      console.log('[transcode] poll response:', data)
       if (data.ok && data.data) {
         const { percent, speed, eta, status } = data.data
         transcodeProgress.value = percent
         transcodeEta.value = eta
         transcodeSpeed.value = speed
+        // 确保轮询期间 loading 一直显示
+        videoLoading.value = true
         
         if (status === 'done' || status === 'not_needed') {
           // 转码完成，加载视频
