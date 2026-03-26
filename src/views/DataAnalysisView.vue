@@ -919,6 +919,7 @@ import {
 import * as echarts from 'echarts';
 import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
+import { convertExcelToXlsx } from '@/utils/excel-convert';
 const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
 const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
 const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
@@ -1772,7 +1773,18 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
       if (Array.isArray(data.missingTrafficMonths)) {
         yearMissingTrafficMonths.value = data.missingTrafficMonths;
       }
-      return payload?.message || data?.message || text;
+      const detail = payload?.detail;
+      if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
+      if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+      if (typeof detail === 'string' && detail.trim()) return detail;
+      if (Array.isArray(detail)) {
+        const detailMessage = detail
+          .map((item: any) => item?.msg || item?.message || '')
+          .filter(Boolean)
+          .join('；');
+        if (detailMessage) return detailMessage;
+      }
+      return text;
     } catch {
       return text || null;
     }
@@ -1787,10 +1799,44 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
     if (Array.isArray(data.missingTrafficMonths)) {
       yearMissingTrafficMonths.value = data.missingTrafficMonths;
     }
-    return payload?.message || data?.message || null;
+    const detail = payload?.detail;
+    if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail)) {
+      const detailMessage = detail
+        .map((item: any) => item?.msg || item?.message || '')
+        .filter(Boolean)
+        .join('；');
+      if (detailMessage) return detailMessage;
+    }
+    return null;
   }
 
   return error?.message || null;
+};
+
+const convertLegacyExcelForUpload = async (file: File, label: string): Promise<File> => {
+  const fileName = String(file?.name || '');
+  if (!/\.xls$/i.test(fileName) || /\.xlsx$/i.test(fileName)) {
+    return file;
+  }
+
+  try {
+    const xlsxBlob = await convertExcelToXlsx(file);
+    const convertedName = fileName.replace(/\.xls$/i, '.xlsx');
+    return new File(
+      [xlsxBlob],
+      convertedName,
+      {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        lastModified: Date.now()
+      }
+    );
+  } catch (error: any) {
+    const message = error?.message || '转换失败，请先在工具页手动转成 .xlsx';
+    throw new Error(`${label}自动转换失败：${message}`);
+  }
 };
 
 const normalizeBatchUploadJob = (payload: any): BatchUploadJobResult => {
@@ -1966,8 +2012,9 @@ const handleUploadYearData = async () => {
 
   uploadingYearData.value = true;
   try {
+    const uploadFile = await convertLegacyExcelForUpload(yearUploadFile.value, '月表文件');
     const formData = new FormData();
-    formData.append('file', yearUploadFile.value);
+    formData.append('file', uploadFile);
     formData.append('datasetType', yearUploadDatasetType.value);
     formData.append('year', year);
     formData.append('month', String(Number(month)));
@@ -2010,8 +2057,9 @@ const handleUploadYearBatchData = async () => {
   clearYearBatchUploadPolling();
   uploadingYearBatchData.value = true;
   try {
+    const uploadFile = await convertLegacyExcelForUpload(yearBatchUploadFile.value, '总表文件');
     const formData = new FormData();
-    formData.append('file', yearBatchUploadFile.value);
+    formData.append('file', uploadFile);
     formData.append('datasetType', yearBatchUploadDatasetType.value);
     formData.append('templateType', 'toad');
     const username = getCurrentUsername();
