@@ -964,6 +964,10 @@ export default defineComponent({
         question.value = formattedQuestion;
         mcqResults.value = [];  // 清空多标签页结果
 
+        // 重置 loading，因为 originalHandleSubmit 内部有 loading 守卫
+        // （MCQ格式化阶段已经将 loading 设为 true，会导致 originalHandleSubmit 直接 return）
+        loading.value = false;
+
         // 直接调用原来的发送逻辑
         await originalHandleSubmit();
 
@@ -1199,7 +1203,7 @@ export default defineComponent({
           return null;
         };
         
-        const FRONTEND_TIMEOUT_MS = 600000; // 前端超时600秒（10分钟，与后端一致）
+        const FRONTEND_TIMEOUT_MS = 600_000; // 前端超时10分钟
         
         try {
           // 使用AbortController实现超时控制

@@ -4734,12 +4734,14 @@ export default defineComponent({
               const row = (questions.value || []).find(x => String(x.qid) === qid)
               if (!row || res.ok === false) return
               const explain = (res.explain||'').trim()
+              const analysisChanged = explain && row.analysis !== explain
               if (explain) row.analysis = explain
               if (typeof res.answer_mismatch !== 'undefined' && (row.status==='none'||row.status==='draft')){
                 row.status = res.answer_mismatch ? 'abnormal' : 'draft'
               }
-              // 清除该题目的参考资料缓存，以便重新加载
-              if (qid) {
+              // 仅在解析内容实际变化时清除参考资料缓存
+              // 避免每次轮询都清除导致参考资料反复消失
+              if (qid && analysisChanged) {
                 delete sourcesLoaded[qid]
                 delete sourcesMap[qid]
                 delete sourcesError[qid]

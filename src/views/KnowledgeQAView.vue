@@ -537,7 +537,8 @@ import {
   type ReferenceSource,
   type StreamMessage,
   type ChatRequest,
-  type KeywordsData
+  type KeywordsData,
+  type StreamTimeoutOptions
 } from '@/utils/chatApi';
 import { API_ENDPOINTS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import {
@@ -953,6 +954,10 @@ export default defineComponent({
         question.value = formattedQuestion;
         mcqResults.value = [];  // 清空多标签页结果
 
+        // 重置 loading，因为 originalHandleSubmit 内部有 loading 守卫
+        // （MCQ格式化阶段已经将 loading 设为 true，会导致 originalHandleSubmit 直接 return）
+        loading.value = false;
+
         // 直接调用原来的发送逻辑
         await originalHandleSubmit();
 
@@ -980,6 +985,12 @@ export default defineComponent({
           });
         }
 
+        // MCQ 模式专用超时配置
+        const mcqTimeoutOptions: StreamTimeoutOptions = {
+          connectTimeoutMs: 600_000,  // 连接超时 10分钟
+          idleTimeoutMs: 600_000,     // 空闲超时 10分钟
+        };
+
         // 单个选项的处理函数
         const processOption = async (index: number, key: string, value: string): Promise<boolean> => {
           const formattedQuestion = `问题：${mcqData.stem}\n候选答案：\n${key}. ${value}`;
@@ -1000,7 +1011,9 @@ export default defineComponent({
                   mcqResults.value[index].loading = false;
                   resolve(false);  // 失败
                 }
-              }
+              },
+              undefined,          // signal: 使用内部 AbortController
+              mcqTimeoutOptions   // 超时配置
             ).catch((error: any) => {
               mcqResults.value[index].answer = `请求失败: ${error.message}`;
               mcqResults.value[index].loading = false;
@@ -1190,7 +1203,7 @@ export default defineComponent({
           return null;
         };
         
-        const FRONTEND_TIMEOUT_MS = 600000; // 前端超时600秒（10分钟，与后端一致）
+        const FRONTEND_TIMEOUT_MS = 600_000; // 前端超时10分钟
         
         try {
           // 使用AbortController实现超时控制

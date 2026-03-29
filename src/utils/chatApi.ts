@@ -153,14 +153,34 @@ export interface ChatRequest {
 }
 
 /**
+ * 流式请求超时配置
+ */
+export interface StreamTimeoutOptions {
+  /** 连接超时（毫秒）：等待服务器首次响应的最长时间，默认 30s */
+  connectTimeoutMs?: number;
+  /** 空闲超时（毫秒）：两次数据块之间的最长等待时间，默认 60s */
+  idleTimeoutMs?: number;
+}
+
+/** 默认超时配置 */
+const DEFAULT_STREAM_TIMEOUT: Required<StreamTimeoutOptions> = {
+  connectTimeoutMs: 600_000,
+  idleTimeoutMs: 600_000,
+};
+
+/**
  * 发送流式聊天请求
+ *
+ * @param signal  外部 AbortSignal（优先级最高，传入后内部不再创建定时器）
+ * @param timeoutOptions  超时配置（仅在未传 signal 时生效）
  */
 export async function sendStreamChatRequest(
   endpoint: string,
   payload: ChatRequest,
   token: string,
   onMessage: (message: StreamMessage) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutOptions?: StreamTimeoutOptions
 ): Promise<void> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -170,41 +190,87 @@ export async function sendStreamChatRequest(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-    signal
-  });
+  // ---- 超时控制 ----
+  const useInternalTimeout = !signal;
+  const opts = { ...DEFAULT_STREAM_TIMEOUT, ...timeoutOptions };
+  let controller: AbortController | undefined;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-  if (!response.ok) {
-    throw new Error(`服务器返回错误: ${response.status}`);
+  if (useInternalTimeout) {
+    controller = new AbortController();
+    signal = controller.signal;
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("无法获取响应流");
+  const resetIdleTimer = () => {
+    if (!useInternalTimeout || !controller) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      controller!.abort();
+    }, opts.idleTimeoutMs);
+  };
+
+  // 连接超时：仅控制 fetch() 本身
+  let connectTimer: ReturnType<typeof setTimeout> | null = null;
+  if (useInternalTimeout && controller) {
+    connectTimer = setTimeout(() => {
+      controller!.abort();
+    }, opts.connectTimeoutMs);
   }
 
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal
+    });
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    // fetch 成功，取消连接超时，启动空闲超时
+    if (connectTimer) clearTimeout(connectTimer);
+    connectTimer = null;
+    resetIdleTimer();
 
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() || "";
-
-    for (const part of parts) {
-      const normalized = part.replace(/[\r\n]+$/, '');
-      if (!normalized.trim()) continue;
-
-      const message = parseSSEMessage(normalized);
-      onMessage(message);
+    if (!response.ok) {
+      throw new Error(`服务器返回错误: ${response.status}`);
     }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("无法获取响应流");
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // 每收到数据就重置空闲计时器
+      resetIdleTimer();
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+
+      for (const part of parts) {
+        const normalized = part.replace(/[\r\n]+$/, '');
+        if (!normalized.trim()) continue;
+
+        const message = parseSSEMessage(normalized);
+        onMessage(message);
+      }
+    }
+  } catch (error: any) {
+    // 将 AbortError 转换为更友好的超时错误消息
+    if (error.name === 'AbortError' && useInternalTimeout) {
+      throw new Error('请求超时：服务器长时间未响应，请稍后重试');
+    }
+    throw error;
+  } finally {
+    if (connectTimer) clearTimeout(connectTimer);
+    if (idleTimer) clearTimeout(idleTimer);
   }
 }
 

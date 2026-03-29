@@ -66,7 +66,7 @@
     </div>
 
     <!-- 考试通知面板（可折叠 + 状态筛选 + 分页） -->
-    <div v-if="publishedExams.length > 0 && !examStarted" class="notification-panel">
+    <div v-if="activeExamCount > 0 && !examStarted" class="notification-panel">
       <div class="notification-header" @click="notificationCollapsed = !notificationCollapsed">
         <el-icon class="notification-icon"><Bell /></el-icon>
         <span>考试通知</span>
@@ -80,13 +80,6 @@
 
       <transition name="notify-slide">
         <div v-show="!notificationCollapsed" class="notification-body">
-          <!-- 显示已结束考试勾选 -->
-          <div v-if="endedExamCount > 0" class="exam-filter-bar">
-            <el-checkbox v-model="showEndedExams" @change="toggleShowEnded" size="small">
-              显示已结束的考试 ({{ endedExamCount }})
-            </el-checkbox>
-          </div>
-
           <!-- 考试列表 -->
           <div class="notification-list">
             <div v-if="filteredPublishedExams.length === 0" class="exam-empty">
@@ -1721,13 +1714,11 @@ export default defineComponent({
     const loadingExamNotifications = ref(false)
     const enteringExam = ref('')
     const notificationCollapsed = ref(false)
-    const showEndedExams = ref(false)
     const examNotificationPage = ref(1)
     const EXAM_PAGE_SIZE = 3
 
-    // 按状态筛选的考试列表（默认隐藏已结束）
+    // 按状态筛选的考试列表（排除已结束）
     const filteredPublishedExams = computed(() => {
-      if (showEndedExams.value) return publishedExams.value
       return publishedExams.value.filter(e => getExamStatus(e) !== 'ended')
     })
 
@@ -1740,11 +1731,6 @@ export default defineComponent({
     // 通知分页总数
     const examNotificationTotalPages = computed(() => {
       return Math.max(1, Math.ceil(filteredPublishedExams.value.length / EXAM_PAGE_SIZE))
-    })
-
-    // 已结束考试数量
-    const endedExamCount = computed(() => {
-      return publishedExams.value.filter(e => getExamStatus(e) === 'ended').length
     })
 
     // 进行中考试数量（用于角标）
@@ -2836,10 +2822,6 @@ export default defineComponent({
       return 'active'
     }
 
-    // 切换显示已结束时重置分页（v-model 已处理 boolean 切换）
-    const toggleShowEnded = () => {
-      examNotificationPage.value = 1
-    }
 
     // 进入已发布的考试（正式考试模式，不可重复进入）
     const currentExamId = ref('')  // 当前考试ID
@@ -3924,14 +3906,11 @@ export default defineComponent({
       getExamStatus,
       enterPublishedExam,
       notificationCollapsed,
-      showEndedExams,
       examNotificationPage,
       filteredPublishedExams,
       paginatedExams,
       examNotificationTotalPages,
-      endedExamCount,
       activeExamCount,
-      toggleShowEnded,
       // 防作弊相关
       switchCount,
       maxSwitchCount,
