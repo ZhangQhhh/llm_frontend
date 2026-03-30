@@ -758,12 +758,48 @@
                     </div>
                   </transition>
 
-                  <div v-if="yearMissingPeopleMonths.length || yearMissingTrafficMonths.length" class="year-missing-panel right-missing-panel">
-                    <div v-if="yearMissingPeopleMonths.length">
-                      人员缺失月份：{{ yearMissingPeopleMonths.join(', ') }}
+                  <div v-if="hasYearValidationIssues" class="year-missing-panel right-missing-panel">
+                    <div v-if="yearMissingAnalysisPeopleMonths.length || yearMissingAnalysisTrafficMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">分析期缺失</div>
+                      <div v-if="yearMissingAnalysisPeopleMonths.length">
+                        人员月份：{{ yearMissingAnalysisPeopleMonths.join(', ') }}
+                      </div>
+                      <div v-if="yearMissingAnalysisTrafficMonths.length">
+                        航班月份：{{ yearMissingAnalysisTrafficMonths.join(', ') }}
+                      </div>
                     </div>
-                    <div v-if="yearMissingTrafficMonths.length">
-                      航班缺失月份：{{ yearMissingTrafficMonths.join(', ') }}
+                    <div v-if="yearMissingMomPeopleMonths.length || yearMissingMomTrafficMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">环比期缺失</div>
+                      <div v-if="yearMissingMomPeopleMonths.length">
+                        人员月份：{{ yearMissingMomPeopleMonths.join(', ') }}
+                      </div>
+                      <div v-if="yearMissingMomTrafficMonths.length">
+                        航班月份：{{ yearMissingMomTrafficMonths.join(', ') }}
+                      </div>
+                    </div>
+                    <div v-if="yearMissingYoyPeopleMonths.length || yearMissingYoyTrafficMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">同比期缺失</div>
+                      <div v-if="yearMissingYoyPeopleMonths.length">
+                        人员月份：{{ yearMissingYoyPeopleMonths.join(', ') }}
+                      </div>
+                      <div v-if="yearMissingYoyTrafficMonths.length">
+                        航班月份：{{ yearMissingYoyTrafficMonths.join(', ') }}
+                      </div>
+                    </div>
+                    <div v-if="!yearMissingAnalysisPeopleMonths.length && !yearMissingMomPeopleMonths.length && !yearMissingYoyPeopleMonths.length && yearMissingPeopleMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">人员缺失月份</div>
+                      <div>{{ yearMissingPeopleMonths.join(', ') }}</div>
+                    </div>
+                    <div v-if="!yearMissingAnalysisTrafficMonths.length && !yearMissingMomTrafficMonths.length && !yearMissingYoyTrafficMonths.length && yearMissingTrafficMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">航班缺失月份</div>
+                      <div>{{ yearMissingTrafficMonths.join(', ') }}</div>
+                    </div>
+                    <div v-if="yearAppendixCompareMonths.length" class="year-missing-group">
+                      <div class="year-missing-title">附录对比口径</div>
+                      <div>
+                        {{ yearAppendixCompareType === 'yoy' ? '全年按同比期展示' : '当前按环比期展示' }}：
+                        {{ yearAppendixCompareMonths.join(', ') }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -956,6 +992,14 @@ const uploadingYearBatchData = ref(false);
 const cancelingYearBatchImportJob = ref(false);
 const yearMissingPeopleMonths = ref<string[]>([]);
 const yearMissingTrafficMonths = ref<string[]>([]);
+const yearMissingAnalysisPeopleMonths = ref<string[]>([]);
+const yearMissingAnalysisTrafficMonths = ref<string[]>([]);
+const yearMissingMomPeopleMonths = ref<string[]>([]);
+const yearMissingYoyPeopleMonths = ref<string[]>([]);
+const yearMissingMomTrafficMonths = ref<string[]>([]);
+const yearMissingYoyTrafficMonths = ref<string[]>([]);
+const yearAppendixCompareMonths = ref<string[]>([]);
+const yearAppendixCompareType = ref<'mom' | 'yoy' | ''>('');
 const yearApiUseCompatPrefix = ref(false);
 const yearBatchUploadDialogVisible = ref(false);
 const yearBatchUploadJob = ref<BatchUploadJobResult | null>(null);
@@ -1140,6 +1184,19 @@ const canGenerate = computed(() => {
   }
   return yearEndMonth.value >= yearStartMonth.value;
 });
+
+const hasYearValidationIssues = computed(() =>
+  [
+    yearMissingPeopleMonths.value,
+    yearMissingTrafficMonths.value,
+    yearMissingAnalysisPeopleMonths.value,
+    yearMissingAnalysisTrafficMonths.value,
+    yearMissingMomPeopleMonths.value,
+    yearMissingYoyPeopleMonths.value,
+    yearMissingMomTrafficMonths.value,
+    yearMissingYoyTrafficMonths.value
+  ].some((months) => months.length > 0)
+);
 
 const canUploadYearData = computed(() =>
   Boolean(yearUploadFile.value && yearUploadMonth.value && !uploadingYearData.value)
@@ -1760,6 +1817,62 @@ const downloadReportBlob = (blobData: any, headers: any, fallbackName: string) =
   window.URL.revokeObjectURL(url);
 };
 
+const normalizeMonthArray = (value: any): string[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    : [];
+
+const uniqueMonths = (...groups: string[][]): string[] =>
+  Array.from(new Set(groups.flat().filter(Boolean)));
+
+const clearYearValidationState = () => {
+  yearMissingPeopleMonths.value = [];
+  yearMissingTrafficMonths.value = [];
+  yearMissingAnalysisPeopleMonths.value = [];
+  yearMissingAnalysisTrafficMonths.value = [];
+  yearMissingMomPeopleMonths.value = [];
+  yearMissingYoyPeopleMonths.value = [];
+  yearMissingMomTrafficMonths.value = [];
+  yearMissingYoyTrafficMonths.value = [];
+  yearAppendixCompareMonths.value = [];
+  yearAppendixCompareType.value = '';
+};
+
+const applyYearValidationState = (rawData: any) => {
+  const data = rawData && typeof rawData === 'object' ? rawData : {};
+  const analysisPeople = normalizeMonthArray(data.missingAnalysisPeopleMonths);
+  const analysisTraffic = normalizeMonthArray(data.missingAnalysisTrafficMonths);
+  const momPeople = normalizeMonthArray(data.missingMomPeopleMonths);
+  const yoyPeople = normalizeMonthArray(data.missingYoyPeopleMonths);
+  const momTraffic = normalizeMonthArray(data.missingMomTrafficMonths);
+  const yoyTraffic = normalizeMonthArray(data.missingYoyTrafficMonths);
+
+  yearMissingAnalysisPeopleMonths.value = analysisPeople;
+  yearMissingAnalysisTrafficMonths.value = analysisTraffic;
+  yearMissingMomPeopleMonths.value = momPeople;
+  yearMissingYoyPeopleMonths.value = yoyPeople;
+  yearMissingMomTrafficMonths.value = momTraffic;
+  yearMissingYoyTrafficMonths.value = yoyTraffic;
+
+  yearMissingPeopleMonths.value = normalizeMonthArray(data.missingPeopleMonths);
+  if (!yearMissingPeopleMonths.value.length) {
+    yearMissingPeopleMonths.value = uniqueMonths(analysisPeople, momPeople, yoyPeople);
+  }
+
+  yearMissingTrafficMonths.value = normalizeMonthArray(data.missingTrafficMonths);
+  if (!yearMissingTrafficMonths.value.length) {
+    yearMissingTrafficMonths.value = uniqueMonths(analysisTraffic, momTraffic, yoyTraffic);
+  }
+
+  yearAppendixCompareMonths.value = normalizeMonthArray(data.appendixCompareMonths);
+  yearAppendixCompareType.value =
+    data.appendixCompareType === 'mom' || data.appendixCompareType === 'yoy'
+      ? data.appendixCompareType
+      : '';
+};
+
 const parseGenerateErrorMessage = async (error: any): Promise<string | null> => {
   const blobData = error?.response?.data;
   if (blobData instanceof Blob) {
@@ -1767,12 +1880,7 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
     try {
       const payload = JSON.parse(text);
       const data = payload?.data || {};
-      if (Array.isArray(data.missingPeopleMonths)) {
-        yearMissingPeopleMonths.value = data.missingPeopleMonths;
-      }
-      if (Array.isArray(data.missingTrafficMonths)) {
-        yearMissingTrafficMonths.value = data.missingTrafficMonths;
-      }
+      applyYearValidationState(data);
       const detail = payload?.detail;
       if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
       if (typeof data?.message === 'string' && data.message.trim()) return data.message;
@@ -1793,12 +1901,7 @@ const parseGenerateErrorMessage = async (error: any): Promise<string | null> => 
   const payload = error?.response?.data;
   if (payload && typeof payload === 'object') {
     const data = payload?.data || {};
-    if (Array.isArray(data.missingPeopleMonths)) {
-      yearMissingPeopleMonths.value = data.missingPeopleMonths;
-    }
-    if (Array.isArray(data.missingTrafficMonths)) {
-      yearMissingTrafficMonths.value = data.missingTrafficMonths;
-    }
+    applyYearValidationState(data);
     const detail = payload?.detail;
     if (typeof payload?.message === 'string' && payload.message.trim()) return payload.message;
     if (typeof data?.message === 'string' && data.message.trim()) return data.message;
@@ -2166,8 +2269,7 @@ const resetForm = () => {
   yearBatchUploadDatasetType.value = 'people';
   yearBatchUploadFile.value = null;
   cancelingYearBatchImportJob.value = false;
-  yearMissingPeopleMonths.value = [];
-  yearMissingTrafficMonths.value = [];
+  clearYearValidationState();
   yearBatchUploadJob.value = null;
   yearBatchUploadRequestError.value = '';
   yearBatchUploadDialogVisible.value = false;
@@ -2224,8 +2326,7 @@ const handleGenerateYearReport = async () => {
   progressPercent.value = 0;
   progressStatus.value = '';
   progressStep.value = '正在校验窗口完整性...';
-  yearMissingPeopleMonths.value = [];
-  yearMissingTrafficMonths.value = [];
+  clearYearValidationState();
 
   let stopPolling = () => {};
 
@@ -2248,18 +2349,13 @@ const handleGenerateYearReport = async () => {
     }
 
     const validateData = validateRes.data.data || {};
-    yearMissingPeopleMonths.value = Array.isArray(validateData.missingPeopleMonths)
-      ? validateData.missingPeopleMonths
-      : [];
-    yearMissingTrafficMonths.value = Array.isArray(validateData.missingTrafficMonths)
-      ? validateData.missingTrafficMonths
-      : [];
+    applyYearValidationState(validateData);
 
     if (!validateData.ready) {
       progressPercent.value = 100;
       progressStatus.value = 'exception';
       progressStep.value = '数据不完整，无法生成';
-      ElMessage.warning('校验未通过，请先补齐缺失月份后再生成');
+      ElMessage.warning('校验未通过，请先补齐分析期、环比期、同比期缺失月份后再生成');
       return;
     }
 
@@ -3045,6 +3141,14 @@ const formatDate = (dateStr: string): string => {
   margin-top: auto;
   border: 1px solid #fcd34d;
   background: linear-gradient(180deg, #fff8db 0%, #fef3c7 100%);
+}
+
+.year-missing-group + .year-missing-group {
+  margin-top: 8px;
+}
+
+.year-missing-title {
+  font-weight: 700;
 }
 
 .year-files-panel {
