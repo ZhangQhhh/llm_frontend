@@ -649,6 +649,8 @@
               </el-table-column>
             </el-table>
           </el-card>
+
+          <backup-manage-panel />
         </el-col>
 
         <el-col :xs="24" :md="8">
@@ -894,6 +896,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CirclePlus, RefreshRight, User, Message, Lock, ArrowDownBold, Refresh, Search, Postcard, CreditCard, Top, Delete } from '@element-plus/icons-vue'
 import { API_ENDPOINTS } from '@/config/api/api'
 import { fetchWithAuth, getApiUrl } from '@/utils/request'
+import BackupManagePanel from '@/components/super-admin/BackupManagePanel.vue'
 
 interface CreateAdminPayload {
   username: string
@@ -944,6 +947,9 @@ type EditableTargetUser = AdminUser & {
 
 export default defineComponent({
   name: 'SuperAdminView',
+  components: {
+    BackupManagePanel
+  },
   setup() {
     const form = reactive<CreateAdminPayload>({
       username: '',
