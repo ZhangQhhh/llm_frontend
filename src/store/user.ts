@@ -1,5 +1,5 @@
 import router from "@/router";
-import { API_ENDPOINTS } from "@/config/api/api";
+import { API_ENDPOINTS, STORAGE_KEYS } from "@/config/api/api";
 import http from "@/config/api/http";
 import { isIpBlockedError, redirectToIpBlockedPage } from "@/utils/errorHandler";
 import { stopSessionWatch } from "@/utils/sessionWatcher";
@@ -85,6 +85,21 @@ const state: UserState = {
   department: null,  // 所属部门
 };
 
+function persistStoredUser(state: UserState) {
+  if (!state.username && !state.role) {
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    return;
+  }
+
+  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({
+    username: state.username,
+    role: state.role,
+    isBjzxAdmin: state.isBjzxAdmin || false,
+    department: state.department || null,
+    hasChangedName: state.hasChangedName
+  }));
+}
+
 // [9] 整个模块导出时，指定为 Module<模块State, 根State>
 export default {
   // namespaced: true, // 如果你使用了模块命名空间，可以打开这个
@@ -145,12 +160,7 @@ export default {
       state.isBjzxAdmin = user.isBjzxAdmin || false;
       state.department = user.department || null;
       // 同步用户信息到 localStorage（供 http 拦截器使用）
-      localStorage.setItem('multi_turn_chat_user', JSON.stringify({
-        username: user.username,
-        role: user.role,
-        isBjzxAdmin: user.isBjzxAdmin || false,
-        department: user.department || null
-      }));
+      persistStoredUser(state);
     },
     // [10] 为 token 参数添加类型
     updateToken(state: UserState, token: string) {
@@ -172,7 +182,7 @@ export default {
       state.isBjzxAdmin = false;
       state.department = null;
       // 清除 localStorage 中的用户信息
-      localStorage.removeItem('multi_turn_chat_user');
+      localStorage.removeItem(STORAGE_KEYS.USER);
     },
     // Set permissions
     setPermissions(state: UserState, permissions: string[]) {
@@ -185,14 +195,17 @@ export default {
     },
     updateUsername(state: UserState, username: string) {
       state.username = username;
+      persistStoredUser(state);
     },
     // 设置是否已修改过用户名
     setHasChangedName(state: UserState, value: boolean) {
       state.hasChangedName = value;
+      persistStoredUser(state);
     },
     // 设置部门
     setDepartment(state: UserState, department: string) {
       state.department = department;
+      persistStoredUser(state);
     }
   },
   actions: {  // 修改state的函数写在actions里边
@@ -279,7 +292,7 @@ export default {
             email: userInfo.email || null,
             policeId: userInfo.policeId || null,
             idCardNumber: userInfo.idCardNumber || null,
-            hasChangedName: userInfo.hasChangedName ?? false,  // 默认为 false
+            hasChangedName: typeof userInfo.hasChangedName === 'boolean' ? userInfo.hasChangedName : undefined,
             isBjzxAdmin: userInfo.isBjzxAdmin ?? false,  // 默认为 false
             department: userInfo.department || null,  // 添加部门字段
             is_login: true,
