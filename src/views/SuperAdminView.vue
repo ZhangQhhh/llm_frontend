@@ -1088,8 +1088,7 @@ export default defineComponent({
 
     const userEditRules = reactive<FormRules<UserEditForm>>({
       newUsername: [
-        { required: true, message: '请输入新用户名', trigger: 'blur' },
-        { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }
+        { required: true, message: '请输入新用户名', trigger: 'blur' }
       ],
       newIdCardNumber: [
         { required: true, message: '请输入新身份证号', trigger: 'blur' },
