@@ -1,5 +1,5 @@
 <template>
-  <div class="exam-page">
+  <div :class="['exam-page', { 'light-mode': isLightMode }]">
     <!-- 顶部工具栏 -->
     <div class="topbar">
       <div class="topwrap">
@@ -57,6 +57,16 @@
         </div>
         
         <div class="user-actions">
+          <el-button 
+            size="small" 
+            :type="isLightMode ? 'warning' : 'default'" 
+            @click="toggleLightMode" 
+            circle
+            :title="isLightMode ? '切换深色模式' : '切换浅色模式'"
+            class="theme-toggle-btn"
+          >
+            {{ isLightMode ? '🌙' : '☀️' }}
+          </el-button>
           <el-tag v-if="isLowPerformanceMode" type="warning" size="small" effect="plain" style="margin-right: 8px;">
             ⚡ 低配模式
           </el-tag>
@@ -1341,7 +1351,7 @@ export default defineComponent({
     const loadPracticeKnowledgePoints = async () => {
       loadingPracticeKnowledgePoints.value = true
       try {
-        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0`)
+        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&all_banks=true`)
         if (bankData.ok) {
           const approvedQuestions = (bankData.items || []).filter((q: any) => q.status === 'approved')
           const kpList: string[] = []
@@ -1434,6 +1444,7 @@ export default defineComponent({
     const lastSwitchTimestamp = ref(0)  // 用于防抖，避免重复计数
     const blurTimeoutId = ref<number | null>(null)  // blur 延迟检测定时器
     const initialWindowSize = ref({ width: 0, height: 0 })  // 初始窗口大小
+    const initialDevicePixelRatio = ref(1)  // 初始缩放比例（用于区分Ctrl+/- 缩放与真实窗口缩小）
     const resizeIntervalId = ref<number | null>(null)  // 窗口缩小持续检测定时器
     const isWindowShrunk = ref(false)  // 窗口是否处于缩小状态
 
@@ -1850,6 +1861,13 @@ export default defineComponent({
       }
       return saqQuestions.value.filter(q => q.category === selectedSaqCategory.value)
     })
+
+    // ======= 浅色模式切换 =======
+    const isLightMode = ref(localStorage.getItem('exam_light_mode') !== 'false')
+    const toggleLightMode = () => {
+      isLightMode.value = !isLightMode.value
+      localStorage.setItem('exam_light_mode', String(isLightMode.value))
+    }
 
     // ======= 性能优化：低配模式分页 =======
     const isLowPerformanceMode = computed(() => store.getters['performance/isLowPerformanceMode'])
@@ -2634,9 +2652,13 @@ export default defineComponent({
       }
     }
 
-    // 检查窗口是否缩小
+    // 检查窗口是否缩小（排除 Ctrl+/- 浏览器缩放的影响）
     const checkWindowShrunk = () => {
       if (initialWindowSize.value.width === 0 || initialWindowSize.value.height === 0) return false
+      const currentDPR = window.devicePixelRatio || 1
+      const initDPR = initialDevicePixelRatio.value
+      // devicePixelRatio 变化说明是 Ctrl+/- 缩放，不是真实窗口缩小
+      if (Math.abs(currentDPR - initDPR) > 0.01) return false
       const currentWidth = window.innerWidth
       const currentHeight = window.innerHeight
       const initWidth = initialWindowSize.value.width
@@ -2679,6 +2701,19 @@ export default defineComponent({
       // 如果没有记录初始窗口大小，跳过
       if (initialWindowSize.value.width === 0 || initialWindowSize.value.height === 0) return
       
+      // Ctrl+/- 缩放会改变 devicePixelRatio，此时重新基线化窗口大小，不触发检测
+      const currentDPR = window.devicePixelRatio || 1
+      if (Math.abs(currentDPR - initialDevicePixelRatio.value) > 0.01) {
+        // 缩放操作：更新基线，恢复正常状态
+        initialWindowSize.value = { width: window.innerWidth, height: window.innerHeight }
+        initialDevicePixelRatio.value = currentDPR
+        if (isWindowShrunk.value) {
+          isWindowShrunk.value = false
+          stopShrinkInterval()
+        }
+        return
+      }
+      
       const shrunk = checkWindowShrunk()
       
       if (shrunk && !isWindowShrunk.value) {
@@ -2699,6 +2734,7 @@ export default defineComponent({
         width: window.innerWidth,
         height: window.innerHeight
       }
+      initialDevicePixelRatio.value = window.devicePixelRatio || 1
     }
 
     // 重置防作弊状态（开始新考试时调用）
@@ -2869,7 +2905,7 @@ export default defineComponent({
       startingPractice.value = true
       try {
         // 1. 从题库获取所有已通过的题目（包含图片数据）
-        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&include_images=true`)
+        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&include_images=true&all_banks=true`)
         if (!bankData.ok) {
           throw new Error(bankData.msg || '获取题库失败')
         }
@@ -3227,7 +3263,9 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             attempt_id: attemptId.value,
-            answers
+            answers,
+            switch_count: switchCount.value,
+            switch_events: switchLogs.value
           })
         })
 
@@ -3955,6 +3993,9 @@ export default defineComponent({
       deleteExamRecord,
       // 防作弊配置
       antiCheatConfig,
+      // 浅色模式
+      isLightMode,
+      toggleLightMode,
       // Icons
       Bell,
       Refresh,
@@ -6148,5 +6189,492 @@ export default defineComponent({
   .wrong-book-actions .el-button {
     flex: 1;
   }
+}
+
+/* ========================================
+   浅色模式（Light Mode）样式覆盖
+   ======================================== */
+
+/* 主题切换按钮 */
+.theme-toggle-btn {
+  font-size: 16px !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+}
+
+/* 页面背景：保留背景图，使用白色蒙版（不覆盖全局导览栏） */
+.exam-page.light-mode {
+  color: #1f2937;
+}
+
+.exam-page.light-mode::before {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* 顶栏 */
+.exam-page.light-mode .topbar {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.exam-page.light-mode .topwrap h1 {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.exam-page.light-mode .control-group {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+}
+
+.exam-page.light-mode .muted {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .pill {
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(124, 58, 237, 0.08) 100%);
+  color: #4f46e5;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.1);
+}
+
+.exam-page.light-mode .user-actions {
+  border-left: 1px solid #d1d5db;
+}
+
+.exam-page.light-mode .user-name {
+  color: #374151;
+}
+
+/* 通知面板 */
+.exam-page.light-mode .notification-header {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.03) 100%);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #d97706;
+}
+
+.exam-page.light-mode .notification-header:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.06) 100%);
+}
+
+.exam-page.light-mode .collapse-arrow {
+  color: #d97706;
+}
+
+.exam-page.light-mode .notification-body {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .notification-item {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.exam-page.light-mode .notification-item:hover {
+  background: #f9fafb;
+}
+
+.exam-page.light-mode .notification-item.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(16, 185, 129, 0.02) 100%);
+  border-left: 3px solid #10b981;
+}
+
+.exam-page.light-mode .exam-name {
+  color: #111827;
+}
+
+.exam-page.light-mode .exam-meta {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .exam-time {
+  color: #9ca3af;
+}
+
+.exam-page.light-mode .exam-desc {
+  color: #9ca3af;
+  border-left: 2px solid #d1d5db;
+}
+
+.exam-page.light-mode .exam-pagination {
+  border-top: 1px solid #f3f4f6;
+}
+
+.exam-page.light-mode .exam-filter-bar {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+/* 卡片 */
+.exam-page.light-mode .card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.exam-page.light-mode .card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 侧栏 */
+.exam-page.light-mode .side h3 {
+  color: #1f2937;
+}
+
+.exam-page.light-mode .side::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.exam-page.light-mode .side::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
+.exam-page.light-mode .side::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 导航按钮 */
+.exam-page.light-mode .navbtn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.exam-page.light-mode .navbtn:hover {
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+}
+
+.exam-page.light-mode .navbtn.answered {
+  border-color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+  color: #4f46e5;
+}
+
+.exam-page.light-mode .navbtn.current {
+  outline: 2px solid #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
+}
+
+.exam-page.light-mode .nav-count {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .nav-summary {
+  border-top: 1px solid #e5e7eb !important;
+}
+
+/* 头部标题 */
+.exam-page.light-mode .head h2 {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.exam-page.light-mode .head .sub {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .head-stat .stat-label {
+  color: #9ca3af;
+}
+
+.exam-page.light-mode .head-stat .stat-value {
+  color: #374151;
+}
+
+.exam-page.light-mode .head-divider {
+  color: #d1d5db;
+}
+
+/* 题目卡片 */
+.exam-page.light-mode .q {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.exam-page.light-mode .q:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.exam-page.light-mode .qheader b {
+  color: #111827;
+}
+
+/* 选项 */
+.exam-page.light-mode .opt {
+  border: 2px solid #d1d5db;
+  background: #fafafa;
+  color: #374151;
+}
+
+.exam-page.light-mode .opt:hover:not(:disabled) {
+  border-color: #4f46e5;
+  background: #f5f3ff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+}
+
+.exam-page.light-mode .opt.active {
+  border-color: #4f46e5;
+  background: #ede9fe;
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+}
+
+.exam-page.light-mode .opt.correct {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.exam-page.light-mode .opt:disabled {
+  opacity: 0.7;
+}
+
+/* 选项/题干图片 */
+.exam-page.light-mode .q-image {
+  border: 1px solid #d1d5db;
+}
+
+.exam-page.light-mode .q-image:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.exam-page.light-mode .opt-image {
+  border: 1px solid #d1d5db;
+}
+
+.exam-page.light-mode .opt-image:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 分区标题 */
+.exam-page.light-mode .section-header {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .section-count {
+  color: #6b7280;
+}
+
+/* 岗位分类筛选 */
+.exam-page.light-mode .category-filter {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .category-filter .filter-label {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .category-filter :deep(.el-radio-button__inner) {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #6b7280;
+}
+
+.exam-page.light-mode .category-filter :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  border-color: #60a5fa;
+  color: #fff;
+}
+
+.exam-page.light-mode .category-filter :deep(.el-radio-button__inner:hover) {
+  color: #3b82f6;
+}
+
+/* 简答题答题区域 */
+.exam-page.light-mode .saq-answer-area {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .saq-answer-area :deep(.el-textarea__inner) {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+}
+
+.exam-page.light-mode .saq-answer-area :deep(.el-textarea__inner:focus) {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+
+/* 成绩面板/解析面板标题 */
+.exam-page.light-mode .result-panel h3,
+.exam-page.light-mode .review-panel h3,
+.exam-page.light-mode .wrong-stats-panel h3 {
+  color: #1f2937;
+}
+
+/* 解析区域 */
+.exam-page.light-mode .analysis {
+  background: #f5f3ff;
+  border: 2px dashed #c4b5fd;
+  color: #374151;
+}
+
+.exam-page.light-mode .analysis::before {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+}
+
+.exam-page.light-mode .analysis-images {
+  border-top: 1px dashed #c4b5fd;
+}
+
+.exam-page.light-mode .analysis-tab-bar :deep(.el-radio-button__inner) {
+  background: #fff;
+  border-color: #c4b5fd;
+  color: #6b7280;
+}
+
+.exam-page.light-mode .analysis-tab-bar :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+/* 知识点统计 */
+.exam-page.light-mode .kp-stats h4,
+.exam-page.light-mode .review-suggestion h4 {
+  color: #1f2937;
+}
+
+.exam-page.light-mode .kp-header {
+  background: #f5f3ff;
+  color: #374151;
+}
+
+.exam-page.light-mode .kp-name {
+  color: #374151;
+}
+
+.exam-page.light-mode .kp-row:not(.kp-header):hover {
+  background: #f9fafb;
+}
+
+/* 复习建议 */
+.exam-page.light-mode .review-suggestion p {
+  color: #4b5563;
+}
+
+/* 简答题解析 */
+.exam-page.light-mode .saq-review-area {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .saq-label {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .saq-comment {
+  color: #4f46e5;
+}
+
+.exam-page.light-mode .saq-answer-box {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .saq-answer-box.my-answer {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.exam-page.light-mode .saq-answer-box.ref-answer {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.exam-page.light-mode .saq-answer-content {
+  color: #1f2937;
+}
+
+/* 知识条款 */
+.exam-page.light-mode .saq-clauses-detail {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+}
+
+.exam-page.light-mode .saq-clause-text {
+  color: #374151;
+}
+
+.exam-page.light-mode .saq-clause-score {
+  color: #6b7280;
+}
+
+/* 低配模式下的简化导航 */
+.exam-page.light-mode .simple-nav-stats .stat-item {
+  background: #eff6ff;
+}
+
+.exam-page.light-mode .simple-nav-stats .stat-item.answered {
+  background: #ecfdf5;
+}
+
+.exam-page.light-mode .simple-nav-stats .stat-item.pending {
+  background: #fffbeb;
+}
+
+.exam-page.light-mode .simple-nav-stats .stat-label {
+  color: #6b7280;
+}
+
+.exam-page.light-mode .simple-nav-progress .progress-bar {
+  background: #e5e7eb;
+}
+
+/* 低配模式标题 */
+.exam-page.light-mode.low-perf-mode .head h2,
+.exam-page.light-mode .low-perf-mode .head h2 {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: unset !important;
+}
+
+/* 空状态 */
+.exam-page.light-mode .empty-hint {
+  color: #9ca3af;
+}
+
+/* 错题本面板 */
+.exam-page.light-mode .wrong-book-content {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.exam-page.light-mode .wrong-book-stats {
+  color: #374151;
+}
+
+/* 自动保存状态 */
+.exam-page.light-mode .auto-save-status .saved {
+  color: #059669;
+}
+
+.exam-page.light-mode .auto-save-status .saving {
+  color: #d97706;
+}
+
+/* Element Plus 组件在浅色模式下的适配 */
+.exam-page.light-mode :deep(.el-select .el-input__wrapper) {
+  background-color: #fff;
+}
+
+.exam-page.light-mode :deep(.el-input-number) {
+  --el-fill-color-blank: #fff;
 }
 </style>

@@ -750,7 +750,7 @@
 
                   >
 
-                    <!-- <el-option label="Qwen-Plus (云端)" value="qwen-plus" /> -->
+                    <el-option label="Qwen-Plus (云端)" value="qwen-plus" />
 
                     <el-option label="Qwen (通用)" value="qwen3-32b" />
 

@@ -1858,8 +1858,14 @@
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
             
+            <!-- 加载中状态 -->
+            <div v-if="loadingGradesStats" style="text-align: center; padding: 60px 0;">
+              <el-icon class="is-loading" :size="32" color="#409eff"><Loading /></el-icon>
+              <p style="margin-top: 12px; color: #909399;">正在加载成绩数据…</p>
+            </div>
+            
             <!-- 成绩统计图表 -->
-            <div v-if="selectedExportExam && gradesStats" class="grades-stats-panel">
+            <div v-else-if="selectedExportExam && gradesStats" class="grades-stats-panel">
               <el-row :gutter="20">
                 <!-- 总体概览 -->
                 <el-col :span="8">
@@ -3330,11 +3336,12 @@ export default defineComponent({
       { value: 'qwen2025',      label: 'Qwen (增强)' },
       { value: 'deepseek',      label: 'DeepSeekv3.1' },
       { value: 'deepseek-3.2',  label: 'DeepSeekv3.2' },
-      //{ value: 'qwen-plus',     label: 'Qwen (云端) ' },
+      { value: 'qwen-plus',     label: 'Qwen (云端) ' },
       //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
       //{ value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
     const llmModelId = ref('deepseek')
+    const fallbackModelId = ref('qwen-plus')
     const topN = ref(10)
     const thinking = ref(true)
     const insertBlock = ref(false)
@@ -3904,7 +3911,7 @@ export default defineComponent({
     const filteredGradesDetails = computed(() => {
       const details = gradesStats.value?.details || []
       const keyword = gradesSearch.value.trim().toLowerCase()
-      if (!keyword) return [...details]
+      if (!keyword) return details
       return details.filter((d: any) =>
         (d.student_name || '').toLowerCase().includes(keyword) ||
         (d.student_id || '').toLowerCase().includes(keyword)
@@ -4688,6 +4695,7 @@ export default defineComponent({
       try{
         const req:any = { 
           model_id: llmModelId.value, 
+          fallback_model_id: fallbackModelId.value || undefined,
           thinking: thinking.value, 
           rerank_top_n: topN.value, 
           use_insert_block: insertBlock.value,
@@ -4990,8 +4998,8 @@ export default defineComponent({
     const loadQuestions = async () => {
       loadingQuestions.value = true
       try {
-        // 不分页(page=0)，加载图片数据，按题库筛选
-        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&include_images=true&bank_id=${encodeURIComponent(currentBankId.value)}`, { method: 'GET', headers: getAuthHeaders(false) })
+        // 不分页(page=0)，不加载图片（图片由 loadPageImages 懒加载），按题库筛选
+        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&bank_id=${encodeURIComponent(currentBankId.value)}`, { method: 'GET', headers: getAuthHeaders(false) })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
@@ -5018,10 +5026,45 @@ export default defineComponent({
             knowledge_points: it.knowledge_points || [],
           }
         })
+        // 题目加载完成后，异步加载当前页图片
+        nextTick(() => loadPageImages())
       } catch (error: any) {
         ElMessage.error('加载题库失败：' + (error?.message || String(error)))
       } finally {
         loadingQuestions.value = false
+      }
+    }
+
+    // 懒加载当前页含图片题目的图片数据
+    const loadPageImages = async () => {
+      const qidsWithImages = pagedQuestions.value
+        .filter(q => q.has_images && (!q.stem_images || q.stem_images.length === 0))
+        .map(q => q.qid)
+      if (qidsWithImages.length === 0) return
+      try {
+        const r = await fetch(`${MCQ_BASE_URL}/bank/batch_images`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ qids: qidsWithImages })
+        })
+        const j = await r.json()
+        if (j?.ok && j.images) {
+          for (const q of questions.value) {
+            const imgData = j.images[q.qid]
+            if (!imgData) continue
+            q.stem_images = imgData.stem_images || []
+            q.analysis_images = imgData.analysis_images || []
+            // 将 option_images 合并到已有的 options 中
+            const oi = imgData.option_images || {}
+            for (const opt of q.options) {
+              if (oi[opt.label] && oi[opt.label].length > 0) {
+                opt.images = oi[opt.label]
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('加载页面图片失败:', e)
       }
     }
 
@@ -5063,7 +5106,11 @@ export default defineComponent({
           body: JSON.stringify({ items: [{ id: qid, status: 'approved', explain: question.analysis || '' }] })
         })
         const data = await resp.json()
-        if (data?.ok) { ElMessage.success('已通过'); loadQuestions() }
+        if (data?.ok) {
+          ElMessage.success('已通过')
+          // 直接更新本地状态，避免重新加载全部题目
+          if (question) question.status = 'approved'
+        }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) { 
         if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) 
@@ -5079,7 +5126,12 @@ export default defineComponent({
           body: JSON.stringify({ ids: [qid], reason: (reason || '不符合要求') })
         })
         const data = await resp.json()
-        if (data?.ok) { ElMessage.success('已驳回'); loadQuestions() }
+        if (data?.ok) {
+          ElMessage.success('已驳回')
+          // 直接更新本地状态，避免重新加载全部题目
+          const question = (questions.value || []).find(q => q.qid === qid)
+          if (question) question.status = 'rejected'
+        }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) { if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) }
     }
@@ -5105,7 +5157,8 @@ export default defineComponent({
         const data = await resp.json()
         if (data?.ok) {
           ElMessage.success('删除成功')
-          loadQuestions()
+          // 直接从本地列表移除，避免重新加载全部题目
+          questions.value = questions.value.filter(q => q.qid !== qid)
         } else {
           throw new Error(data?.msg || '删除失败')
         }
@@ -5139,7 +5192,11 @@ export default defineComponent({
           throw new Error(`响应格式错误，预期 JSON 但收到: ${text.substring(0, 100)}`)
         }
         const data = await resp.json()
-        if (data?.ok) { ElMessage.success(`已通过 ${data.count || candidates.length} 题`); loadQuestions() }
+        if (data?.ok) {
+          ElMessage.success(`已通过 ${data.count || candidates.length} 题`)
+          // 直接更新本地状态，避免重新加载全部题目
+          for (const c of candidates) c.status = 'approved'
+        }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) {
         if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error))
@@ -5169,7 +5226,8 @@ export default defineComponent({
         const data = await resp.json()
         if (!data?.ok) throw new Error(data?.msg || '批量驳回失败')
         ElMessage.success(`批量驳回 ${data.count||candidates.length} 题`)
-        await loadQuestions()
+        // 直接更新本地状态，避免重新加载全部题目
+        for (const c of candidates) c.status = 'rejected'
       } catch (e:any) { ElMessage.error(e?.message || e) }
       finally { rejectingAll.value = false }
     }
@@ -5211,9 +5269,11 @@ export default defineComponent({
         const data = await resp.json()
         if (data?.ok) {
           ElMessage.success(`已删除 ${data.count} 个题目`)
+          // 直接从本地列表移除，避免重新加载全部题目
+          const deletedSet = new Set(selectedQuestions.value)
+          questions.value = questions.value.filter(q => !deletedSet.has(q.qid))
           selectedQuestions.value = []
           selectAll.value = false
-          loadQuestions()
         } else {
           throw new Error(data?.msg || '批量删除失败')
         }
@@ -5617,10 +5677,12 @@ export default defineComponent({
         const finalExplain = (editBuf.explain || '').trim()
         // 根据是否有实际内容的选项自动判定题目类型
         // 同时清理空选项（无文本且无图片的选项不保存）
+        // 但保留原本已存在的选项（避免图片题的选项被误删）
+        const existingLabels = new Set((row.options || []).map((o: any) => o.label))
         const cleanedOptions: Record<string, string> = {}
         const optImgs = editBuf.option_images || {}
         for (const [k, v] of Object.entries(editBuf.options || {})) {
-          if ((v as string || '').trim() !== '' || (optImgs[k] && optImgs[k].length > 0)) {
+          if ((v as string || '').trim() !== '' || (optImgs[k] && optImgs[k].length > 0) || existingLabels.has(k)) {
             cleanedOptions[k] = v as string
           }
         }
@@ -5671,23 +5733,29 @@ export default defineComponent({
         const updated = (up.items && up.items[0]) || null
         if (updated) {
           row.stem = updated.stem || ''
-          row.options = normalizeOptions(updated.options || {})
+          row.options = normalizeOptions(updated.options || {}, updated.option_images || {})
           row.answer = (updated.answer || '').toString().toUpperCase()
           row.analysis = updated.explain || ''
           row.status = updated.status || ((row.analysis || '').trim() ? 'draft' : 'none')
           row.qtype = updated.qtype || newQtype
           row.knowledge_clauses = updated.knowledge_clauses || []
           row.knowledge_points = updated.knowledge_points || []
+          row.has_images = updated.has_images ?? false
+          row.stem_images = updated.stem_images || []
+          row.analysis_images = updated.analysis_images || []
         } else {
           // 理论上不会走到这里，兜底用前端缓冲区
           row.stem = editBuf.stem
-          row.options = normalizeOptions(editBuf.options)
+          row.options = normalizeOptions(editBuf.options, editBuf.option_images || {})
           row.answer = (editBuf.answer || '').toString().toUpperCase()
           row.analysis = editBuf.explain || ''
           row.status = (row.analysis && row.analysis.trim()) ? 'draft' : 'none'
           row.qtype = newQtype
           row.knowledge_clauses = editBuf.knowledge_clauses || []
           row.knowledge_points = editSelectedKnowledgePoints.value || []
+          row.has_images = !!(editBuf.stem_images?.length || Object.keys(editBuf.option_images || {}).length || editBuf.analysis_images?.length)
+          row.stem_images = editBuf.stem_images || []
+          row.analysis_images = editBuf.analysis_images || []
         }
 
         ElMessage.success('保存成功')
@@ -5704,6 +5772,7 @@ export default defineComponent({
           items: [{ qid: row.qid, stem: row.stem, options: Object.fromEntries((row.options||[]).map((o:any)=>[o.label,o.text])) }],
           thinking: thinking.value,
           model_id: llmModelId.value,
+          fallback_model_id: fallbackModelId.value || undefined,
           rerank_top_n: topN.value,
           use_insert_block: insertBlock.value
         }
@@ -6005,6 +6074,11 @@ export default defineComponent({
     const pagedQuestions = computed(() => {
       const start = (page.value - 1) * pageSize.value
       return (filteredQuestions.value || []).slice(start, start + pageSize.value)
+    })
+
+    // 翻页 / 筛选 / 搜索 变化时懒加载当前页图片
+    watch([page, pageSize, statusFilter, searchQuery], () => {
+      nextTick(() => loadPageImages())
     })
 
     const processAnalysisText = (text: string | null | undefined): string => {
@@ -7739,13 +7813,27 @@ export default defineComponent({
       }
     })
 
-    onMounted(() => {
-      if (showBjzxTabs.value) {
-        loadBanksList()
-        loadQuestions()
-        loadExportPapers()
-        loadPaperList()
+    // 懒加载：切换到特定 Tab 时才加载对应数据，避免 onMounted 并发过多请求
+    const exportTabLoaded = ref(false)
+    const publishTabLoaded = ref(false)
+    watch(activeTab, (tab) => {
+      if (tab === 'export' && !exportTabLoaded.value) {
+        exportTabLoaded.value = true
         loadPublishedExams()
+      }
+      if (tab === 'publish' && !publishTabLoaded.value) {
+        publishTabLoaded.value = true
+        if (!publishedExams.value.length) loadPublishedExams()
+        loadExportPapers()
+      }
+    })
+
+    onMounted(async () => {
+      if (showBjzxTabs.value) {
+        // 先等题库列表加载完（确定 currentBankId），再加载题目，避免竞态导致"暂无题目"
+        await loadBanksList()
+        loadQuestions()
+        loadPaperList()
         checkPendingTask()
         loadKnowledgePointOptions()
         loadGroupOptions()
