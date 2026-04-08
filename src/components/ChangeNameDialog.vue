@@ -96,6 +96,11 @@ export default defineComponent({
     
     // 获取用户是否已登录
     const isLoggedIn = computed(() => store.state.user.is_login)
+    const hasChangedName = computed(() => store.state.user.hasChangedName)
+
+    const extractUserInfo = (payload: any) => {
+      return payload?.data?.data || payload?.data || payload || {}
+    }
 
     // 表单验证规则
     const rules: FormRules = {
@@ -126,18 +131,31 @@ export default defineComponent({
     // 从后端获取用户是否已修改过用户名
     const checkHasChangedName = async () => {
       if (hasChecked.value) return
+
+      if (typeof hasChangedName.value === 'boolean') {
+        showDialog.value = hasChangedName.value === false
+        hasChecked.value = true
+        return
+      }
       
       try {
         const response = await http.get(API_ENDPOINTS.AUTH.USER_INFO)
-        // 后端返回 { id, username, email, hasChangedName }
-        const userInfo = response.data
+        const userInfo = extractUserInfo(response.data)
+        const nextHasChangedName =
+          typeof userInfo.hasChangedName === 'boolean' ? userInfo.hasChangedName : undefined
         
-        if (userInfo.hasChangedName === false) {
+        if (typeof userInfo.username === 'string' && userInfo.username.trim()) {
+          store.commit('updateUsername', userInfo.username.trim())
+        }
+
+        if (nextHasChangedName === false) {
           showDialog.value = true
         }
         
         // 更新 store 中的状态
-        store.commit('setHasChangedName', userInfo.hasChangedName)
+        if (typeof nextHasChangedName === 'boolean') {
+          store.commit('setHasChangedName', nextHasChangedName)
+        }
         hasChecked.value = true
       } catch (error) {
         console.error('获取用户信息失败:', error)
@@ -165,9 +183,10 @@ export default defineComponent({
         await formRef.value.validate()
         
         loading.value = true
+        const nextUsername = formData.newName.trim()
         
         const response = await http.post(API_ENDPOINTS.AUTH.CHANGE_NAME, {
-          newUsername: formData.newName
+          newUsername: nextUsername
         })
 
         // 后端返回 { code: 200, message: "success", data: null }
@@ -175,7 +194,7 @@ export default defineComponent({
           ElMessage.success('用户名修改成功！')
           
           // 更新 store 中的用户名和 hasChangedName 状态
-          store.commit('updateUsername', formData.newName)
+          store.commit('updateUsername', nextUsername)
           store.commit('setHasChangedName', true)
           
           showDialog.value = false

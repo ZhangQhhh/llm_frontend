@@ -50,6 +50,12 @@ export const API_ENDPOINTS = {
     IP_BLACKLIST_LIST: `/api/admin/ip-blacklist/`,
     IP_BLACKLIST_ADD: `/api/admin/ip-blacklist/`,
     IP_BLACKLIST_DELETE: (identifier: string | number) => `/api/admin/ip-blacklist/${encodeURIComponent(String(identifier))}/`,
+    BACKUP_FILES: `/api/admin/backup/files`,
+    BACKUP_PREVIEWS: `/api/admin/backup/previews`,
+    BACKUP_PREVIEW_TABLES: (previewId: string) => `/api/admin/backup/previews/${encodeURIComponent(previewId)}/tables`,
+    BACKUP_PREVIEW_TABLE: (previewId: string, tableName: string) => `/api/admin/backup/previews/${encodeURIComponent(previewId)}/tables/${encodeURIComponent(tableName)}`,
+    BACKUP_RESTORE: `/api/admin/backup/restore`,
+    BACKUP_PREVIEW_DELETE: (previewId: string) => `/api/admin/backup/previews/${encodeURIComponent(previewId)}`,
   },
   USER: {
     LOGIN: `/user/account/token/`,
