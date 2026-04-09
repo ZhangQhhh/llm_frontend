@@ -823,14 +823,38 @@
                         无参考资料
                       </div>
                       <template v-else>
-                        <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
-                          <div class="src-title">{{ getSourceTitle(s, si) }}</div>
-                          <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
-                          <div v-if="sourcePassages(s).length" class="src-passages">
-                            <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
+                        <!-- 分组结构：展开所有分组 -->
+                        <template v-if="isGroupedSources(q.qid)">
+                          <details
+                            v-for="(group, gi) in sourcesMap[q.qid]"
+                            :key="group.label || gi"
+                            class="src-group"
+                            open
+                          >
+                            <summary>选项 {{ group.label || '?' }} 的参考资料</summary>
+                            <div class="src-group-body">
+                              <div v-for="(s, si) in group.sources || []" :key="si" class="src-card">
+                                <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                                <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                                <div v-if="sourcePassages(s).length" class="src-passages">
+                                  <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
+                                </div>
+                                <div v-else class="src-empty">无片段</div>
+                              </div>
+                            </div>
+                          </details>
+                        </template>
+                        <!-- 非分组结构 -->
+                        <template v-else>
+                          <div v-for="(s, si) in sourcesMap[q.qid] || []" :key="si" class="src-card">
+                            <div class="src-title">{{ getSourceTitle(s, si) }}</div>
+                            <div v-if="getSourceMeta(s)" class="src-meta">{{ getSourceMeta(s) }}</div>
+                            <div v-if="sourcePassages(s).length" class="src-passages">
+                              <div v-for="(p, pi) in sourcePassages(s)" :key="pi" class="passage"><pre>{{ p }}</pre></div>
+                            </div>
+                            <div v-else class="src-empty">无片段</div>
                           </div>
-                          <div v-else class="src-empty">无片段</div>
-                        </div>
+                        </template>
                       </template>
                     </details>
                   </template>
@@ -1000,13 +1024,13 @@
               <template #header>
                 <span style="font-weight: 600;">生成试卷</span>
               </template>
-              
+
               <!-- 试卷标题和生成模式 -->
               <el-form label-width="100px" style="margin-bottom: 16px;">
                 <el-form-item label="试卷标题" style="margin-bottom: 12px;">
                   <el-input v-model="paperTitle" placeholder="请输入试卷名称" style="width: 300px" />
                 </el-form-item>
-                
+
                 <!-- 分数设置 -->
                 <el-form-item label="分数设置" style="margin-bottom: 12px;">
                   <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
@@ -1039,7 +1063,7 @@
                     </span>
                   </div>
                 </el-form-item>
-                
+
                 <!-- 知识点筛选（放在生成模式前，对随机和手动都生效） -->
                 <el-form-item label="考点筛选" style="margin-bottom: 12px;">
                   <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -1075,7 +1099,7 @@
                     </span>
                   </div>
                 </el-form-item>
-                
+
                 <!-- 生成模式选择 -->
                 <el-form-item label="生成模式" style="margin-bottom: 12px;">
                   <el-radio-group v-model="paperGenerateMode">
@@ -1083,7 +1107,7 @@
                     <el-radio value="random">随机抽取题目</el-radio>
                   </el-radio-group>
                 </el-form-item>
-                
+
                 <!-- 随机抽取配置 -->
                 <el-form-item v-if="paperGenerateMode === 'random'" label="题目数量" style="margin-bottom: 12px;">
                   <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -1112,7 +1136,7 @@
                     </span>
                   </div>
                 </el-form-item>
-                
+
                 <!-- 手动模式下的不定项配置 -->
                 <el-form-item v-if="paperGenerateMode === 'manual'" label="不定项题" style="margin-bottom: 12px;">
                   <el-checkbox v-model="enableIndeterminate" style="margin-right: 16px;">启用不定项选择题</el-checkbox>
@@ -1121,14 +1145,14 @@
                       <el-radio value="select">手动选择题目</el-radio>
                       <el-radio value="count">按数量抽取</el-radio>
                     </el-radio-group>
-                    
+
                     <template v-if="indeterminateMode === 'select'">
                       <span style="color: #67c23a; font-size: 13px;">
                         已选 {{ selectedIndeterminateQuestions.length }} 题为不定项
                         <span v-if="selectedIndeterminateQuestions.length > 0">（点击下方题目的"不定项"按钮可取消）</span>
                       </span>
                     </template>
-                    
+
                     <template v-else>
                       <span style="margin-right: 8px;">单选</span>
                       <el-input-number v-model="indeterminateSingleCount" :min="0" :max="99" size="small" style="width: 80px;" />
@@ -1138,7 +1162,7 @@
                     </template>
                   </template>
                 </el-form-item>
-                
+
                 <!-- 密码保护 -->
                 <el-form-item label="密码保护" style="margin-bottom: 8px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
@@ -1154,18 +1178,18 @@
                     <span style="color: #909399; font-size: 12px;">（用于查看/编辑/下载）</span>
                   </div>
                 </el-form-item>
-                
+
                 <!-- 生成按钮 -->
                 <el-form-item label="" style="margin-bottom: 0;">
                   <el-button type="primary" @click="createPaper" :loading="creatingPaper">
-                    {{ paperGenerateMode === 'random' 
-                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomSaqCount + randomIndeterminateCount}题)` 
+                    {{ paperGenerateMode === 'random'
+                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomSaqCount + randomIndeterminateCount}题)`
                       : `生成试卷 ${selectedPaperQuestions.length > 0 ? '(' + selectedPaperQuestions.length + '题)' : '(全部)'}` }}
                   </el-button>
                   <span class="status-msg">{{ paperMessage }}</span>
                 </el-form-item>
               </el-form>
-              
+
               <!-- 筛选和搜索 -->
               <div class="action-bar" style="margin-bottom: 12px;">
                 <el-radio-group v-model="paperQuestionFilter" size="small" @change="paperQuestionPage = 1">
@@ -1194,7 +1218,7 @@
                   （已通过共 {{ approvedQuestions.length }} 题）
                 </span>
               </div>
-              
+
               <!-- 题目列表 -->
               <div v-if="approvedQuestions.length === 0" style="text-align: center; padding: 30px; color: #999;">
                 暂无已通过的题目，请先在题库管理中通过题目
@@ -1225,10 +1249,10 @@
                       <el-tag :type="q.qtype === 'saq' ? 'primary' : (isMultiChoice(q) ? 'warning' : 'info')" size="small" style="margin-right: 8px;">
                         {{ q.qtype === 'saq' ? '简答' : (isMultiChoice(q) ? '多选' : '单选') }}
                       </el-tag>
-                      <el-tag 
-                        v-if="enableIndeterminate && indeterminateMode === 'select' && q.qtype !== 'saq'" 
+                      <el-tag
+                        v-if="enableIndeterminate && indeterminateMode === 'select' && q.qtype !== 'saq'"
                         :type="selectedIndeterminateQuestions.includes(q.qid) ? 'success' : 'info'"
-                        size="small" 
+                        size="small"
                         style="margin-right: 8px; cursor: pointer;"
                         :effect="selectedIndeterminateQuestions.includes(q.qid) ? 'dark' : 'plain'"
                         @click="toggleIndeterminate(q.qid)"
@@ -1321,7 +1345,7 @@
                 />
               </div>
             </el-card>
-            
+
             <!-- 试卷列表 -->
             <el-card shadow="never">
               <template #header>
@@ -1364,7 +1388,7 @@
                 </el-button>
                 <span style="color: #909399; font-size: 12px;">（可修改试卷内容并批量解析）</span>
               </div>
-              
+
               <div style="margin-bottom: 12px;">
                 <el-input v-model="paperListSearch" placeholder="搜索试卷名称" clearable size="small" style="width: 260px;" :prefix-icon="Search" @input="paperListPage = 1" />
               </div>
@@ -1405,7 +1429,7 @@
                 />
               </div>
             </el-card>
-            
+
             <!-- 上传试卷预览编辑对话框 -->
             <el-dialog
               v-model="paperPreviewVisible"
@@ -1505,7 +1529,7 @@
                   <span v-if="paperExplainMsg" style="color: #909399; font-size: 13px;">{{ paperExplainMsg }}</span>
                 </div>
               </div>
-              
+
               <div style="max-height: 500px; overflow-y: auto;">
                 <div
                   v-for="(item, idx) in uploadedPaperItems"
@@ -1565,7 +1589,7 @@
                       删除
                     </el-button>
                   </div>
-                  
+
                   <!-- 预览模式 -->
                   <div v-if="editingPaperItemIdx !== idx" class="preview-content">
                     <div class="preview-stem">{{ item.stem || '（题干为空）' }}</div>
@@ -1632,7 +1656,7 @@
                     <!-- 图片题标记 -->
                     <el-tag v-if="item.has_images" type="info" size="small" style="margin-top: 4px;">📷 含图片</el-tag>
                   </div>
-                  
+
                   <!-- 编辑模式 -->
                   <div v-else class="preview-edit">
                     <el-form label-width="60px" size="small">
@@ -1738,7 +1762,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <template #footer>
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                   <div style="display: flex; align-items: center; gap: 8px;">
@@ -1841,10 +1865,10 @@
           <div class="tab-content">
             <div class="action-bar">
               <el-select v-model="selectedExportExam" placeholder="选择考试场次" filterable style="width: 480px" @change="onExportExamChange">
-                <el-option 
-                  v-for="exam in sortedPublishedExams" 
-                  :key="exam.exam_id" 
-                  :label="`${exam.exam_name} (${exam.paper_title})`" 
+                <el-option
+                  v-for="exam in sortedPublishedExams"
+                  :key="exam.exam_id"
+                  :label="`${exam.exam_name} (${exam.paper_title})`"
                   :value="exam.exam_id"
                 />
               </el-select>
@@ -1857,13 +1881,13 @@
               </el-button> -->
               <span class="status-msg">{{ exportMessage }}</span>
             </div>
-            
+
             <!-- 加载中状态 -->
             <div v-if="loadingGradesStats" style="text-align: center; padding: 60px 0;">
               <el-icon class="is-loading" :size="32" color="#409eff"><Loading /></el-icon>
               <p style="margin-top: 12px; color: #909399;">正在加载成绩数据…</p>
             </div>
-            
+
             <!-- 成绩统计图表 -->
             <div v-else-if="selectedExportExam && gradesStats" class="grades-stats-panel">
               <el-row :gutter="20">
@@ -1896,7 +1920,7 @@
                     </div>
                   </el-card>
                 </el-col>
-                
+
                 <!-- 分数分布 -->
                 <el-col :span="8">
                   <el-card shadow="hover" class="stats-card">
@@ -1917,7 +1941,7 @@
                     </div>
                   </el-card>
                 </el-col>
-                
+
                 <!-- 最高/最低分 -->
                 <el-col :span="8">
                   <el-card shadow="hover" class="stats-card">
@@ -1949,7 +1973,7 @@
                   </el-card>
                 </el-col>
               </el-row>
-              
+
               <!-- 易错知识点统计 -->
               <el-card v-if="topKpErrors && topKpErrors.length > 0" shadow="hover" style="margin-top: 20px;">
                 <template #header>
@@ -1964,9 +1988,9 @@
                     <div class="kp-rank" :class="{ 'top-three': Number(idx) < 3 }">{{ Number(idx) + 1 }}</div>
                     <div class="kp-name" :title="kp.name">{{ kp.name }}</div>
                     <div class="kp-bar-wrapper">
-                      <div 
-                        class="kp-bar" 
-                        :style="{ 
+                      <div
+                        class="kp-bar"
+                        :style="{
                           width: getKpBarWidth(kp.error_count) + '%',
                           background: getKpBarColor(Number(idx))
                         }"
@@ -1977,7 +2001,7 @@
                   </div>
                 </div>
               </el-card>
-              
+
               <!-- 错题 Top10 -->
               <el-card v-if="topWrongQuestions && topWrongQuestions.length > 0" shadow="hover" style="margin-top: 20px;">
                 <template #header>
@@ -1995,9 +2019,9 @@
                     </el-tag>
                     <div class="wq-stem" :title="q.stem_full || q.stem">{{ q.stem }}</div>
                     <div class="wq-bar-wrapper">
-                      <div 
-                        class="wq-bar" 
-                        :style="{ 
+                      <div
+                        class="wq-bar"
+                        :style="{
                           width: getWrongQBarWidth(q.error_count) + '%',
                           background: getWrongQBarColor(Number(idx))
                         }"
@@ -2008,7 +2032,7 @@
                   </div>
                 </div>
               </el-card>
-              
+
               <!-- 成绩明细表 -->
               <el-card shadow="hover" style="margin-top: 20px;">
                 <template #header>
@@ -2076,11 +2100,11 @@
                 </div>
               </el-card>
             </div>
-            
+
             <el-empty v-else-if="selectedExportPaper && !loadingGradesStats" description="暂无成绩数据" />
           </div>
         </el-tab-pane>
-        
+
         <!-- 考试发布 -->
         <el-tab-pane v-if="showBjzxTabs" label="考试发布" name="publish">
           <div class="tab-content">
@@ -2089,12 +2113,12 @@
               <template #header>
                 <span style="font-weight: 600;">📢 发布新考试</span>
               </template>
-              
+
               <el-form :model="publishForm" label-width="100px" style="max-width: 700px;">
                 <el-form-item label="考试名称" required>
                   <el-input v-model="publishForm.examName" placeholder="请输入考试名称，如：2024年度业务考核" />
                 </el-form-item>
-                
+
                 <el-form-item label="选择试卷" required>
                   <el-select v-model="publishForm.paperId" placeholder="选择已生成的试卷" style="width: 100%">
                     <el-option
@@ -2105,7 +2129,7 @@
                     />
                   </el-select>
                 </el-form-item>
-                
+
                 <el-form-item label="考试时间" required>
                   <el-date-picker
                     v-model="publishForm.timeRange"
@@ -2118,12 +2142,12 @@
                     style="width: 100%"
                   />
                 </el-form-item>
-                
+
                 <el-form-item label="考试时长">
                   <el-input-number v-model="publishForm.durationMin" :min="10" :max="180" :step="5" />
                   <span style="margin-left: 10px; color: #909399;">分钟（学生进入考试后的答题时间）</span>
                 </el-form-item>
-                
+
                 <el-form-item label="目标分组">
                   <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                     <div style="display: flex; gap: 10px; width: 100%;">
@@ -2144,9 +2168,9 @@
                           :value="group.id"
                         />
                       </el-select>
-                      <el-button 
-                        type="primary" 
-                        plain 
+                      <el-button
+                        type="primary"
+                        plain
                         :disabled="publishForm.targetDepartments.length === 0"
                         :loading="loadingPersonTree"
                         @click="openPersonSelectDialog"
@@ -2161,7 +2185,7 @@
                     </div>
                   </div>
                 </el-form-item>
-                
+
                 <el-form-item label="考试说明">
                   <el-input
                     v-model="publishForm.description"
@@ -2170,7 +2194,7 @@
                     placeholder="可选，填写考试注意事项等"
                   />
                 </el-form-item>
-                
+
                 <el-form-item>
                   <el-button type="primary" @click="publishExam" :loading="publishing" :icon="Bell">
                     发布考试通知
@@ -2179,7 +2203,7 @@
                 </el-form-item>
               </el-form>
             </el-card>
-            
+
             <!-- 已发布考试列表 -->
             <el-card shadow="never">
               <template #header>
@@ -2191,12 +2215,12 @@
                   </div>
                 </div>
               </template>
-              
+
               <div style="margin-bottom: 12px;">
                 <el-input v-model="examSearch" placeholder="搜索考试名称/试卷" clearable size="small" style="width: 260px;" :prefix-icon="Search" @input="examPage = 1" />
               </div>
               <el-empty v-if="filteredExams.length === 0" description="暂无已发布的考试" />
-              
+
               <el-table v-else :data="pagedExams" border stripe style="width: 100%">
                 <el-table-column prop="exam_name" label="考试名称" min-width="180" />
                 <el-table-column prop="paper_title" label="试卷" min-width="150" />
@@ -2513,9 +2537,9 @@
       <el-dialog v-model="kpManageDialogVisible" title="管理考点列表" width="600px">
         <div style="margin-bottom: 16px;">
           <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <el-input 
-              v-model="newKpName" 
-              placeholder="输入新考点名称" 
+            <el-input
+              v-model="newKpName"
+              placeholder="输入新考点名称"
               @keyup.enter="addKnowledgePoint"
               style="flex: 1;"
             />
@@ -2525,17 +2549,17 @@
             共 {{ knowledgePointOptions.length }} 个考点（数据保存在浏览器本地）
           </div>
         </div>
-        
+
         <div style="max-height: 400px; overflow-y: auto;">
-          <div 
-            v-for="(kp, idx) in knowledgePointOptions" 
+          <div
+            v-for="(kp, idx) in knowledgePointOptions"
             :key="idx"
             class="kp-manage-item"
           >
             <template v-if="editingKpIndex === idx">
-              <el-input 
-                v-model="editingKpName" 
-                size="small" 
+              <el-input
+                v-model="editingKpName"
+                size="small"
                 style="flex: 1;"
                 @keyup.enter="saveEditKp"
               />
@@ -2546,9 +2570,9 @@
               <span class="kp-name">《{{ kp }}》</span>
               <div class="kp-actions">
                 <el-button size="small" type="primary" link @click="startEditKp(idx)">编辑</el-button>
-                <el-popconfirm 
-                  title="确定删除此考点？" 
-                  confirm-button-text="删除" 
+                <el-popconfirm
+                  title="确定删除此考点？"
+                  confirm-button-text="删除"
                   cancel-button-text="取消"
                   @confirm="deleteKnowledgePoint(idx)"
                 >
@@ -2560,12 +2584,12 @@
             </template>
           </div>
         </div>
-        
+
         <template #footer>
           <el-button @click="kpManageDialogVisible = false">关闭</el-button>
-          <el-popconfirm 
-            title="确定重置为默认考点列表？" 
-            confirm-button-text="确定" 
+          <el-popconfirm
+            title="确定重置为默认考点列表？"
+            confirm-button-text="确定"
             cancel-button-text="取消"
             @confirm="resetKnowledgePoints"
           >
@@ -2665,13 +2689,13 @@
               <span class="stat-value">{{ kpDetailData.questions?.length || 0 }}</span>
             </div>
           </div>
-          
+
           <el-divider content-position="left">错误学生</el-divider>
           <div class="error-students-list">
             <el-tag v-for="name in kpDetailData.error_students" :key="name" size="small" style="margin: 2px;">{{ name }}</el-tag>
             <span v-if="!kpDetailData.error_students?.length" style="color: #909399;">暂无</span>
           </div>
-          
+
           <el-divider content-position="left">易错题目 Top5</el-divider>
           <div class="detail-questions">
             <div v-for="(q, idx) in kpDetailData.top5_questions" :key="q.qid" class="detail-question-item">
@@ -2710,7 +2734,7 @@
               <span class="stat-value error">{{ ((questionDetailData.error_count / questionDetailData.total_participants) * 100).toFixed(1) }}%</span>
             </div>
           </div>
-          
+
           <el-divider content-position="left">题目信息</el-divider>
           <div class="question-detail-content">
             <div class="qd-stem">
@@ -2728,7 +2752,7 @@
               <div class="answer-content">{{ questionDetailData.question?.answer }}</div>
             </div>
           </div>
-          
+
           <el-divider v-if="questionDetailData.question?.qtype !== 'saq'" content-position="left">错误选项分布</el-divider>
           <div v-if="questionDetailData.question?.qtype !== 'saq'" class="wrong-choice-dist">
             <div v-for="[label, count] in questionDetailData.wrong_choice_distribution" :key="label" class="wcd-item">
@@ -2740,7 +2764,7 @@
             </div>
             <div v-if="!questionDetailData.wrong_choice_distribution?.length" style="color: #909399;">暂无选项分布数据</div>
           </div>
-          
+
           <el-divider content-position="left">错误学生</el-divider>
           <div class="error-students-list">
             <el-tag v-for="name in questionDetailData.error_students" :key="name" size="small" style="margin: 2px;">{{ name }}</el-tag>
@@ -2970,7 +2994,7 @@ export default defineComponent({
     const username = computed(() => store.state.user.username)
     const userRole = computed(() => store.getters.userRole)
     const isBjzxAdmin = computed(() => store.state.user.isBjzxAdmin || false)
-    
+
     // 通用请求头（包含用户信息和边检智学管理员标识）
     const getAuthHeaders = (includeContentType = true) => {
       const headers: Record<string, string> = {
@@ -2983,11 +3007,11 @@ export default defineComponent({
       }
       return headers
     }
-    
+
     // Tab权限控制
     const showAdminTabs = computed(() => canAccessAdminTabs(userRole.value))
     const showBjzxTabs = computed(() => canAccessBjzxTabs(userRole.value, isBjzxAdmin.value))
-    
+
     const roleText = computed(() => {
       const role = userRole.value as UserRole
       return role ? RoleNames[role] : '普通用户'
@@ -3170,7 +3194,7 @@ export default defineComponent({
     const parseOptionAnalyses = (analysis: string): Record<string, string> => {
       const result: Record<string, string> = {}
       if (!analysis) return result
-      
+
       // 使用【选项X分析】标记分割各选项段落（比 A. 格式更可靠，避免误匹配内部 【证据链验证】 等）
       const optionPattern = /【选项([A-H])分析】([\s\S]*?)(?=【选项[A-H]分析】|【答案汇总|说明：本步骤|$)/g
       let match
@@ -3181,7 +3205,7 @@ export default defineComponent({
           result[label] = content
         }
       }
-      
+
       return result
     }
 
@@ -3189,7 +3213,7 @@ export default defineComponent({
     const getAnalysisForTab = (qid: string, analysis: string, tab: string): string => {
       if (!analysis) return ''
       if (tab === 'all') return analysis
-      
+
       // 优先使用后端返回的per_option数据
       const perOpts = perOptionMap[qid]
       if (perOpts && perOpts.length > 0) {
@@ -3198,7 +3222,7 @@ export default defineComponent({
           return opt.explain
         }
       }
-      
+
       // 回退：使用正则解析（兼容旧数据）
       const optionAnalyses = parseOptionAnalyses(analysis)
       return optionAnalyses[tab] || '（无该选项解析）'
@@ -3208,17 +3232,17 @@ export default defineComponent({
     const getSourcesForTab = (qid: string, tab: string): any[] => {
       const src = sourcesMap[qid]
       if (!Array.isArray(src) || !src.length) return []
-      
+
       // 如果是"全部"Tab，返回所有
       if (tab === 'all') return src
-      
+
       // 检查是否为分组结构
       const first = src[0] as any
       if (first && typeof first === 'object' && Array.isArray(first.sources)) {
         // 分组结构，只返回对应选项的组
         return src.filter((group: any) => group.label === tab)
       }
-      
+
       // 非分组结构，返回全部
       return src
     }
@@ -3336,7 +3360,7 @@ export default defineComponent({
       { value: 'qwen2025',      label: 'Qwen (增强)' },
       { value: 'deepseek',      label: 'DeepSeekv3.1' },
       { value: 'deepseek-3.2',  label: 'DeepSeekv3.2' },
-      //{ value: 'qwen-plus',     label: 'Qwen (云端) ' },
+      { value: 'qwen-plus',     label: 'Qwen (云端) ' },
       //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
       //{ value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
@@ -3566,7 +3590,7 @@ export default defineComponent({
     const loadingPaperDetail = ref(false)
     const isEditingExistingPaper = ref(false)
     const editPaperOriginalId = ref('')
-    
+
     // 试卷密码保护相关
     const paperPassword = ref('')  // 保存试卷时设置的密码
     const paperPasswordDialogVisible = ref(false)  // 密码验证对话框
@@ -3921,7 +3945,7 @@ export default defineComponent({
       const start = (gradesPage.value - 1) * gradesPageSize.value
       return filteredGradesDetails.value.slice(start, start + gradesPageSize.value)
     })
-    
+
     // 分数分布计算
     const scoreDistribution = computed(() => {
       if (!gradesStats.value?.details?.length) return []
@@ -3948,45 +3972,45 @@ export default defineComponent({
         percent: total > 0 ? (r.count / total) * 100 : 0
       }))
     })
-    
+
     // 易错知识点 Top10
     const topKpErrors = computed(() => {
       return gradesStats.value?.top_kp_errors || []
     })
-    
+
     // 错题 Top10
     const topWrongQuestions = computed(() => {
       return gradesStats.value?.top_wrong_questions || []
     })
-    
+
     // 计算知识点柱状图宽度百分比
     const getKpBarWidth = (errorCount: number) => {
-      const maxCount = topKpErrors.value.length > 0 
-        ? Math.max(...topKpErrors.value.map((kp: any) => kp.error_count)) 
+      const maxCount = topKpErrors.value.length > 0
+        ? Math.max(...topKpErrors.value.map((kp: any) => kp.error_count))
         : 1
       return (errorCount / maxCount) * 100
     }
-    
+
     // 计算错题柱状图宽度百分比
     const getWrongQBarWidth = (errorCount: number) => {
-      const maxCount = topWrongQuestions.value.length > 0 
-        ? Math.max(...topWrongQuestions.value.map((q: any) => q.error_count)) 
+      const maxCount = topWrongQuestions.value.length > 0
+        ? Math.max(...topWrongQuestions.value.map((q: any) => q.error_count))
         : 1
       return (errorCount / maxCount) * 100
     }
-    
+
     // 获取知识点柱状图颜色
     const getKpBarColor = (index: number) => {
       const colors = ['#f56c6c', '#e6a23c', '#f89c3d', '#409eff', '#67c23a', '#909399', '#b0b0b0', '#c0c0c0', '#d0d0d0', '#e0e0e0']
       return colors[index] || '#909399'
     }
-    
+
     // 获取错题柱状图颜色
     const getWrongQBarColor = (index: number) => {
       const colors = ['#e74c3c', '#e67e22', '#f39c12', '#3498db', '#2ecc71', '#9b59b6', '#1abc9c', '#34495e', '#95a5a6', '#7f8c8d']
       return colors[index] || '#95a5a6'
     }
-    
+
     // 获取题型标签
     const getQtypeLabel = (qtype: string) => {
       const map: Record<string, string> = { single: '单选', multi: '多选', saq: '简答' }
@@ -3997,12 +4021,12 @@ export default defineComponent({
     const kpDetailDialogVisible = ref(false)
     const loadingKpDetail = ref(false)
     const kpDetailData = ref<any>(null)
-    
+
     // 错题详情弹窗
     const questionDetailDialogVisible = ref(false)
     const loadingQuestionDetail = ref(false)
     const questionDetailData = ref<any>(null)
-    
+
     // 查看知识点详情
     const viewKpDetail = async (kpName: string) => {
       if (!selectedExportExam.value) return
@@ -4026,7 +4050,7 @@ export default defineComponent({
         loadingKpDetail.value = false
       }
     }
-    
+
     // 查看错题详情
     const viewQuestionDetail = async (qid: string) => {
       if (!selectedExportExam.value) return
@@ -4050,7 +4074,7 @@ export default defineComponent({
         loadingQuestionDetail.value = false
       }
     }
-    
+
     // 作弊详情弹窗
     const cheatDetailDialogVisible = ref(false)
     const cheatDetailData = ref<any>(null)
@@ -4310,7 +4334,7 @@ export default defineComponent({
           const qKps = (q.knowledge_points && q.knowledge_points.length > 0)
             ? q.knowledge_points
             : extractKnowledgePointsFromAnalysis(q.analysis || '')
-          return qKps.some((qKp: string) => 
+          return qKps.some((qKp: string) =>
             selectedKnowledgePoints.value.some(selKp => isSameKnowledgePoint(qKp, selKp))
           )
         })
@@ -4468,7 +4492,7 @@ export default defineComponent({
         ElMessage.warning('请选择 .docx / .txt 文件')
         return
       }
-      
+
       uploading.value = true
       uploadMessage.value = '识别中…'
 
@@ -4507,7 +4531,7 @@ export default defineComponent({
           }
           return item
         })
-        
+
         // 处理简答题（三字段：题干、答案、解析）
         const saqPayload = saqItems.map((x: any) => ({
           stem: x.stem || '',
@@ -4521,7 +4545,7 @@ export default defineComponent({
           option_images: {},
           analysis_images: x.analysis_images || [],
         }))
-        
+
         // 合并选择题和简答题
         const upsertPayload = [...mcqPayload, ...saqPayload]
 
@@ -4533,7 +4557,7 @@ export default defineComponent({
           body: JSON.stringify({ items: upsertPayload, bank_id: currentBankId.value }),
         })
         const checkData = await checkRes.json()
-        
+
         if (!checkData || checkData.ok === false) {
           throw new Error(checkData?.msg || '检查重复失败')
         }
@@ -4545,20 +4569,20 @@ export default defineComponent({
         if (checkData.has_duplicates && checkData.dup_count > 0) {
           const dupCount = checkData.dup_count
           const newCount = checkData.new_count
-          
+
           // 构建重复题目的 HTML 预览列表
           const dupListHtml = (checkData.duplicates || [])
             .map((d: any, i: number) => {
               const stem = (d.new_item?.stem || '').substring(0, 80)
               const answer = d.new_item?.answer || ''
               return `<div style="padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px;">
-                <span style="color: #909399;">${i + 1}.</span> 
+                <span style="color: #909399;">${i + 1}.</span>
                 <span>${stem}${stem.length >= 80 ? '...' : ''}</span>
                 <span style="color: #E6A23C; margin-left: 8px;">答案: ${answer}</span>
               </div>`
             })
             .join('')
-          
+
           // 构建完整的 HTML 消息
           const messageHtml = `
             <div style="margin-bottom: 12px;">
@@ -4604,12 +4628,12 @@ export default defineComponent({
                 type: 'warning',
               }
             )
-            
+
             // 用户确认，自动跳过重复项
             const dupIndexSet = new Set((checkData.duplicates || []).map((d: any) => d.index))
             finalPayload = upsertPayload.filter((_: any, idx: number) => !dupIndexSet.has(idx))
             skippedCount = dupCount
-            
+
           } catch (dialogAction) {
             // 用户取消上传
             uploadMessage.value = '已取消上传'
@@ -4654,7 +4678,7 @@ export default defineComponent({
         const parsedExplainCount = questions.value.filter(
           q => (q.analysis || '').trim().length > 0
         ).length
-        
+
         // 7）构建消息，包含格式化和去重信息
         const mcqCount = items.length
         const saqCount = saqItems.length
@@ -4693,11 +4717,11 @@ export default defineComponent({
       }
       asyncExplaining.value = true; asyncMsg.value = '创建任务中…'
       try{
-        const req:any = { 
-          model_id: llmModelId.value, 
+        const req:any = {
+          model_id: llmModelId.value,
           fallback_model_id: fallbackModelId.value || undefined,
-          thinking: thinking.value, 
-          rerank_top_n: topN.value, 
+          thinking: thinking.value,
+          rerank_top_n: topN.value,
           use_insert_block: insertBlock.value,
           target_statuses: parseTargetStatuses.value,  // 传递选中的目标状态
           bank_id: currentBankId.value,  // 指定题库
@@ -4931,18 +4955,18 @@ export default defineComponent({
             const originalQuestion = batch.find(q => q.qid === qid)
             const originalAnswer = (originalQuestion?.answer || '').trim()
             const aiFinalAnswer = (r.final_answer || '').trim()
-            
+
             const updateItem: any = {
               id: qid,
               explain: r.explain_raw || r.explain || '',
             }
-            
+
             // 如果原题无答案且 AI 给出了答案，自动填充并标记
             if (!originalAnswer && aiFinalAnswer) {
               updateItem.answer = aiFinalAnswer.toUpperCase()
               updateItem.ai_generated_answer = true
             }
-            
+
             return updateItem
           })
 
@@ -5086,7 +5110,7 @@ export default defineComponent({
       try {
         const question = (questions.value || []).find(q => q.qid === qid)
         if (!question) return
-        
+
         // 如果没有解析，弹窗提醒
         if (!analysis) {
           await ElMessageBox.confirm(
@@ -5099,7 +5123,7 @@ export default defineComponent({
             }
           )
         }
-        
+
         const resp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
           method: 'POST',
           headers: getAuthHeaders(),
@@ -5112,8 +5136,8 @@ export default defineComponent({
           if (question) question.status = 'approved'
         }
         else throw new Error(data?.msg || '操作失败')
-      } catch (error: any) { 
-        if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) 
+      } catch (error: any) {
+        if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error))
       }
     }
 
@@ -5555,7 +5579,7 @@ export default defineComponent({
       if (!text) return ''
       // 将带选项字母的进度提示替换为选项分隔标记（保留选项标识）
       const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
-      
+
       let cleaned = text
         .replace(/<NEWLINE>/g, '\n')           // <NEWLINE> 转换为真实换行
         // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
@@ -5628,13 +5652,13 @@ export default defineComponent({
       } else {
         editSelectedKnowledgePoints.value = extractKnowledgePointsFromAnalysis(row.analysis || '')
       }
-      
+
       const map: Record<string, string> = {}
       ;(row.options || []).forEach((o: any) => {
         map[o.label] = o.text
       })
       editBuf.options = { ...map }
-      
+
       // 按需加载图片数据（如果题目有图片但尚未加载）
       if (row.has_images && (!row.stem_images || row.stem_images.length === 0)) {
         const imgData = await loadQuestionImages(row.qid)
@@ -5649,7 +5673,7 @@ export default defineComponent({
           })
         }
       }
-      
+
       editBuf.stem_images = JSON.parse(JSON.stringify(row.stem_images || []))
       // 从选项中提取图片
       const optImgs: Record<string, any[]> = {}
@@ -5695,10 +5719,11 @@ export default defineComponent({
           answer: (editBuf.answer || '').toUpperCase(),
           explain: finalExplain,
           qtype: newQtype,
+          status: finalExplain.trim() ? ((row.status && row.status !== 'none') ? row.status : 'draft') : 'none',
           knowledge_clauses: editBuf.knowledge_clauses || [],
           knowledge_points: editSelectedKnowledgePoints.value || [],
         }
-        
+
         // 添加图片数据
         if (editBuf.stem_images && editBuf.stem_images.length > 0) {
           itemData.stem_images = editBuf.stem_images
@@ -5715,7 +5740,7 @@ export default defineComponent({
         } else {
           itemData.analysis_images = []
         }
-        
+
         const payload = { items: [itemData] }
 
         const upResp = await fetch(`${MCQ_BASE_URL}/bank/bulk_update`, {
@@ -5915,29 +5940,29 @@ export default defineComponent({
       const input = document.getElementById('stem-image-input') as HTMLInputElement
       input?.click()
     }
-    
+
     const onStemImageSelected = async (evt: Event) => {
       const input = evt.target as HTMLInputElement
       const file = input?.files?.[0]
       if (!file) return
-      
+
       // 检查文件类型
       if (!file.type.startsWith('image/')) {
         ElMessage.warning('请选择图片文件')
         return
       }
-      
+
       // 检查文件大小（限制5MB）
       if (file.size > 5 * 1024 * 1024) {
         ElMessage.warning('图片大小不能超过5MB')
         return
       }
-      
+
       try {
         // 读取文件并转换为base64
         const base64 = await fileToBase64(file)
         const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-        
+
         // 添加到编辑缓冲区
         if (!editBuf.stem_images) {
           editBuf.stem_images = []
@@ -5948,7 +5973,7 @@ export default defineComponent({
           ext: ext,
           content_type: file.type,
         })
-        
+
         ElMessage.success('图片已添加')
       } catch (e: any) {
         ElMessage.error('图片读取失败：' + (e?.message || e))
@@ -5957,7 +5982,7 @@ export default defineComponent({
         if (input) input.value = ''
       }
     }
-    
+
     // 将文件转换为base64（不含data:前缀）
     const fileToBase64 = (file: File): Promise<string> => {
       return new Promise((resolve, reject) => {
@@ -5975,35 +6000,35 @@ export default defineComponent({
 
     // 选项图片上传
     let currentOptionLabel = ''
-    
+
     const triggerOptionImageUpload = (label: string) => {
       currentOptionLabel = label
       const input = document.getElementById('option-image-input') as HTMLInputElement
       input?.click()
     }
-    
+
     const onOptionImageSelected = async (evt: Event) => {
       const input = evt.target as HTMLInputElement
       const file = input?.files?.[0]
       if (!file || !currentOptionLabel) return
-      
+
       // 检查文件类型
       if (!file.type.startsWith('image/')) {
         ElMessage.warning('请选择图片文件')
         return
       }
-      
+
       // 检查文件大小（限制5MB）
       if (file.size > 5 * 1024 * 1024) {
         ElMessage.warning('图片大小不能超过5MB')
         return
       }
-      
+
       try {
         // 读取文件并转换为base64
         const base64 = await fileToBase64(file)
         const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-        
+
         // 添加到编辑缓冲区
         if (!editBuf.option_images) {
           editBuf.option_images = {}
@@ -6017,7 +6042,7 @@ export default defineComponent({
           ext: ext,
           content_type: file.type,
         })
-        
+
         ElMessage.success(`选项${currentOptionLabel}图片已添加`)
       } catch (e: any) {
         ElMessage.error('图片读取失败：' + (e?.message || e))
@@ -6033,26 +6058,26 @@ export default defineComponent({
       const input = document.getElementById('analysis-image-input') as HTMLInputElement
       input?.click()
     }
-    
+
     const onAnalysisImageSelected = async (evt: Event) => {
       const input = evt.target as HTMLInputElement
       const file = input?.files?.[0]
       if (!file) return
-      
+
       if (!file.type.startsWith('image/')) {
         ElMessage.warning('请选择图片文件')
         return
       }
-      
+
       if (file.size > 5 * 1024 * 1024) {
         ElMessage.warning('图片大小不能超过5MB')
         return
       }
-      
+
       try {
         const base64 = await fileToBase64(file)
         const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-        
+
         if (!editBuf.analysis_images) {
           editBuf.analysis_images = []
         }
@@ -6062,7 +6087,7 @@ export default defineComponent({
           ext: ext,
           content_type: file.type,
         })
-        
+
         ElMessage.success('解析图片已添加')
       } catch (e: any) {
         ElMessage.error('图片读取失败：' + (e?.message || e))
@@ -6085,7 +6110,7 @@ export default defineComponent({
       if (!text) return '<p>暂无解析</p>'
       // 将带选项字母的进度提示替换为选项分隔标记
       const replaceProgressWithLabel = (_: string, letter: string) => `【选项${letter.toUpperCase()}分析】`
-      
+
       let cleaned = text
         // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
         .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
@@ -6107,11 +6132,11 @@ export default defineComponent({
     const createPaper = async () => {
       // 仍然要求填写标题，和原行为保持一致
       if (!paperTitle.value) return ElMessage.warning('请输入试卷标题')
-      
+
       const name = (paperTitle.value || '').trim() || '试卷'
       creatingPaper.value = true
       paperMessage.value = '生成中…'
-      
+
       // 构建分数配置
       const scoreConfig: any = {
         single: singleScore.value,
@@ -6119,7 +6144,7 @@ export default defineComponent({
         indeterminate: indeterminateScore.value,
         saq_mode: saqScoreMode.value
       }
-      
+
       if (saqScoreMode.value === 'uniform') {
         scoreConfig.saq = saqScore.value
         // 统一模式下，为有知识条款的题目自动分配各条款分数
@@ -6151,14 +6176,14 @@ export default defineComponent({
           scoreConfig.saq_clause_scores = clauseScoresMap
         }
       }
-      
-      let requestBody: any = { 
+
+      let requestBody: any = {
         name,
         score_config: scoreConfig,
         password: generatePaperPassword.value.trim(),
         bank_id: currentBankId.value,
       }
-      
+
       if (paperGenerateMode.value === 'random') {
         // 随机抽取模式
         requestBody.random_mode = {
@@ -6171,11 +6196,11 @@ export default defineComponent({
       } else {
         // 手动选择模式
         // 如果选择了题目，则使用选中的题目；否则使用全部已通过题目
-        const questionIds = selectedPaperQuestions.value.length > 0 
-          ? selectedPaperQuestions.value 
+        const questionIds = selectedPaperQuestions.value.length > 0
+          ? selectedPaperQuestions.value
           : null
         requestBody.question_ids = questionIds
-        
+
         // 构建不定项配置
         if (enableIndeterminate.value) {
           if (indeterminateMode.value === 'select') {
@@ -6487,32 +6512,32 @@ export default defineComponent({
       const input = evt.target as HTMLInputElement
       const f = input?.files?.[0]
       if (!f) return
-      
+
       // 重置编辑状态（新上传的试卷不是编辑模式）
       isEditingExistingPaper.value = false
       editPaperOriginalId.value = ''
-      
+
       try {
         ElMessage.info('正在解析试卷文件...')
-        
+
         const fd = new FormData()
         fd.append('file', f)
-        
+
         const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', body: fd })
         const j = await r.json()
-        
+
         if (!j || j.ok === false) {
           throw new Error(j?.msg || '解析失败')
         }
-        
+
         const items = Array.isArray(j.items) ? j.items : []
         const saqItems = Array.isArray(j.saq_items) ? j.saq_items : []
-        
+
         if (items.length === 0 && saqItems.length === 0) {
           ElMessage.warning('未识别到任何题目，请检查文件格式')
           return
         }
-        
+
         // 确保每个item的options是对象格式，保留qtype和图片数据
         const mcqList = items.map((x: any) => ({
           stem: x.stem || '',
@@ -6523,11 +6548,11 @@ export default defineComponent({
           stem_images: x.stem_images || [],
           option_images: x.option_images || {},
           analysis_images: x.analysis_images || [],
-          has_images: Boolean(x.has_images || (x.stem_images && x.stem_images.length > 0) || 
+          has_images: Boolean(x.has_images || (x.stem_images && x.stem_images.length > 0) ||
                               (x.option_images && Object.keys(x.option_images).length > 0) ||
                               (x.analysis_images && x.analysis_images.length > 0)),
         }))
-        
+
         // 处理简答题（三字段：题干、答案、解析）
         const saqList = saqItems.map((x: any) => ({
           stem: x.stem || '',
@@ -6543,17 +6568,17 @@ export default defineComponent({
           has_images: Boolean((x.stem_images && x.stem_images.length > 0) ||
                               (x.analysis_images && x.analysis_images.length > 0)),
         }))
-        
+
         // 合并选择题和简答题
         uploadedPaperItems.value = [...mcqList, ...saqList]
-        
+
         // 从文件名提取标题
         const fileName = f.name.replace(/\.(docx|txt)$/i, '')
         uploadedPaperTitle.value = fileName
-        
+
         editingPaperItemIdx.value = null
         paperPreviewVisible.value = true
-        
+
         const issueCount = mcqList.filter((item: any) => hasParseIssue(item)).length
         let msg = `成功识别 ${items.length} 道选择题`
         if (saqItems.length > 0) {
@@ -6564,7 +6589,7 @@ export default defineComponent({
         } else {
           ElMessage.success(msg)
         }
-        
+
       } catch (e: any) {
         ElMessage.error(`解析失败：${e?.message || e}`)
       } finally {
@@ -6604,7 +6629,7 @@ export default defineComponent({
     const deleteUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string) => {
       const item = uploadedPaperItems.value[itemIdx]
       if (!item) return
-      
+
       if (type === 'stem') {
         if (item.stem_images && item.stem_images[imgIdx]) {
           item.stem_images.splice(imgIdx, 1)
@@ -6657,11 +6682,11 @@ export default defineComponent({
       const input = evt.target as HTMLInputElement
       const file = input?.files?.[0]
       if (!file || !pendingImageUpload.value) return
-      
+
       const { itemIdx, type, optionKey } = pendingImageUpload.value
       const item = uploadedPaperItems.value[itemIdx]
       if (!item) return
-      
+
       try {
         // 读取图片为base64
         const reader = new FileReader()
@@ -6672,7 +6697,7 @@ export default defineComponent({
             content_type: file.type || 'image/png',
             filename: file.name
           }
-          
+
           if (type === 'stem') {
             if (!item.stem_images) item.stem_images = []
             item.stem_images.push(imgData)
@@ -6684,7 +6709,7 @@ export default defineComponent({
             if (!item.analysis_images) item.analysis_images = []
             item.analysis_images.push(imgData)
           }
-          
+
           updateItemHasImages(item)
           ElMessage.success('图片已添加')
         }
@@ -6702,7 +6727,7 @@ export default defineComponent({
         ElMessage.warning('请选择要编辑的试卷')
         return
       }
-      
+
       loadingPaperDetail.value = true
       try {
         const r = await fetch(`${MCQ_BASE_URL}/papers/detail?paper_id=${encodeURIComponent(editPaperSelected.value)}`, {
@@ -6711,17 +6736,17 @@ export default defineComponent({
           cache: 'no-store'
         })
         const j = await r.json()
-        
+
         if (!j || j.ok === false) {
           throw new Error(j?.detail || j?.msg || '加载失败')
         }
-        
+
         // 填充编辑数据
         uploadedPaperTitle.value = j.title || ''
         uploadedPaperItems.value = j.items || []
         // 将所有文本字段中的 <NEWLINE> 转换为真实换行符
         uploadedPaperItems.value.forEach((item: any) => stripPaperItemNewlines(item))
-        
+
         // 设置分数配置
         const scoreConfig = j.score_config || {}
         uploadedSingleScore.value = scoreConfig.single || 1
@@ -6729,7 +6754,7 @@ export default defineComponent({
         uploadedIndeterminateScore.value = scoreConfig.indeterminate || 5
         uploadedSaqScore.value = scoreConfig.saq || 10
         uploadedSaqScoreMode.value = scoreConfig.saq_mode || 'uniform'
-        
+
         // 恢复知识条款分数到各题目上（使用索引作为key）
         const savedClauseScores = scoreConfig.saq_clause_scores || {}
         uploadedPaperItems.value.forEach((item: any, idx: number) => {
@@ -6743,11 +6768,11 @@ export default defineComponent({
             }
           }
         })
-        
+
         // 标记为编辑模式
         isEditingExistingPaper.value = true
         editPaperOriginalId.value = editPaperSelected.value
-        
+
         // 加载已有密码（如果超级管理员或者已验证过密码）
         paperPassword.value = ''
         try {
@@ -6761,10 +6786,10 @@ export default defineComponent({
             paperPassword.value = pj.password
           }
         } catch { /* ignore - password field stays empty */ }
-        
+
         editingPaperItemIdx.value = null
         paperPreviewVisible.value = true
-        
+
         ElMessage.success(`已加载试卷「${j.title}」，共 ${j.items?.length || 0} 题`)
       } catch (e: any) {
         ElMessage.error(`加载试卷失败：${e?.message || e}`)
@@ -6779,21 +6804,21 @@ export default defineComponent({
         ElMessage.warning('请输入试卷标题')
         return
       }
-      
+
       const validItems = uploadedPaperItems.value.filter(item => item.stem && item.stem.trim())
       if (validItems.length === 0) {
         ElMessage.warning('没有有效的题目可保存')
         return
       }
-      
+
       savingUploadedPaper.value = true
       try {
         // 根据是否编辑模式选择不同的 API
         const isUpdate = isEditingExistingPaper.value && editPaperOriginalId.value
-        const url = isUpdate 
+        const url = isUpdate
           ? `${MCQ_BASE_URL}/papers/update`
           : `${MCQ_BASE_URL}/bank/save_paper`
-        
+
         // 构建分数配置
         const scoreConfig: any = {
           single: uploadedSingleScore.value,
@@ -6801,7 +6826,7 @@ export default defineComponent({
           indeterminate: uploadedIndeterminateScore.value,
           saq_mode: uploadedSaqScoreMode.value
         }
-        
+
         if (uploadedSaqScoreMode.value === 'uniform') {
           scoreConfig.saq = uploadedSaqScore.value
           // 统一模式下，为有知识条款的题目自动分配各条款分数（使用索引作为key）
@@ -6827,29 +6852,29 @@ export default defineComponent({
           }
         }
         // 自定义模式下，每题总分已保存在 item.score 中
-        
+
         const payload: any = {
           title: uploadedPaperTitle.value.trim(),
           items: validItems,
           score_config: scoreConfig
         }
-        
+
         // 更新模式需要附带原试卷 ID
         if (isUpdate) {
           payload.paper_id = editPaperOriginalId.value
         }
-        
+
         const r = await fetch(url, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify(payload)
         })
         const j = await r.json()
-        
+
         if (!j || j.ok === false) {
           throw new Error(j?.msg || '保存失败')
         }
-        
+
         // 保存成功后设置密码（如果有）
         const newPaperId = j.paper_id || ''
         if (paperPassword.value.trim() && newPaperId) {
@@ -6863,21 +6888,21 @@ export default defineComponent({
             ElMessage.warning('试卷已保存，但密码设置失败：' + (pwdErr?.message || pwdErr))
           }
         }
-        
+
         ElMessage.success(j.msg || (isUpdate ? '试卷更新成功' : '试卷保存成功'))
         paperPreviewVisible.value = false
         uploadedPaperItems.value = []
         uploadedPaperTitle.value = ''
         paperPassword.value = ''
-        
+
         // 重置编辑状态
         isEditingExistingPaper.value = false
         editPaperOriginalId.value = ''
         editPaperSelected.value = ''
-        
+
         // 刷新试卷列表
         await loadPaperList()
-        
+
       } catch (e: any) {
         ElMessage.error(`保存失败：${e?.message || e}`)
       } finally {
@@ -6907,10 +6932,10 @@ export default defineComponent({
         ElMessage.warning('没有题目可解析')
         return
       }
-      
+
       paperExplaining.value = true
       paperExplainMsg.value = '创建任务中…'
-      
+
       try {
         // 将试卷题目转换为解析任务需要的格式
         const items = uploadedPaperItems.value.map((item, idx) => ({
@@ -6920,7 +6945,7 @@ export default defineComponent({
           answer: item.answer || '',
           qtype: item.qtype || 'single'
         }))
-        
+
         const req = {
           items,
           model_id: llmModelId.value,
@@ -6928,19 +6953,19 @@ export default defineComponent({
           rerank_top_n: topN.value,
           use_insert_block: insertBlock.value
         }
-        
+
         const r = await fetch(`${MCQ_BASE_URL}/explain_paper_async`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify(req)
         })
         const j = await r.json()
-        
+
         if (!j?.ok) throw new Error(j?.msg || '创建任务失败')
-        
+
         paperTaskId.value = String(j.task_id)
         pollPaperTaskStatus(String(j.task_id))
-        
+
       } catch (e: any) {
         paperExplainMsg.value = `失败：${e?.message || e}`
         ElMessage.error(`创建解析任务失败：${e?.message || e}`)
@@ -6952,16 +6977,16 @@ export default defineComponent({
     // 轮询试卷解析任务状态
     const pollPaperTaskStatus = (taskId: string) => {
       if (paperPollingInterval.value) clearInterval(paperPollingInterval.value)
-      
+
       paperPollingInterval.value = window.setInterval(async () => {
         try {
           const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache: 'no-store' })
           const j = await r.json()
-          
+
           if (!j || !j.ok) return
-          
+
           paperExplainMsg.value = `进度：${j.done || 0}/${j.total || 0}`
-          
+
           // 更新解析结果到 uploadedPaperItems
           const arrs = [j.results, j.delta_results, j.partial_results, j.latest_results, j.items, j.updates]
           arrs.forEach((arr: any[]) => {
@@ -6975,7 +7000,7 @@ export default defineComponent({
               }
             })
           })
-          
+
           // 任务完成
           if (j.status === 'done' || j.status === 'stopped') {
             if (paperPollingInterval.value) {
@@ -6997,7 +7022,7 @@ export default defineComponent({
     // 停止试卷解析任务
     const stopPaperExplainTask = async () => {
       if (!paperTaskId.value) return
-      
+
       try {
         const r = await fetch(`${MCQ_BASE_URL}/tasks/stop`, {
           method: 'POST',
@@ -7005,7 +7030,7 @@ export default defineComponent({
           body: JSON.stringify({ task_id: paperTaskId.value })
         })
         const j = await r.json()
-        
+
         if (j?.ok) {
           ElMessage.success('任务已停止')
           if (paperPollingInterval.value) {
@@ -7026,7 +7051,7 @@ export default defineComponent({
     const explainSinglePaperItem = async (idx: number) => {
       const item = uploadedPaperItems.value[idx]
       if (!item) return
-      
+
       paperItemExplaining[idx] = true
       try {
         const req = {
@@ -7042,14 +7067,14 @@ export default defineComponent({
           rerank_top_n: topN.value,
           use_insert_block: insertBlock.value
         }
-        
+
         const r = await fetch(`${MCQ_BASE_URL}/explain`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify(req)
         })
         const j = await r.json()
-        
+
         if (j?.results && j.results.length > 0 && j.results[0].explain) {
           uploadedPaperItems.value[idx].explain = stripNewlineTags(j.results[0].explain)
           ElMessage.success('解析完成')
@@ -7231,7 +7256,7 @@ export default defineComponent({
     }
 
     // ========== 考试发布相关函数 ==========
-    
+
     // 查看名单分页计算
     const pagedDeptUsersList = computed(() => {
       const start = (deptUsersPage.value - 1) * deptUsersPageSize.value
@@ -7424,7 +7449,7 @@ export default defineComponent({
       if (!publishForm.timeRange || publishForm.timeRange.length < 2) {
         return ElMessage.warning('请设置考试时间')
       }
-      
+
       publishing.value = true
       publishMessage.value = '发布中...'
       try {

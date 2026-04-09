@@ -10,6 +10,9 @@ module.exports = defineConfig({
     host: '0.0.0.0',
     port: 8080,
     allowedHosts: 'all',
+    onListening: (devServer) => {
+      devServer.server.setMaxListeners(20)
+    },
     proxy: {
       '/ws/session': {
         target: 'ws://127.0.0.1:3000',
