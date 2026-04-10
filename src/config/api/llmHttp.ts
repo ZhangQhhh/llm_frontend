@@ -24,8 +24,10 @@ llmHttp.interceptors.request.use(
             (config.headers as any)?.Authorization ||
             (config.headers as any)?.authorization;
         if (!existingAuth && config.headers) {
-            const chatToken = localStorage.getItem(STORAGE_KEYS.CHAT_TOKEN);
-            const token = chatToken || localStorage.getItem(STORAGE_KEYS.TOKEN);
+            // 优先使用主登录 token；CHAT_TOKEN 仅作兼容兜底，避免旧会话 token 覆盖新登录状态。
+            const token =
+                localStorage.getItem(STORAGE_KEYS.TOKEN) ||
+                localStorage.getItem(STORAGE_KEYS.CHAT_TOKEN);
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }

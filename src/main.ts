@@ -6,7 +6,7 @@ import App from './App.vue'
 import router from './router'
 import store from './store'
 import http from './config/api/http'
-import { API_ENDPOINTS } from './config/api/api'
+import { API_ENDPOINTS, STORAGE_KEYS } from './config/api/api'
 import { initSessionWatch } from './utils/userStatusChecker'
 
 // 1. 导入 Element Plus 库
@@ -38,6 +38,8 @@ const syncLoginIp = async () => {
 const token = localStorage.getItem('jwt_token')
 if (token) {
   console.log('[Auth] 检测到本地 token，尝试恢复登录状态...')
+  // 统一 LLM 侧 token，避免旧的 CHAT_TOKEN 覆盖当前登录态。
+  localStorage.setItem(STORAGE_KEYS.CHAT_TOKEN, token)
   // 恢复 token 到 store
   store.commit('updateToken', token)
   
@@ -58,6 +60,7 @@ if (token) {
       // token 可能已过期，清除它
       console.error('[Auth] 恢复登录状态失败，清除 token:', err)
       localStorage.removeItem('jwt_token')
+      localStorage.removeItem(STORAGE_KEYS.CHAT_TOKEN)
       store.commit('logout')
     }
   })
