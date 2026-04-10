@@ -22,6 +22,7 @@ declare module 'vue-router' {
     pageCode?: string
     publicAccess?: boolean
     hideAppChrome?: boolean
+    testMode?: boolean
   }
 }
 
@@ -98,6 +99,12 @@ const routes: Array<RouteRecordRaw> = [
       title: '知识问答 (Debug模式)',
       publicAccess: true
     }
+  },
+  {
+  path: '/knowledge/test',
+  name: 'knowledge-test',
+  component: KnowledgeQAView,
+  meta: { title: '业务问答（测试模式）', publicAccess: true, testMode: true }
   },
   {
     path: '/403',
