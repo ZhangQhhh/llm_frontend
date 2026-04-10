@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="qa-page ai-tech-theme" :class="{ 'lite-mode': liteMode }">
     <!-- 科技感AI背景效果 (简洁模式下隐藏) -->
     <div v-if="!liteMode" class="ai-bg">
@@ -574,7 +574,10 @@ export default defineComponent({
     const isDebugMode = computed(() => {
       return window.location.pathname.includes('/debug');
     });
-
+    // 测试模式检测
+    const isTestMode = computed(() => {
+      return window.location.pathname.includes('/knowledge/test');
+    });
     // 状态
     const question = ref('');
     const answer = ref('');
@@ -817,6 +820,7 @@ export default defineComponent({
         payload.use_insert_block = insertBlock.value;
         payload.insert_block_llm_id = modelId.value;
         payload.user_id = store.state.user.id || null;
+        payload.test_mode = isTestMode.value;
       }
 
       return payload;
@@ -1713,7 +1717,8 @@ export default defineComponent({
       renderMarkdown, copyAnswer, toggleRefExpand, getReferenceContent, handleMcqModeChange,
       liteMode, toggleLiteMode,
       // Debug模式
-      isDebugMode
+      isDebugMode,
+      isTestMode,
     };
   }
 });

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 聊天API相关工具函数
  */
 
@@ -149,7 +149,8 @@ export interface ChatRequest {
   rerank_top_n?: number;
   use_insert_block?: boolean;
   insert_block_llm_id?: string;
-  user_id?: string | number | null;  // 可选，请求用户ID
+  user_id?: string | number | null;
+  test_mode?: boolean;  // 可选，请求用户ID
 }
 
 /**
@@ -355,6 +356,7 @@ export interface SessionListParams {
   page_size?: number;
   sort_by?: 'last_update' | 'create_time';
   user_id?: string | number | null;
+  test_mode?: boolean;
 }
 
 export interface SessionListResponse {
