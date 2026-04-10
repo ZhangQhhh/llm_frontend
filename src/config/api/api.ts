@@ -196,6 +196,7 @@ export const API_ENDPOINTS = {
   },
   // 知识库管理API（使用llmHttp，baseURL已包含/api前缀）
   KNOWLEDGE_BASE: {
+    VERIFY_PASSWORD: `/knowledge/verify_password`, // POST 校验知识库操作口令
     UPLOAD: `/knowledge/upload`,           // POST 上传文件
     LIST_FILES: `/knowledge/list_files`,   // GET 列出文件
     DELETE_FILE: `/knowledge/delete_file`, // POST 删除文件

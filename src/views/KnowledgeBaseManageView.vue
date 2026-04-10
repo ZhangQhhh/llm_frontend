@@ -28,7 +28,7 @@
           <div class="header-actions">
             <el-button type="primary" @click="showPasswordDialog = true">
               <el-icon><Key /></el-icon>
-              {{ kbPassword ? '已验证口令' : '输入口令' }}
+              {{ kbPasswordVerified ? '口令已验证' : (kbPassword ? '已保存口令' : '输入口令') }}
             </el-button>
           </div>
         </div>
@@ -290,6 +290,7 @@ import {
   getUpdateStatus,
   isUpdating,
   triggerRebuild,
+  verifyKBPassword,
   getKBPassword,
   setKBPassword,
   formatFileSize,
@@ -317,6 +318,7 @@ export default defineComponent({
     const rebuildLoading = ref(false);
 
     const kbPassword = ref(getKBPassword());
+    const kbPasswordVerified = ref(false);
     const showPasswordDialog = ref(false);
     const passwordInput = ref('');
 
@@ -353,6 +355,14 @@ export default defineComponent({
 
     // 加载状态
     const loadStatus = async () => {
+      const fallbackStatus = (): KBStatusItem => ({
+        kb_type: currentKB.value,
+        updating: false,
+        progress: '',
+        file_count: files.value.length,
+        last_error: ''
+      });
+
       try {
         const response = await getUpdateStatus();
         if (response.ok && response.data) {
@@ -360,26 +370,14 @@ export default defineComponent({
           if (response.data[currentKB.value]) {
             kbStatus.value = response.data[currentKB.value];
           } else {
-            // 如果没有当前知识库的状态，设置默认值
-            kbStatus.value = {
-              kb_type: currentKB.value,
-              updating: false,
-              progress: '',
-              file_count: files.value.length,
-              last_error: ''
-            };
+            kbStatus.value = fallbackStatus();
           }
+        } else {
+          kbStatus.value = fallbackStatus();
         }
       } catch (error) {
         console.error('加载状态失败:', error);
-        // API 失败时设置默认状态
-        kbStatus.value = {
-          kb_type: currentKB.value,
-          updating: false,
-          progress: '',
-          file_count: files.value.length,
-          last_error: ''
-        };
+        kbStatus.value = fallbackStatus();
       }
     };
 
@@ -470,6 +468,7 @@ export default defineComponent({
             if (error.response?.status === 403) {
               ElMessage.error('口令错误，请重新设置');
               kbPassword.value = '';
+              kbPasswordVerified.value = false;
               setKBPassword('');
               break;
             }
@@ -518,6 +517,7 @@ export default defineComponent({
         if (error.response?.status === 403) {
           ElMessage.error('口令错误，请重新设置');
           kbPassword.value = '';
+          kbPasswordVerified.value = false;
           setKBPassword('');
         } else {
           ElMessage.error(error.message || '删除失败');
@@ -548,6 +548,7 @@ export default defineComponent({
         if (error.response?.status === 403) {
           ElMessage.error('口令错误，请重新设置');
           kbPassword.value = '';
+          kbPasswordVerified.value = false;
           setKBPassword('');
         } else {
           ElMessage.error(error.message || '重建失败');
@@ -559,16 +560,39 @@ export default defineComponent({
     };
 
     // 保存口令
-    const savePassword = () => {
-      if (!passwordInput.value.trim()) {
+    const savePassword = async () => {
+      const password = passwordInput.value.trim();
+      if (!password) {
         ElMessage.warning('请输入口令');
         return;
       }
-      kbPassword.value = passwordInput.value.trim();
-      setKBPassword(kbPassword.value);
-      showPasswordDialog.value = false;
-      passwordInput.value = '';
-      ElMessage.success('口令已保存');
+
+      try {
+        const response = await verifyKBPassword(password);
+        if (!response.ok) {
+          ElMessage.error(response.message || '口令校验失败');
+          kbPasswordVerified.value = false;
+          return;
+        }
+
+        kbPassword.value = password;
+        kbPasswordVerified.value = true;
+        setKBPassword(password);
+        showPasswordDialog.value = false;
+        passwordInput.value = '';
+        ElMessage.success('口令校验成功');
+        await loadFiles();
+        await loadStatus();
+      } catch (error: any) {
+        kbPasswordVerified.value = false;
+        if (error.response?.status === 401) {
+          ElMessage.error('登录状态已失效，请重新登录');
+        } else if (error.response?.status === 403) {
+          ElMessage.error('口令错误，请重新输入');
+        } else {
+          ElMessage.error(error.message || '口令校验失败');
+        }
+      }
     };
 
     // 获取知识库标签
@@ -607,6 +631,7 @@ export default defineComponent({
       deleteLoading,
       rebuildLoading,
       kbPassword,
+      kbPasswordVerified,
       showPasswordDialog,
       passwordInput,
       fileList,
