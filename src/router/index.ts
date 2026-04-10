@@ -317,7 +317,6 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/KnowledgeBaseManageView.vue'),
     meta: {
       requiresAuth: true,
-      requiresSuperAdmin: true,
       title: '知识库管理',
       pageCode: 'PAGE_022'
     }
