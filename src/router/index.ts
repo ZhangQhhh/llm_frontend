@@ -96,8 +96,9 @@ const routes: Array<RouteRecordRaw> = [
     name: 'knowledge-qa-debug',
     component: KnowledgeQAView,
     meta: {
+      requiresAuth: true,
+      requiresAdminRole: true,
       title: '知识问答 (Debug模式)',
-      publicAccess: true
     }
   },
   {
