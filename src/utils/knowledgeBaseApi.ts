@@ -68,6 +68,11 @@ export interface KBRebuildResponse {
   message: string;
 }
 
+export interface KBVerifyPasswordResponse {
+  ok: boolean;
+  message: string;
+}
+
 // 知识库类型配置
 export const KB_TYPES = [
   { value: 'general', label: '通用知识库', description: '默认知识库，存放通用业务文档' },
@@ -103,6 +108,29 @@ export const listFiles = async (kbType: string = 'general'): Promise<KBListRespo
   const response = await llmHttp.get(API_ENDPOINTS.KNOWLEDGE_BASE.LIST_FILES, {
     params: { kb: kbType }
   });
+  return response.data;
+};
+
+// 校验知识库口令
+export const verifyKBPassword = async (
+  kbPassword: string
+): Promise<KBVerifyPasswordResponse> => {
+  if (isMockEnabled()) {
+    return {
+      ok: true,
+      message: `模拟模式口令已接受: ${kbPassword ? 'mock-password' : ''}`
+    };
+  }
+
+  const response = await llmHttp.post(
+    API_ENDPOINTS.KNOWLEDGE_BASE.VERIFY_PASSWORD,
+    {},
+    {
+      headers: {
+        'X-KB-PASSWORD': kbPassword
+      }
+    }
+  );
   return response.data;
 };
 
