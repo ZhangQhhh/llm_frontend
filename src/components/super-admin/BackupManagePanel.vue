@@ -384,6 +384,7 @@ interface BizResponse<T = unknown> {
   success?: boolean
   code?: number
   message?: string
+  detail?: string
   data?: T
 }
 
@@ -422,8 +423,22 @@ export default defineComponent({
       return Number(payload.code) === 200
     }
 
-    const getBizMessage = (payload?: BizResponse<any>, fallback = '请求失败，请稍后重试') => {
-      return payload?.message || fallback
+    const getBackendMessage = (payload?: BizResponse<any>) => {
+      return String(payload?.message || payload?.detail || '').trim()
+    }
+
+    const getRequestErrorMessage = (
+      response: { status?: number } | undefined,
+      payload: BizResponse<any> | undefined,
+      fallback = '请求失败，请稍后重试'
+    ) => {
+      const backendMessage = getBackendMessage(payload)
+      const statusText = response?.status ? `HTTP ${response.status}` : ''
+      const detailParts = [statusText, backendMessage].filter(Boolean)
+      if (detailParts.length === 0) {
+        return fallback
+      }
+      return `${fallback}（${detailParts.join('，')}）`
     }
 
     const sanitizeIdentifier = (value: string) => value.trim().replace(/[^\w]/g, '')
@@ -511,7 +526,7 @@ export default defineComponent({
         const response = await fetchWithAuth(getApiUrl(API_ENDPOINTS.SUPER_ADMIN.BACKUP_FILES))
         const payload = response.data as BizResponse<BackupFileInfo[]>
         if (!response.ok || !isBizSuccess(payload)) {
-          throw new Error(getBizMessage(payload, '加载备份文件失败'))
+          throw new Error(getRequestErrorMessage(response, payload, '加载备份文件失败'))
         }
         backupFiles.value = Array.isArray(payload.data) ? payload.data : []
         if (selectedBackupPath.value) {
@@ -545,12 +560,12 @@ export default defineComponent({
         )
         const payload = response.data as BizResponse<BackupTableInfo[]>
         if (!response.ok || !isBizSuccess(payload)) {
-          const message = getBizMessage(payload, '加载表概览失败')
-          if (message.includes('预览')) {
-            handlePreviewInvalid(message)
+          const backendMessage = getBackendMessage(payload)
+          if (backendMessage.includes('预览')) {
+            handlePreviewInvalid(getRequestErrorMessage(response, payload, '加载表概览失败'))
             return
           }
-          throw new Error(message)
+          throw new Error(getRequestErrorMessage(response, payload, '加载表概览失败'))
         }
         previewTables.value = Array.isArray(payload.data) ? payload.data : []
         if (selectedTableName.value) {
@@ -578,12 +593,12 @@ export default defineComponent({
         const response = await fetchWithAuth(getApiUrl(endpoint))
         const payload = response.data as BizResponse<BackupTablePreview>
         if (!response.ok || !isBizSuccess(payload)) {
-          const message = getBizMessage(payload, '加载表数据失败')
-          if (message.includes('预览')) {
-            handlePreviewInvalid(message)
+          const backendMessage = getBackendMessage(payload)
+          if (backendMessage.includes('预览')) {
+            handlePreviewInvalid(getRequestErrorMessage(response, payload, '加载表数据失败'))
             return
           }
-          throw new Error(message)
+          throw new Error(getRequestErrorMessage(response, payload, '加载表数据失败'))
         }
         const preview = payload.data
         tablePreview.value = preview
@@ -636,7 +651,7 @@ export default defineComponent({
         })
         const payload = response.data as BizResponse<BackupPreviewInfo>
         if (!response.ok || !isBizSuccess(payload) || !payload.data) {
-          throw new Error(getBizMessage(payload, '创建预览失败'))
+          throw new Error(getRequestErrorMessage(response, payload, '创建预览失败'))
         }
         activePreview.value = payload.data
         previewTables.value = []
@@ -676,7 +691,7 @@ export default defineComponent({
         )
         const payload = response.data as BizResponse
         if (!response.ok || !isBizSuccess(payload)) {
-          throw new Error(getBizMessage(payload, '删除预览失败'))
+          throw new Error(getRequestErrorMessage(response, payload, '删除预览失败'))
         }
         clearPreviewState()
         ElMessage.success(payload.message || '预览已删除')
@@ -732,12 +747,12 @@ export default defineComponent({
         })
         const biz = response.data as BizResponse<BackupRestoreResult>
         if (!response.ok || !isBizSuccess(biz) || !biz.data) {
-          const message = getBizMessage(biz, '恢复失败')
-          if (message.includes('预览')) {
-            handlePreviewInvalid(message)
+          const backendMessage = getBackendMessage(biz)
+          if (backendMessage.includes('预览')) {
+            handlePreviewInvalid(getRequestErrorMessage(response, biz, '恢复失败'))
             return
           }
-          throw new Error(message)
+          throw new Error(getRequestErrorMessage(response, biz, '恢复失败'))
         }
         lastRestoreResult.value = biz.data
         ElMessage.success(biz.message || '恢复成功')
