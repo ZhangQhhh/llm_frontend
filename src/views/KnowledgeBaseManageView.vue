@@ -258,19 +258,27 @@
         show-icon
         style="margin-bottom: 16px;"
       />
-      <el-form>
+      <el-form @submit.prevent>
         <el-form-item label="操作口令">
           <el-input
             v-model="passwordInput"
             type="password"
             placeholder="请输入口令"
             show-password
+            @keyup.enter.prevent="savePassword"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showPasswordDialog = false">取消</el-button>
-        <el-button type="primary" @click="savePassword">确认</el-button>
+        <el-button native-type="button" @click="showPasswordDialog = false">取消</el-button>
+        <el-button
+          type="primary"
+          native-type="button"
+          :loading="passwordSaving"
+          @click="savePassword"
+        >
+          确认
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -321,6 +329,7 @@ export default defineComponent({
     const kbPasswordVerified = ref(false);
     const showPasswordDialog = ref(false);
     const passwordInput = ref('');
+    const passwordSaving = ref(false);
 
     const fileList = ref<any[]>([]);
     const autoRebuild = ref(true);
@@ -561,12 +570,15 @@ export default defineComponent({
 
     // 保存口令
     const savePassword = async () => {
+      if (passwordSaving.value) return;
+
       const password = passwordInput.value.trim();
       if (!password) {
         ElMessage.warning('请输入口令');
         return;
       }
 
+      passwordSaving.value = true;
       try {
         const response = await verifyKBPassword(password);
         if (!response.ok) {
@@ -592,6 +604,8 @@ export default defineComponent({
         } else {
           ElMessage.error(error.message || '口令校验失败');
         }
+      } finally {
+        passwordSaving.value = false;
       }
     };
 
@@ -634,6 +648,7 @@ export default defineComponent({
       kbPasswordVerified,
       showPasswordDialog,
       passwordInput,
+      passwordSaving,
       fileList,
       autoRebuild,
       uploadRef,
