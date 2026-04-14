@@ -3360,7 +3360,7 @@ export default defineComponent({
       { value: 'qwen2025',      label: 'Qwen (增强)' },
       { value: 'deepseek',      label: 'DeepSeekv3.1' },
       { value: 'deepseek-3.2',  label: 'DeepSeekv3.2' },
-      //{ value: 'qwen-plus',     label: 'Qwen (云端) ' },
+      { value: 'qwen-plus',     label: 'Qwen (云端) ' },
       //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
       //{ value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
     ])
