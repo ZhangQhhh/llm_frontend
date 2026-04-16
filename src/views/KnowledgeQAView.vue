@@ -1250,6 +1250,31 @@ export default defineComponent({
                 ElMessage.error('服务器超时且本地解析失败，请检查输入格式');
                 return;
               }
+            } else if (formatResponse.status === 400) {
+              // 400错误可能是LLM认为不是有效选择题，尝试读取错误信息并本地解析
+              let errorMsg = '输入内容不是有效的选择题，请检查输入格式';
+              try {
+                const errorData = await formatResponse.json();
+                errorMsg = errorData.msg || errorMsg;
+              } catch (e) { /* ignore parse error */ }
+
+              console.warn(`MCQ格式化返回400: ${errorMsg}，尝试本地解析`);
+              const localResult = parseLocalMcq(question.value);
+              if (localResult) {
+                mcqData = localResult;
+                const formattedLines = [localResult.stem];
+                for (const label of Object.keys(localResult.options).sort()) {
+                  formattedLines.push(`${label}.${localResult.options[label]}`);
+                }
+                question.value = formattedLines.join('\n');
+                thinking.value = '';
+                ElMessage.info('使用本地快速解析模式');
+              } else {
+                thinking.value = '';
+                loading.value = false;
+                ElMessage.warning(errorMsg);
+                return;
+              }
             } else {
               thinking.value = '';
               loading.value = false;

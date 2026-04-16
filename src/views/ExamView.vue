@@ -991,7 +991,7 @@
         <div v-else class="history-list">
           <div v-for="record in examHistory" :key="record.attempt_id" class="history-item" :class="record.status">
             <div class="history-header">
-              <span class="history-title">{{ record.title }}</span>
+              <span class="history-title">{{ formatPracticeTitle(record.title) }}</span>
               <el-tag v-if="record.is_practice" size="small" type="info">练习</el-tag>
               <el-tag v-if="record.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
               <el-tag v-else-if="record.status === 'timeout'" size="small" type="danger">已超时</el-tag>
@@ -1285,6 +1285,26 @@ export default defineComponent({
     const selectedPaperId = ref('')
     const loadingPapers = ref(false)
     const paperTitle = ref('尚未开始')
+
+    // 本地时间戳（避免 UTC 偏移），格式：YYYY-MM-DDTHH-MM-SS
+    const localTimestamp = (d: Date = new Date()): string => {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`
+    }
+
+    // 格式化练习标题：将 temp 名称转为友好显示（含时间，同一天多次练习可区分）
+    const formatPracticeTitle = (rawTitle: string): string => {
+      if (rawTitle.startsWith('随机练习_') || rawTitle.startsWith('错题练习_')) {
+        const prefix = rawTitle.startsWith('随机练习') ? '随机练习' : '错题练习'
+        const dateMatch = rawTitle.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/)
+        if (dateMatch) {
+          return `${prefix} ${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]} ${dateMatch[4]}:${dateMatch[5]}`
+        }
+        const fallbackDate = rawTitle.match(/(\d{4}-\d{2}-\d{2})/)
+        return `${prefix} ${fallbackDate ? fallbackDate[1] : new Date().toISOString().slice(0, 10)}`
+      }
+      return rawTitle
+    }
 
     // 考试相关
     const questions = ref<Question[]>([])
@@ -2447,7 +2467,7 @@ export default defineComponent({
           const switchInfo = actualSwitchCount > 0 ? `\n⚠️ 已切屏 ${actualSwitchCount} 次` : ''
           try {
             await ElMessageBox.confirm(
-              `您有一个未完成的考试「${data.title}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？${switchInfo}`,
+              `您有一个未完成的考试「${formatPracticeTitle(data.title)}」，剩余时间 ${Math.floor(data.left_sec / 60)} 分钟。是否继续答题？${switchInfo}`,
               '发现未完成的考试',
               {
                 confirmButtonText: '继续答题',
@@ -2483,7 +2503,7 @@ export default defineComponent({
       attemptId.value = progressData.attempt_id
       leftSeconds.value = progressData.left_sec
       questions.value = normalizeQuestions(progressData.items || [])
-      paperTitle.value = progressData.title || '试卷'
+      paperTitle.value = formatPracticeTitle(progressData.title || '试卷')
       selectedPaperId.value = progressData.paper_id
       
       // 恢复已保存的答案
@@ -3041,8 +3061,7 @@ export default defineComponent({
         })
 
         // 6. 直接使用临时题目数据开始练习（不保存为试卷文件）
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-        const practiceTitle = `随机练习_${timestamp}`
+        const practiceTitle = `随机练习_${localTimestamp()}`
         
         const startResult = await mcqFetch(API_ENDPOINTS.EXAM.START_TEMP, {
           method: 'POST',
@@ -3066,6 +3085,7 @@ export default defineComponent({
         examStarted.value = true
         isPracticeMode.value = true
         currentExamId.value = ''
+        paperTitle.value = formatPracticeTitle(practiceTitle)
         
         // 重置懒加载状态（低配模式）
         resetLazyLoad()
@@ -3628,7 +3648,7 @@ export default defineComponent({
         if (data.ok) {
           // 设置状态显示结果
           attemptId.value = record.attempt_id
-          paperTitle.value = record.title
+          paperTitle.value = formatPracticeTitle(record.title)
           questions.value = normalizeQuestions(data.items || [])
           
           // 规范化选项格式用于 reviewData
@@ -3696,7 +3716,7 @@ export default defineComponent({
       
       try {
         await ElMessageBox.confirm(
-          `确定要删除「${record.title}」的考试记录吗？此操作不可恢复。`,
+          `确定要删除「${formatPracticeTitle(record.title)}」的考试记录吗？此操作不可恢复。`,
           '删除确认',
           {
             confirmButtonText: '删除',
@@ -3758,8 +3778,7 @@ export default defineComponent({
         }))
         
         // 直接使用临时题目数据开始练习（不保存为试卷文件）
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-        const practiceTitle = `错题练习_${timestamp}`
+        const practiceTitle = `错题练习_${localTimestamp()}`
         const durationSec = Math.max(30, wrongBook.value.length * 2) * 60  // 每题2分钟
         
         const startResult = await mcqFetch(API_ENDPOINTS.EXAM.START_TEMP, {
@@ -3784,6 +3803,7 @@ export default defineComponent({
         examStarted.value = true
         isPracticeMode.value = true
         currentExamId.value = ''
+        paperTitle.value = formatPracticeTitle(practiceTitle)
         wrongBookVisible.value = false
         
         // 重置懒加载状态（低配模式）
@@ -3861,6 +3881,7 @@ export default defineComponent({
       selectedPaperId,
       loadingPapers,
       paperTitle,
+      formatPracticeTitle,
       questions,
       examStarted,
       durationMin,
