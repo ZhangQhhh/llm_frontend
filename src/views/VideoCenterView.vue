@@ -155,12 +155,69 @@
             @click="openResource(resource)"
           >
             <div class="resource-thumbnail" :class="`type-${resource.file_type}`">
-              <el-icon class="type-icon">
-                <VideoPlay v-if="resource.file_type === 'video'" />
-                <Document v-else-if="resource.file_type === 'pdf'" />
-                <Tickets v-else-if="resource.file_type === 'ppt'" />
-                <Document v-else />
-              </el-icon>
+              <!-- 视频：真实缩略图 + 播放按钮 -->
+              <template v-if="resource.file_type === 'video'">
+                <img
+                  v-if="!thumbFailedSet.has(resource.id)"
+                  :src="getThumbUrl(resource)"
+                  class="thumb-img"
+                  @error="onThumbError(resource.id)"
+                  loading="lazy"
+                />
+                <div class="video-play-overlay">
+                  <div class="play-btn-circle">
+                    <el-icon><VideoPlay /></el-icon>
+                  </div>
+                </div>
+              </template>
+              <!-- PDF：真实首页预览 + 文档样式回退 -->
+              <template v-else-if="resource.file_type === 'pdf'">
+                <img
+                  v-if="!thumbFailedSet.has(resource.id)"
+                  :src="getThumbUrl(resource)"
+                  class="thumb-img"
+                  @error="onThumbError(resource.id)"
+                  loading="lazy"
+                />
+                <div v-if="thumbFailedSet.has(resource.id)" class="file-doc-preview">
+                  <div class="doc-page">
+                    <div class="doc-corner"></div>
+                    <div class="doc-lines">
+                      <div class="doc-line" style="width: 75%"></div>
+                      <div class="doc-line" style="width: 92%"></div>
+                      <div class="doc-line" style="width: 60%"></div>
+                      <div class="doc-line" style="width: 85%"></div>
+                      <div class="doc-line" style="width: 45%"></div>
+                    </div>
+                    <div class="doc-file-badge pdf-badge">PDF</div>
+                  </div>
+                </div>
+              </template>
+              <!-- PPT：真实首页预览 + 幻灯片样式回退 -->
+              <template v-else-if="resource.file_type === 'ppt'">
+                <img
+                  v-if="!thumbFailedSet.has(resource.id)"
+                  :src="getThumbUrl(resource)"
+                  class="thumb-img"
+                  @error="onThumbError(resource.id)"
+                  loading="lazy"
+                />
+                <div v-if="thumbFailedSet.has(resource.id)" class="file-ppt-preview">
+                  <div class="ppt-slide">
+                    <div class="ppt-title-bar"></div>
+                    <div class="ppt-body">
+                      <div class="ppt-line" style="width: 70%"></div>
+                      <div class="ppt-line" style="width: 55%"></div>
+                      <div class="ppt-line" style="width: 80%"></div>
+                    </div>
+                    <div class="doc-file-badge ppt-badge">PPT</div>
+                  </div>
+                </div>
+              </template>
+              <!-- 其他文件 -->
+              <template v-else>
+                <el-icon class="type-icon"><Document /></el-icon>
+              </template>
               <div class="resource-size">
                 {{ formatFileSize(resource.size) }}
               </div>
@@ -791,7 +848,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -970,6 +1027,20 @@ function getFileTypeLabel(fileType: string): string {
     case 'ppt': return 'PPT'
     default: return '文件'
   }
+}
+
+// 获取视频缩略图URL
+function getThumbUrl(resource: any): string {
+  const baseUrl = process.env.VUE_APP_LLM_BASE_URL || ''
+  const token = localStorage.getItem('multi_turn_chat_jwt') || localStorage.getItem('jwt_token')
+  return `${baseUrl}/resources/${resource.id}/thumbnail?token=${token}`
+}
+
+// 缩略图加载失败记录（避免翻页后重复请求已失败的缩略图）
+const thumbFailedSet = reactive(new Set<string>())
+
+function onThumbError(resourceId: string) {
+  thumbFailedSet.add(resourceId)
 }
 
 // 切换上传文件类型时清空已选文件
@@ -1860,18 +1931,196 @@ onMounted(() => {
   position: relative;
 }
 
+/* ---- 视频缩略图：真实截帧 + 播放按钮 ---- */
 .resource-thumbnail.type-video {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  overflow: hidden;
 }
 
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.video-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.1);
+  transition: background 0.3s;
+}
+
+.resource-item:hover .video-play-overlay {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.play-btn-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #333;
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.resource-item:hover .play-btn-circle {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- PDF 文档预览 ---- */
 .resource-thumbnail.type-pdf {
-  background: linear-gradient(135deg, #c62828 0%, #e53935 100%);
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  overflow: hidden;
 }
 
+.file-doc-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.doc-page {
+  width: 100px;
+  height: 130px;
+  background: #fff;
+  border-radius: 3px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 14px 12px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s;
+}
+
+.resource-item:hover .doc-page {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.doc-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 20px 20px 0;
+  border-color: transparent #e9ecef transparent transparent;
+}
+
+.doc-corner::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -20px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 20px 0 0 20px;
+  border-color: transparent transparent transparent #ddd;
+}
+
+.doc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.doc-line {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+.doc-file-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.doc-file-badge.pdf-badge {
+  background: #dc2626;
+  color: #fff;
+}
+
+.doc-file-badge.ppt-badge {
+  background: #d97706;
+  color: #fff;
+}
+
+/* ---- PPT 幻灯片预览 ---- */
 .resource-thumbnail.type-ppt {
-  background: linear-gradient(135deg, #d84315 0%, #ff5722 100%);
+  background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+  overflow: hidden;
 }
 
+.file-ppt-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.ppt-slide {
+  width: 144px;
+  height: 100px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s;
+}
+
+.resource-item:hover .ppt-slide {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.ppt-title-bar {
+  height: 8px;
+  width: 60%;
+  background: linear-gradient(90deg, #fb923c, #f97316);
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+
+.ppt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ppt-line {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+/* ---- 通用 fallback icon ---- */
 .type-icon {
   font-size: 60px;
   color: rgba(255, 255, 255, 0.8);
@@ -1892,6 +2141,7 @@ onMounted(() => {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
+  z-index: 3;
 }
 
 .resource-type-badge {
@@ -1904,6 +2154,7 @@ onMounted(() => {
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
+  z-index: 3;
 }
 
 .resource-info {
