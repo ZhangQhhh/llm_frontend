@@ -10,6 +10,7 @@ import store from '../store'
 import { ElMessage } from 'element-plus'
 import http from '../config/api/http'
 import { API_ENDPOINTS } from '../config/api/api'
+import MarkdownManageView from '../views/MarkdownManageView.vue'
 
 // 路由元信息类型定义
 declare module 'vue-router' {
@@ -106,6 +107,12 @@ const routes: Array<RouteRecordRaw> = [
   name: 'knowledge-test',
   component: KnowledgeQAView,
   meta: { title: '业务问答（测试模式）', publicAccess: true, testMode: true }
+  },
+  {
+  path: '/knowledge/markdown',
+  name: 'knowledge-markdown',
+  component: MarkdownManageView,
+  meta: { requiresAuth: true, title: 'Markdown 文件管理' }
   },
   {
     path: '/403',
