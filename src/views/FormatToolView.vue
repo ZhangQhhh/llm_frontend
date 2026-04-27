@@ -669,7 +669,8 @@ const downloadFormattedDocx = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         formatted_text: formatResult.formatted_text,
-        items: formatResult.items 
+        items: formatResult.items,
+        saq_items: formatResult.saq_items   // 必传：含简答题图片(base64)，后端无状态需回传才能写入docx
       })
     });
     
