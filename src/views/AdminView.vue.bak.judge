@@ -1092,11 +1092,6 @@
                       <el-input-number v-model="indeterminateScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px;">分/题</span>
                     </span>
-                    <span>
-                      <span style="margin-right: 4px;">判断题</span>
-                      <el-input-number v-model="judgeScore" :min="0" :max="100" :precision="1" :step="0.1" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">分/题</span>
-                    </span>
                     <span style="display: flex; align-items: center; gap: 8px;">
                       <span style="margin-right: 4px;">简答题</span>
                       <el-radio-group v-model="saqScoreMode" size="small">
@@ -1170,11 +1165,6 @@
                       <span style="margin-left: 4px;">题</span>
                     </span>
                     <span>
-                      <span style="margin-right: 4px;">判断</span>
-                      <el-input-number v-model="randomJudgeCount" :min="0" :max="judgeApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">题</span>
-                    </span>
-                    <span>
                       <span style="margin-right: 4px;">简答</span>
                       <el-input-number v-model="randomSaqCount" :min="0" :max="saqApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
                       <span style="margin-left: 4px;">题</span>
@@ -1236,7 +1226,7 @@
                 <el-form-item label="" style="margin-bottom: 0;">
                   <el-button type="primary" @click="createPaper" :loading="creatingPaper">
                     {{ paperGenerateMode === 'random'
-                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomJudgeCount + randomSaqCount + randomIndeterminateCount}题)`
+                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomSaqCount + randomIndeterminateCount}题)`
                       : `生成试卷 ${selectedPaperQuestions.length > 0 ? '(' + selectedPaperQuestions.length + '题)' : '(全部)'}` }}
                   </el-button>
                   <span class="status-msg">{{ paperMessage }}</span>
@@ -1249,7 +1239,6 @@
                   <el-radio-button value="all">全部</el-radio-button>
                   <el-radio-button value="single">单选题</el-radio-button>
                   <el-radio-button value="multi">多选题</el-radio-button>
-                  <el-radio-button value="judge">判断题</el-radio-button>
                   <el-radio-button value="saq">简答题</el-radio-button>
                 </el-radio-group>
                 <el-input
@@ -1300,8 +1289,8 @@
                   />
                   <div class="paper-question-content">
                     <div class="paper-question-stem">
-                      <el-tag :type="q.qtype === 'saq' ? 'primary' : (q.qtype === 'judge' ? 'success' : (isMultiChoice(q) ? 'warning' : 'info'))" size="small" style="margin-right: 8px;">
-                        {{ q.qtype === 'saq' ? '简答' : (q.qtype === 'judge' ? '判断' : (isMultiChoice(q) ? '多选' : '单选')) }}
+                      <el-tag :type="q.qtype === 'saq' ? 'primary' : (isMultiChoice(q) ? 'warning' : 'info')" size="small" style="margin-right: 8px;">
+                        {{ q.qtype === 'saq' ? '简答' : (isMultiChoice(q) ? '多选' : '单选') }}
                       </el-tag>
                       <el-tag
                         v-if="enableIndeterminate && indeterminateMode === 'select' && q.qtype !== 'saq'"
@@ -1335,8 +1324,7 @@
                           <span style="color: #909399; font-size: 12px;">分</span>
                         </span>
                       </template>
-                      <span class="paper-q-num">{{ idx + 1 + (paperQuestionPage - 1) * paperQuestionPageSize }}.</span>
-                      <span class="stem-html paper-stem-html" v-html="formatStem(q.stem, q)" @click="onStemContentClick"></span>
+                      <span>{{ idx + 1 }}. <span class="stem-html" v-html="formatStem(q.stem, q)" @click="onStemContentClick"></span></span>
                     </div>
                     <!-- 题干图片（表格内嵌入的图片不重复展示） -->
                     <div v-if="visibleStemImagesOf(q).length > 0" class="q-stem-images" style="margin: 6px 0;">
@@ -1534,11 +1522,6 @@
                         <el-input-number v-model="uploadedIndeterminateScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
                         <span style="margin-left: 4px;">分</span>
                       </span>
-                      <span style="display: flex; align-items: center;">
-                        <span style="margin-right: 6px;">判断题</span>
-                        <el-input-number v-model="uploadedJudgeScore" :min="0" :max="100" :precision="1" size="small" style="width: 100px;" />
-                        <span style="margin-left: 4px;">分</span>
-                      </span>
                       <span style="display: flex; align-items: center; gap: 8px;">
                         <span style="margin-right: 6px;">简答题</span>
                         <el-radio-group v-model="uploadedSaqScoreMode" size="small">
@@ -1611,7 +1594,6 @@
                     <span class="preview-num">{{ idx + 1 }}.</span>
                     <el-tag v-if="item.qtype === 'saq'" type="primary" size="small">简答</el-tag>
                     <el-tag v-else-if="item.qtype === 'indeterminate'" type="success" size="small">不定项</el-tag>
-                    <el-tag v-else-if="item.qtype === 'judge'" size="small" style="background: #9c27b0; color: #fff; border-color: #9c27b0;">判断</el-tag>
                     <el-tag v-else-if="item.qtype === 'multi' || (!item.qtype && isMultiChoice(item))" type="warning" size="small">多选</el-tag>
                     <el-tag v-else type="info" size="small">单选</el-tag>
                     <el-tag v-if="item.qtype === 'saq' && item.category" size="small" effect="plain">{{ item.category }}</el-tag>
@@ -1736,7 +1718,6 @@
                           <el-radio-button value="single">单选</el-radio-button>
                           <el-radio-button value="multi">多选</el-radio-button>
                           <el-radio-button value="indeterminate">不定项</el-radio-button>
-                          <el-radio-button value="judge">判断</el-radio-button>
                           <el-radio-button value="saq">简答</el-radio-button>
                         </el-radio-group>
                       </el-form-item>
@@ -2103,9 +2084,7 @@
                 <div class="wrong-question-chart">
                   <div v-for="(q, idx) in topWrongQuestions" :key="q.qid" class="wrong-question-item">
                     <div class="wq-rank" :class="{ 'top-three': Number(idx) < 3 }">{{ Number(idx) + 1 }}</div>
-                    <el-tag class="wq-tag" size="small"
-                      :type="q.qtype === 'saq' ? 'warning' : (q.qtype === 'multi' ? 'success' : (q.qtype === 'indeterminate' ? 'danger' : (q.qtype === 'judge' ? 'info' : 'primary')))"
-                      :style="q.qtype === 'judge' ? 'background:#9c27b0;color:#fff;border-color:#9c27b0;' : ''">
+                    <el-tag class="wq-tag" size="small" :type="q.qtype === 'saq' ? 'warning' : (q.qtype === 'multi' ? 'success' : 'primary')">
                       {{ getQtypeLabel(q.qtype) }}
                     </el-tag>
                     <div class="wq-stem" :title="q.stem_full || q.stem">{{ q.stem }}</div>
@@ -2143,11 +2122,6 @@
                   <el-table-column prop="mcq_score" label="选择题" width="100" sortable>
                     <template #default="scope">
                       {{ scope.row.mcq_score?.toFixed(1) || 0 }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column v-if="gradesStats.has_judge" prop="judge_score" label="判断题" width="100" sortable>
-                    <template #default="scope">
-                      {{ scope.row.judge_score?.toFixed(1) || 0 }}
                     </template>
                   </el-table-column>
                   <el-table-column v-if="gradesStats.has_saq" prop="saq_score" label="简答题" width="100" sortable>
@@ -2796,9 +2770,7 @@
           <div class="detail-questions">
             <div v-for="(q, idx) in kpDetailData.top5_questions" :key="q.qid" class="detail-question-item">
               <div class="dq-rank">{{ idx + 1 }}</div>
-              <el-tag size="small"
-                :type="q.qtype === 'saq' ? 'warning' : (q.qtype === 'multi' ? 'success' : (q.qtype === 'indeterminate' ? 'danger' : (q.qtype === 'judge' ? 'info' : 'primary')))"
-                :style="q.qtype === 'judge' ? 'background:#9c27b0;color:#fff;border-color:#9c27b0;' : ''">
+              <el-tag size="small" :type="q.qtype === 'saq' ? 'warning' : (q.qtype === 'multi' ? 'success' : 'primary')">
                 {{ getQtypeLabel(q.qtype) }}
               </el-tag>
               <div class="dq-stem" :title="q.stem_full">{{ q.stem }}</div>
@@ -2953,17 +2925,13 @@
               <el-input-number v-model="scoreEditForm.mcq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_mcq?.toFixed(1) }}</span>
             </el-form-item>
-            <el-form-item v-if="gradesStats?.has_judge" label="判断题分数">
-              <el-input-number v-model="scoreEditForm.judge_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
-              <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_judge?.toFixed(1) }}</span>
-            </el-form-item>
             <el-form-item v-if="gradesStats?.has_saq" label="简答题分数">
               <el-input-number v-model="scoreEditForm.saq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_saq?.toFixed(1) }}</span>
             </el-form-item>
             <el-form-item label="修改后总分">
               <span style="font-size: 18px; font-weight: 600; color: #409eff;">
-                {{ ((scoreEditForm.mcq_score || 0) + (scoreEditForm.judge_score || 0) + (scoreEditForm.saq_score || 0)).toFixed(1) }}
+                {{ ((scoreEditForm.mcq_score || 0) + (scoreEditForm.saq_score || 0)).toFixed(1) }}
               </span>
             </el-form-item>
           </el-form>
@@ -3540,7 +3508,6 @@ export default defineComponent({
     const singleScore = ref(1)       // 单选题分数
     const multiScore = ref(5)        // 多选题分数
     const indeterminateScore = ref(5) // 不定项分数
-    const judgeScore = ref(1)        // 判断题分数
     const saqScore = ref(10)         // 简答题分数
     const saqScoreMode = ref<'uniform' | 'custom'>('uniform')  // 简答题分数模式
     const saqCustomScores = reactive<Record<string, number>>({})  // 简答题自定义分数 {qid: score}
@@ -3607,7 +3574,7 @@ export default defineComponent({
     const exportMessage = ref('')
 
     // 试卷题目选择相关
-    const paperQuestionFilter = ref<'all' | 'single' | 'multi' | 'judge' | 'saq'>('all')
+    const paperQuestionFilter = ref<'all' | 'single' | 'multi' | 'saq'>('all')
     const paperQuestionSearch = ref('')
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
@@ -3621,7 +3588,6 @@ export default defineComponent({
     // 随机抽取配置
     const randomSingleCount = ref(5)
     const randomMultiCount = ref(5)
-    const randomJudgeCount = ref(0)  // 判断题数量
     const randomSaqCount = ref(0)    // 简答题数量
     const randomIndeterminateSingleCount = ref(0)  // 不定项中的单选数量
     const randomIndeterminateMultiCount = ref(0)   // 不定项中的多选数量
@@ -3630,13 +3596,10 @@ export default defineComponent({
 
     // 计算题库中各类型的题目数量（排除SAQ）
     const singleApprovedCount = computed(() => {
-      return approvedQuestions.value.filter(q => q.qtype !== 'saq' && q.qtype !== 'judge' && !isMultiChoice(q)).length
+      return approvedQuestions.value.filter(q => q.qtype !== 'saq' && !isMultiChoice(q)).length
     })
     const multiApprovedCount = computed(() => {
-      return approvedQuestions.value.filter(q => q.qtype !== 'saq' && q.qtype !== 'judge' && isMultiChoice(q)).length
-    })
-    const judgeApprovedCount = computed(() => {
-      return approvedQuestions.value.filter(q => q.qtype === 'judge').length
+      return approvedQuestions.value.filter(q => q.qtype !== 'saq' && isMultiChoice(q)).length
     })
     const saqApprovedCount = computed(() => {
       return approvedQuestions.value.filter(q => q.qtype === 'saq').length
@@ -3671,7 +3634,6 @@ export default defineComponent({
     const uploadedSingleScore = ref(1)
     const uploadedMultiScore = ref(5)
     const uploadedIndeterminateScore = ref(5)
-    const uploadedJudgeScore = ref(1)
     const uploadedSaqScore = ref(10)
     const uploadedSaqScoreMode = ref<'uniform' | 'custom'>('uniform')  // 简答题分数模式：统一/自定义
 
@@ -4122,7 +4084,7 @@ export default defineComponent({
 
     // 获取题型标签
     const getQtypeLabel = (qtype: string) => {
-      const map: Record<string, string> = { single: '单选', multi: '多选', indeterminate: '不定项', judge: '判断', saq: '简答' }
+      const map: Record<string, string> = { single: '单选', multi: '多选', saq: '简答' }
       return map[qtype] || qtype
     }
 
@@ -4202,7 +4164,7 @@ export default defineComponent({
     // ========== 改分功能 ==========
     const scoreEditDialogVisible = ref(false)
     const scoreEditData = ref<any>(null)
-    const scoreEditForm = reactive({ mcq_score: 0, judge_score: 0, saq_score: 0 })
+    const scoreEditForm = reactive({ mcq_score: 0, saq_score: 0 })
     const scoreEditSaving = ref(false)
 
     const openScoreEditDialog = (row: any) => {
@@ -4211,12 +4173,10 @@ export default defineComponent({
         student_name: row.student_name,
         student_id: row.student_id,
         orig_mcq: row.mcq_score || 0,
-        orig_judge: row.judge_score || 0,
         orig_saq: row.saq_score || 0,
         has_override: row.has_override || false
       }
       scoreEditForm.mcq_score = row.mcq_score || 0
-      scoreEditForm.judge_score = row.judge_score || 0
       scoreEditForm.saq_score = row.saq_score || 0
       scoreEditDialogVisible.value = true
     }
@@ -4230,9 +4190,7 @@ export default defineComponent({
           headers: getAuthHeaders(),
           body: JSON.stringify({
             attempt_id: scoreEditData.value.attempt_id,
-            // 后端 score_overrides.mcq_score 语义为“全部非简答”合并分，
-            // 这里将选择题分 + 判断题分合并传递，保持向后兼容
-            mcq_score: (scoreEditForm.mcq_score || 0) + (scoreEditForm.judge_score || 0),
+            mcq_score: scoreEditForm.mcq_score,
             saq_score: scoreEditForm.saq_score
           })
         })
@@ -4287,7 +4245,7 @@ export default defineComponent({
     const fixAnswerForm = reactive({ question_index: null as number | null, new_answer: '' })
     const fixAnswerSaving = ref(false)
     const fixAnswerResult = ref<any>(null)
-    const qtypeLabelMap: Record<string, string> = { single: '单选', multi: '多选', indeterminate: '不定项', judge: '判断', saq: '简答' }
+    const qtypeLabelMap: Record<string, string> = { single: '单选', multi: '多选', indeterminate: '不定项', saq: '简答' }
 
     // 只显示选择题（非SAQ）
     const mcqQuestionsOverview = computed(() => {
@@ -4434,11 +4392,9 @@ export default defineComponent({
 
       // 按类型筛选
       if (paperQuestionFilter.value === 'single') {
-        result = result.filter(q => q.qtype !== 'saq' && q.qtype !== 'judge' && !isMultiChoice(q))
+        result = result.filter(q => q.qtype !== 'saq' && !isMultiChoice(q))
       } else if (paperQuestionFilter.value === 'multi') {
-        result = result.filter(q => q.qtype !== 'saq' && q.qtype !== 'judge' && isMultiChoice(q))
-      } else if (paperQuestionFilter.value === 'judge') {
-        result = result.filter(q => q.qtype === 'judge')
+        result = result.filter(q => q.qtype !== 'saq' && isMultiChoice(q))
       } else if (paperQuestionFilter.value === 'saq') {
         result = result.filter(q => q.qtype === 'saq')
       }
@@ -5944,15 +5900,7 @@ export default defineComponent({
           }
         }
         const hasOptions = Object.keys(cleanedOptions).length > 0
-        const optionTexts = Object.values(cleanedOptions).map((v: any) => String(v || '').trim()).filter(Boolean)
-        const _judgePairs = [['正确','错误'],['对','错'],['是','否'],['true','false'],['yes','no'],['√','×']]
-        const isJudgeOpts = optionTexts.length === 2 && _judgePairs.some(p => {
-          const norm = optionTexts.map(t => t.toLowerCase().replace(/[\s。.！？·、]+/g, ''))
-          return (norm[0] === p[0] && norm[1] === p[1]) || (norm[0] === p[1] && norm[1] === p[0])
-        })
-        const newQtype = hasOptions
-          ? (isJudgeOpts ? 'judge' : (((editBuf.answer || '').length > 1) ? 'multi' : 'single'))
-          : 'saq'
+        const newQtype = hasOptions ? (((editBuf.answer || '').length > 1) ? 'multi' : 'single') : 'saq'
         const itemData: any = {
           id: row.qid,
           stem: editBuf.stem,
@@ -6526,7 +6474,6 @@ export default defineComponent({
         single: singleScore.value,
         multi: multiScore.value,
         indeterminate: indeterminateScore.value,
-        judge: judgeScore.value,
         saq_mode: saqScoreMode.value
       }
 
@@ -6574,7 +6521,6 @@ export default defineComponent({
         requestBody.random_mode = {
           single_count: randomSingleCount.value,
           multi_count: randomMultiCount.value,
-          judge_count: randomJudgeCount.value,
           saq_count: randomSaqCount.value,
           indeterminate_single_count: randomIndeterminateSingleCount.value,
           indeterminate_multi_count: randomIndeterminateMultiCount.value
@@ -7193,7 +7139,6 @@ export default defineComponent({
         uploadedSingleScore.value = scoreConfig.single || 1
         uploadedMultiScore.value = scoreConfig.multi || 5
         uploadedIndeterminateScore.value = scoreConfig.indeterminate || 5
-        uploadedJudgeScore.value = scoreConfig.judge || 1
         uploadedSaqScore.value = scoreConfig.saq || 10
         uploadedSaqScoreMode.value = scoreConfig.saq_mode || 'uniform'
 
@@ -7266,7 +7211,6 @@ export default defineComponent({
           single: uploadedSingleScore.value,
           multi: uploadedMultiScore.value,
           indeterminate: uploadedIndeterminateScore.value,
-          judge: uploadedJudgeScore.value,
           saq_mode: uploadedSaqScoreMode.value
         }
 
@@ -8356,7 +8300,7 @@ export default defineComponent({
       // 试卷生成相关
       questions, filteredQuestions, statusFilter, searchQuery, loadingQuestions, showingAnalysis, approvingAll,
       paperTitle, creatingPaper, paperMessage,
-      singleScore, multiScore, indeterminateScore, judgeScore, saqScore, saqScoreMode, saqCustomScores, saqClauseScores, distributeScore, getSaqClauseTotal,
+      singleScore, multiScore, indeterminateScore, saqScore, saqScoreMode, saqCustomScores, saqClauseScores, distributeScore, getSaqClauseTotal,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       selectedKnowledgePoints, availableKnowledgePoints, mergedKnowledgePointOptions,
       approvedQuestions, filteredPaperQuestions, pagedPaperQuestions, paperQuestionPage, paperQuestionPageSize, toggleSelectAllPaperQuestions, isMultiChoice,
@@ -8364,8 +8308,8 @@ export default defineComponent({
       exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,
       userSearch, users, loadingUsers, actionLoadingId, userPage, userPageSize, pagedUsers,
       // 试卷生成模式
-      paperGenerateMode, randomSingleCount, randomMultiCount, randomJudgeCount, randomSaqCount, randomIndeterminateSingleCount, randomIndeterminateMultiCount, randomIndeterminateCount,
-      singleApprovedCount, multiApprovedCount, judgeApprovedCount, saqApprovedCount,
+      paperGenerateMode, randomSingleCount, randomMultiCount, randomSaqCount, randomIndeterminateSingleCount, randomIndeterminateMultiCount, randomIndeterminateCount,
+      singleApprovedCount, multiApprovedCount, saqApprovedCount,
       // 不定项配置
       enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,
       selectedIndeterminateQuestions, toggleIndeterminate,
@@ -8375,7 +8319,7 @@ export default defineComponent({
       hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
       toggleEditPaperItem, deletePaperItem, addNewPaperItem, saveUploadedPaper,
       deleteUploadedItemImage, triggerUploadItemImage, triggerReplaceUploadedItemImage,
-      uploadedSingleScore, uploadedMultiScore, uploadedIndeterminateScore, uploadedJudgeScore, uploadedSaqScore, uploadedSaqScoreMode,
+      uploadedSingleScore, uploadedMultiScore, uploadedIndeterminateScore, uploadedSaqScore, uploadedSaqScoreMode,
       // 编辑已有试卷相关
       editPaperSelected, loadingPaperDetail, isEditingExistingPaper, editPaperOriginalId,
       loadPaperForEdit, onPaperDialogClosed, editPaperWithPasswordCheck,
@@ -8526,10 +8470,6 @@ export default defineComponent({
 /* 题干 v-html 容器：让图片有手型光标提示 */
 .stem-html { display: inline; }
 .stem-html :deep(.md-table-img) { cursor: zoom-in; }
-/* 试卷管理 tab：使表格能在题干 v-html 容器内正确渲染 */
-.paper-q-num { margin-right: 4px; font-weight: 500; }
-.paper-stem-html { display: inline-block; vertical-align: top; max-width: 100%; }
-.paper-stem-html :deep(.md-table) { display: table; }
 /* 编辑模式下"表格图片"的删除卡片 */
 .table-img-edit-grid {
   display: flex;

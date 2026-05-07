@@ -218,23 +218,6 @@
             </button>
           </div>
         </div>
-        <!-- 判断题导航 -->
-        <div v-if="judgeQuestions.length > 0" class="nav-section">
-          <div class="nav-section-title">
-            <span class="nav-type-tag judge">判断</span>
-            <span class="nav-count">{{ judgeQuestions.length }}题</span>
-          </div>
-          <div class="navgrid">
-            <button
-              v-for="(q, idx) in judgeQuestions"
-              :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
-              @click="scrollToQuestion(q.qid)"
-            >
-              {{ idx + 1 }}
-            </button>
-          </div>
-        </div>
         <!-- 简答题导航 -->
         <div v-if="saqQuestions.length > 0" class="nav-section">
           <div class="nav-section-title">
@@ -302,12 +285,7 @@
               <span class="stat-label">不定项</span>
               <span class="stat-value">{{ indeterminateQuestions.length }}题</span>
             </span>
-            <span class="head-divider" v-if="indeterminateQuestions.length > 0 && (judgeQuestions.length > 0 || saqQuestions.length > 0)">|</span>
-            <span class="head-stat" v-if="judgeQuestions.length > 0">
-              <span class="stat-label">判断</span>
-              <span class="stat-value">{{ judgeQuestions.length }}题</span>
-            </span>
-            <span class="head-divider" v-if="judgeQuestions.length > 0 && saqQuestions.length > 0">|</span>
+            <span class="head-divider" v-if="indeterminateQuestions.length > 0 && saqQuestions.length > 0">|</span>
             <span class="head-stat" v-if="saqQuestions.length > 0">
               <span class="stat-label">简答</span>
               <span class="stat-value">{{ saqQuestions.length }}题</span>
@@ -509,42 +487,6 @@
                     </template>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 判断题区域（单选题特例：2 选项 正确/错误） -->
-          <div v-if="visibleJudgeQuestions.length > 0" class="question-section">
-            <div class="section-header">
-              <span class="section-tag judge">{{ getJudgeSectionNumber() }}、判断题</span>
-              <span class="section-count">{{ isLowPerformanceMode ? `本页 ${visibleJudgeQuestions.length} 题` : `共 ${judgeQuestions.length} 题` }}</span>
-            </div>
-            <div v-for="(q, idx) in visibleJudgeQuestions" :key="q.qid" :id="'q-' + q.qid" class="q">
-              <div class="qheader">
-                <b><span>{{ getQuestionIndexInType(q, idx, 'judge') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
-                <span class="tag judge">判断</span>
-              </div>
-              <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
-                <img
-                  v-for="(img, imgIdx) in visibleStemImagesOf(q)"
-                  :key="imgIdx"
-                  :src="'data:' + img.content_type + ';base64,' + img.base64"
-                  class="q-image"
-                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                />
-              </div>
-              <div class="opts" v-if="q.options && q.options.length">
-                <button
-                  v-for="opt in q.options"
-                  :key="opt.label"
-                  type="button"
-                  :class="['opt', { active: answersState[q.qid] === opt.label }]"
-                  :disabled="submitted"
-                  @click="!submitted && ((answersState[q.qid] = (answersState[q.qid] === opt.label ? '' : opt.label)), debounceSave())"
-                >
-                  <span class="opt-label">{{ opt.label }}</span>
-                  <span class="opt-text">{{ opt.text }}</span>
-                </button>
               </div>
             </div>
           </div>
@@ -767,7 +709,7 @@
               <div class="qheader">
                 <b><span>{{ idx + 1 }}. </span><span class="stem-html" v-html="formatText(item.stem, item)" @click="onStemContentClick"></span></b>
                 <span :class="['tag', item.qtype]">
-                  {{ item.qtype === 'multi' ? '多选' : (item.qtype === 'indeterminate' ? '不定项' : (item.qtype === 'judge' ? '判断' : (item.qtype === 'saq' ? '简答' : '单选'))) }}
+                  {{ item.qtype === 'multi' ? '多选' : (item.qtype === 'indeterminate' ? '不定项' : (item.qtype === 'saq' ? '简答' : '单选')) }}
                 </span>
               </div>
               <!-- 题干图片（表格内嵌入的图片在表格内渲染，不重复显示） -->
@@ -964,17 +906,8 @@
               <el-input-number v-model="practiceConfig.indeterminateCount" :min="0" :max="50" size="default" />
             </div>
             <div class="config-item-dialog">
-              <label>判断题数量</label>
-              <el-input-number v-model="practiceConfig.judgeCount" :min="0" :max="50" size="default" />
-            </div>
-          </div>
-          <div class="config-row-dialog">
-            <div class="config-item-dialog">
               <label>简答题数量</label>
               <el-input-number v-model="practiceConfig.saqCount" :min="0" :max="20" size="default" />
-            </div>
-            <div class="config-item-dialog">
-              <!-- 占位 -->
             </div>
           </div>
           <div class="config-row-dialog">
@@ -1141,8 +1074,8 @@
             <div class="wrong-header">
               <span class="wrong-num">{{ idx + 1 }}</span>
               <span class="wrong-stem stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span>
-              <el-tag size="small" :type="q.qtype === 'multi' ? 'danger' : (q.qtype === 'saq' ? 'info' : (q.qtype === 'judge' ? 'success' : 'primary'))">
-                {{ q.qtype === 'multi' ? '多选' : (q.qtype === 'indeterminate' ? '不定项' : (q.qtype === 'judge' ? '判断' : (q.qtype === 'saq' ? '简答' : '单选'))) }}
+              <el-tag size="small" :type="q.qtype === 'multi' ? 'danger' : (q.qtype === 'saq' ? 'info' : 'primary')">
+                {{ q.qtype === 'multi' ? '多选' : (q.qtype === 'indeterminate' ? '不定项' : (q.qtype === 'saq' ? '简答' : '单选')) }}
               </el-tag>
               <el-button 
                 size="small" 
@@ -1389,43 +1322,13 @@ export default defineComponent({
       singleCount: 10,
       multiCount: 5,
       indeterminateCount: 0,
-      judgeCount: 0,
       saqCount: 0,
       duration: 30
     })
     const startingPractice = ref(false)
     const practiceTotalCount = computed(() => {
-      return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount + practiceConfig.judgeCount + practiceConfig.saqCount
+      return practiceConfig.singleCount + practiceConfig.multiCount + practiceConfig.indeterminateCount + practiceConfig.saqCount
     })
-
-    // 检测是否为判断题选项（恡76项，内容为正确/错误等对偶词对）
-    const _JUDGE_OPTION_PAIRS: Set<string>[] = [
-      new Set(['正确', '错误']), new Set(['对', '错']), new Set(['是', '否']),
-      new Set(['true', 'false']), new Set(['t', 'f']), new Set(['yes', 'no']), new Set(['y', 'n']),
-      new Set(['√', '×']), new Set(['对的', '错的']), new Set(['正确的', '错误的']),
-    ]
-    const _isJudgeOptions = (options: any): boolean => {
-      try {
-        let texts: string[] = []
-        if (Array.isArray(options)) {
-          texts = options.map((o: any) => (o?.text ?? o ?? '').toString().trim()).filter(Boolean)
-        } else if (options && typeof options === 'object') {
-          texts = Object.values(options).map((v: any) => (v ?? '').toString().trim()).filter(Boolean)
-        }
-        if (texts.length !== 2) return false
-        const norm = new Set(texts.map(t => t.toLowerCase().replace(/[。.!！？?·、 ]+$/g, '')))
-        return _JUDGE_OPTION_PAIRS.some(pair => {
-          if (pair.size !== norm.size) return false
-          for (const v of pair) if (!norm.has(v)) return false
-          return true
-        })
-      } catch { return false }
-    }
-    const _isJudgeQuestion = (q: any): boolean => {
-      if (!q) return false
-      if (q.qtype === 'judge') return true
-      return _isJudgeOptions(q.options)
-    }
 
     // 知识点筛选相关
     const selectedPracticeKnowledgePoints = ref<string[]>([])
@@ -1895,10 +1798,10 @@ export default defineComponent({
       return Math.round((correctCount.value / total) * 100)
     })
 
-    // 按题型排序的解析列表（单选→多选→不定项→判断→简答）
+    // 按题型排序的解析列表（单选→多选→不定项→简答）
     const sortedReviewItems = computed(() => {
       if (!reviewData.value) return []
-      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, judge: 3, saq: 4 }
+      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, saq: 3 }
       return [...reviewData.value.items].sort((a, b) => {
         return (typeOrder[a.qtype] ?? 99) - (typeOrder[b.qtype] ?? 99)
       })
@@ -1907,7 +1810,7 @@ export default defineComponent({
     // 按题型排序的成绩报告项（与考试时的题目显示顺序一致）
     const sortedGradeItems = computed(() => {
       if (!gradeReport.value || !reviewData.value) return []
-      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, judge: 3, saq: 4 }
+      const typeOrder: Record<string, number> = { single: 0, multi: 1, indeterminate: 2, saq: 3 }
       // 需要从reviewData获取qtype信息
       const qtypeMap: Record<string, string> = {}
       reviewData.value.items.forEach((item: any) => {
@@ -1953,11 +1856,6 @@ export default defineComponent({
       return questions.value.filter(q => q.qtype === 'indeterminate')
     })
 
-    // 判断题列表（单选题特例：2 个选项 + 正确/错误）
-    const judgeQuestions = computed(() => {
-      return questions.value.filter(q => q.qtype === 'judge')
-    })
-
     // 简答题列表
     const saqQuestions = computed(() => {
       return questions.value.filter(q => q.qtype === 'saq')
@@ -1995,14 +1893,13 @@ export default defineComponent({
     // ======= 性能优化：低配模式分页 =======
     const isLowPerformanceMode = computed(() => store.getters['performance/isLowPerformanceMode'])
 
-    // 按题型顺序排序的题目列表（单选→多选→不定项→判断→简答）
+    // 按题型顺序排序的题目列表（单选→多选→不定项→简答）
     // 低配模式下使用筛选后的简答题，确保分页与岗位筛选同步
     const sortedQuestions = computed(() => {
       return [
         ...singleQuestions.value,
         ...multiQuestions.value,
         ...indeterminateQuestions.value,
-        ...judgeQuestions.value,
         ...filteredSaqQuestions.value  // 使用筛选后的简答题
       ]
     })
@@ -2030,11 +1927,6 @@ export default defineComponent({
       return pagedQuestions.value.filter(q => q.qtype === 'indeterminate')
     })
 
-    const visibleJudgeQuestions = computed(() => {
-      if (!isLowPerformanceMode.value) return judgeQuestions.value
-      return pagedQuestions.value.filter(q => q.qtype === 'judge')
-    })
-
     const visibleSaqQuestions = computed(() => {
       // 使用已筛选的简答题列表
       if (!isLowPerformanceMode.value) return filteredSaqQuestions.value
@@ -2060,8 +1952,6 @@ export default defineComponent({
         fullList = multiQuestions.value
       } else if (qtype === 'indeterminate') {
         fullList = indeterminateQuestions.value
-      } else if (qtype === 'judge') {
-        fullList = judgeQuestions.value
       } else if (qtype === 'saq') {
         fullList = filteredSaqQuestions.value
       }
@@ -2251,21 +2141,10 @@ export default defineComponent({
     }
 
     // 计算简答题章节编号
-    const getJudgeSectionNumber = () => {
-      let num = 0
-      if (singleQuestions.value.length > 0) num++
-      if (multiQuestions.value.length > 0) num++
-      if (indeterminateQuestions.value.length > 0) num++
-      num++
-      const chinese = ['一','二','三','四','五','六','七','八','九','十']
-      return chinese[num - 1] || String(num)
-    }
-
     const getSaqSectionNumber = () => {
       let num = 0
       if (singleQuestions.value.length > 0) num++
       if (multiQuestions.value.length > 0) num++
-      if (judgeQuestions.value.length > 0) num++  // judge 章节
       if (indeterminateQuestions.value.length > 0) num++
       const numbers = ['一', '二', '三', '四', '五']
       return numbers[num] || '四'
@@ -3092,26 +2971,10 @@ export default defineComponent({
           }
         }
         
-        // 简答题（兼容历史数据：qtype 缺失或被误填时，按"无选项"兜底判定为 SAQ）
-        const _hasOptions = (q: any): boolean => {
-          const opts = q?.options
-          if (!opts) return false
-          if (Array.isArray(opts)) return opts.length > 0
-          if (typeof opts === 'object') return Object.keys(opts).length > 0
-          return false
-        }
-        const _isSaqQuestion = (q: any): boolean => {
-          if (!q) return false
-          if (q.qtype === 'saq') return true
-          // 兜底：无任何选项的题目视为简答题
-          if (!_hasOptions(q)) return true
-          return false
-        }
-        const saqQuestions = approvedQuestions.filter((q: any) => _isSaqQuestion(q))
-        // 判断题（选项为正确/错误对偶 或 qtype===judge）从选择题中剩离
-        const nonSaq = approvedQuestions.filter((q: any) => !_isSaqQuestion(q))
-        const judgeQuestionsPool = nonSaq.filter((q: any) => _isJudgeQuestion(q))
-        const mcqQuestions = nonSaq.filter((q: any) => !_isJudgeQuestion(q))
+        // 简答题
+        const saqQuestions = approvedQuestions.filter((q: any) => q.qtype === 'saq')
+        // 选择题（非SAQ）
+        const mcqQuestions = approvedQuestions.filter((q: any) => q.qtype !== 'saq')
         const singleQuestions = mcqQuestions.filter((q: any) => {
           const answer = (q.answer || '').toUpperCase()
           return answer.length === 1
@@ -3133,10 +2996,8 @@ export default defineComponent({
 
         const selectedSingle = shuffle(singleQuestions).slice(0, practiceConfig.singleCount)
         const selectedMulti = shuffle(multiQuestions).slice(0, practiceConfig.multiCount)
-        // 判断题（从判断题专用池抽取）
-        const selectedJudge = shuffle(judgeQuestionsPool).slice(0, practiceConfig.judgeCount)
         
-        // 不定项题目：从单选和多选中各抽一部分（判断题已剩离，不会混入）
+        // 不定项题目：从单选和多选中各抽一部分
         const indeterminateSingleCount = Math.ceil(practiceConfig.indeterminateCount / 2)
         const indeterminateMultiCount = practiceConfig.indeterminateCount - indeterminateSingleCount
         const remainingSingle = shuffle(singleQuestions.filter((q: any) => !selectedSingle.includes(q))).slice(0, indeterminateSingleCount)
@@ -3150,9 +3011,8 @@ export default defineComponent({
         const actualSingleCount = selectedSingle.length
         const actualMultiCount = selectedMulti.length
         const actualIndeterminateCount = selectedIndeterminate.length
-        const actualJudgeCount = selectedJudge.length
         const actualSaqCount = selectedSaq.length
-        const actualTotal = actualSingleCount + actualMultiCount + actualIndeterminateCount + actualJudgeCount + actualSaqCount
+        const actualTotal = actualSingleCount + actualMultiCount + actualIndeterminateCount + actualSaqCount
 
         if (actualTotal === 0) {
           ElMessage.warning('题库中没有足够的已通过题目')
@@ -3209,11 +3069,6 @@ export default defineComponent({
         // 添加不定项题
         selectedIndeterminate.forEach((q: any) => {
           paperItems.push(buildPaperItem(q, 'indeterminate'))
-        })
-
-        // 添加判断题
-        selectedJudge.forEach((q: any) => {
-          paperItems.push(buildPaperItem(q, 'judge'))
         })
 
         // 添加简答题
@@ -4073,12 +3928,9 @@ export default defineComponent({
       visibleSingleQuestions,
       visibleMultiQuestions,
       visibleIndeterminateQuestions,
-      visibleJudgeQuestions,
-      judgeQuestions,
       visibleSaqQuestions,
       sortedQuestions,
       getSaqSectionNumber,
-      getJudgeSectionNumber,
       getQuestionIndexInType,
       pagedQuestions,
       lowModeTotalPages,
@@ -4123,7 +3975,6 @@ export default defineComponent({
       lastSaveTime,
       savingProgress,
       saveProgress,
-      debounceSave,
       // 考试通知相关
       publishedExams,
       loadingExamNotifications,
@@ -4903,16 +4754,6 @@ export default defineComponent({
   color: #fff;
 }
 
-.tag.judge {
-  background: linear-gradient(135deg, #a78bfa 0%, #9c27b0 100%);
-  color: #fff;
-}
-
-.section-tag.judge {
-  background: linear-gradient(135deg, #a78bfa 0%, #9c27b0 100%);
-  color: #fff;
-}
-
 .tag.saq {
   background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
   color: #fff;
@@ -5587,10 +5428,6 @@ export default defineComponent({
 
 .nav-type-tag.multi {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.nav-type-tag.judge {
-  background: linear-gradient(135deg, #a78bfa 0%, #9c27b0 100%);
 }
 
 .nav-type-tag.indeterminate {

@@ -711,8 +711,6 @@ const previewResult = () => {
     const qtype = item.qtype || '';
     if (qtype === 'saq') {
       return '<span style="background: #f56c6c; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">简答</span>';
-    } else if (qtype === 'judge') {
-      return '<span style="background: #9c27b0; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">判断</span>';
     } else if (qtype === 'single') {
       return '<span style="background: #409eff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">单选</span>';
     } else if (qtype === 'multi') {
