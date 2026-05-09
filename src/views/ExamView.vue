@@ -140,6 +140,12 @@
                 >
                   进入考试
                 </el-button>
+                <span
+                  v-else-if="getExamStatus(exam) === 'pending'"
+                  class="exam-countdown"
+                >
+                  {{ formatCountdown(getMsUntilStart(exam)) }}
+                </span>
               </div>
             </div>
           </div>
@@ -177,7 +183,7 @@
             <button
               v-for="(q, idx) in singleQuestions"
               :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              :class="['navbtn', getNavStateClass(q.qid)]"
               @click="scrollToQuestion(q.qid)"
             >
               {{ idx + 1 }}
@@ -194,7 +200,7 @@
             <button
               v-for="(q, idx) in multiQuestions"
               :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              :class="['navbtn', getNavStateClass(q.qid)]"
               @click="scrollToQuestion(q.qid)"
             >
               {{ idx + 1 }}
@@ -211,7 +217,7 @@
             <button
               v-for="(q, idx) in indeterminateQuestions"
               :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              :class="['navbtn', getNavStateClass(q.qid)]"
               @click="scrollToQuestion(q.qid)"
             >
               {{ idx + 1 }}
@@ -228,7 +234,7 @@
             <button
               v-for="(q, idx) in judgeQuestions"
               :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              :class="['navbtn', getNavStateClass(q.qid)]"
               @click="scrollToQuestion(q.qid)"
             >
               {{ idx + 1 }}
@@ -245,7 +251,7 @@
             <button
               v-for="(q, idx) in saqQuestions"
               :key="q.qid"
-              :class="['navbtn', { answered: isAnswered(q.qid), current: currentQid === q.qid }]"
+              :class="['navbtn', getNavStateClass(q.qid)]"
               @click="scrollToQuestion(q.qid)"
             >
               {{ idx + 1 }}
@@ -253,7 +259,8 @@
           </div>
         </div>
         <div class="nav-summary" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(96, 165, 250, 0.2);">
-          <span class="muted">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
+          <span class="muted" v-if="!reviewData">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
+          <span class="muted" v-else>共 {{ questions.length }} 题，答对 {{ correctCount }} 题</span>
         </div>
       </div>
       <!-- 低配模式下的简化导航 -->
@@ -329,7 +336,7 @@
           <el-empty description="未获取到题目" />
         </div>
 
-        <div v-else class="qlist">
+        <div v-else-if="!reviewData" class="qlist">
           <!-- 单选题区域 -->
           <div v-if="visibleSingleQuestions.length > 0" class="question-section">
             <div class="section-header">
@@ -628,7 +635,7 @@
         </div>
 
         <!-- 提交按钮 -->
-        <div class="card footact" v-if="examStarted">
+        <div class="card footact" v-if="examStarted && !reviewData">
           <el-button type="primary" size="large" @click="submitExam" :disabled="submitted" :loading="submitting">
             交卷并评分
           </el-button>
@@ -763,7 +770,7 @@
         <div v-if="reviewData" class="card review-panel">
           <h3>答案与解析</h3>
           <div class="review-list">
-            <div v-for="(item, idx) in sortedReviewItems" :key="idx" class="q">
+            <div v-for="(item, idx) in sortedReviewItems" :key="idx" :id="'review-q-' + item.qid" class="q">
               <div class="qheader">
                 <b><span>{{ idx + 1 }}. </span><span class="stem-html" v-html="formatText(item.stem, item)" @click="onStemContentClick"></span></b>
                 <span :class="['tag', item.qtype]">
@@ -837,22 +844,44 @@
                 <button
                   v-for="opt in item.options"
                   :key="opt.label"
-                  :class="['opt', { 
-                    active: item.my_labels?.includes(opt.label),
-                    correct: item.correct_labels?.includes(opt.label)
-                  }]"
+                  :class="[
+                    'opt',
+                    {
+                      active: item.my_labels?.includes(opt.label),
+                      correct: item.correct_labels?.includes(opt.label),
+                      'correct-picked': item.my_labels?.includes(opt.label) && item.correct_labels?.includes(opt.label),
+                      'correct-missed': !item.my_labels?.includes(opt.label) && item.correct_labels?.includes(opt.label),
+                      'wrong-picked': item.my_labels?.includes(opt.label) && !item.correct_labels?.includes(opt.label)
+                    }
+                  ]"
                   disabled
                 >
-                  <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
-                  <!-- 选项图片 -->
-                  <span v-if="getReviewOptionImages(item, opt.label).length > 0" class="opt-images">
-                    <img
-                      v-for="(img, imgIdx) in getReviewOptionImages(item, opt.label)"
-                      :key="imgIdx"
-                      :src="'data:' + img.content_type + ';base64,' + img.base64"
-                      class="opt-image"
-                      @click.stop="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
-                    />
+                  <span class="opt-content">
+                    <span>{{ opt.label }}. </span><span v-html="formatText(opt.text)"></span>
+                    <!-- 选项图片 -->
+                    <span v-if="getReviewOptionImages(item, opt.label).length > 0" class="opt-images">
+                      <img
+                        v-for="(img, imgIdx) in getReviewOptionImages(item, opt.label)"
+                        :key="imgIdx"
+                        :src="'data:' + img.content_type + ';base64,' + img.base64"
+                        class="opt-image"
+                        @click.stop="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                      />
+                    </span>
+                  </span>
+                  <span class="opt-badges">
+                    <span
+                      v-if="item.my_labels?.includes(opt.label)"
+                      :class="['opt-badge', 'badge-mine', item.correct_labels?.includes(opt.label) ? 'badge-mine-ok' : 'badge-mine-bad']"
+                    >
+                      {{ item.correct_labels?.includes(opt.label) ? '我选 ✓' : '我选 ✗' }}
+                    </span>
+                    <span
+                      v-if="item.correct_labels?.includes(opt.label) && !item.my_labels?.includes(opt.label)"
+                      class="opt-badge badge-correct-missed"
+                    >
+                      正确答案
+                    </span>
                   </span>
                 </button>
               </div>
@@ -1230,9 +1259,19 @@
       </div>
       <template #footer>
         <div class="wrong-book-footer">
-          <span class="wrong-total">共 {{ wrongBook.length }} 道错题</span>
+          <span class="wrong-total">共 {{ wrongBookTotal }} 道错题</span>
+          <el-pagination
+            v-if="wrongBookTotal > wrongBookPageSize"
+            small
+            background
+            layout="prev, pager, next"
+            :total="wrongBookTotal"
+            :page-size="wrongBookPageSize"
+            :current-page="wrongBookPage"
+            @current-change="onWrongBookPageChange"
+          />
           <el-button @click="wrongBookVisible = false">关闭</el-button>
-          <el-button type="warning" @click="startWrongBookPractice" :loading="startingPractice" :disabled="wrongBook.length === 0">
+          <el-button type="warning" @click="startWrongBookPractice" :loading="startingPractice" :disabled="wrongBookTotal === 0">
             开始错题练习
           </el-button>
         </div>
@@ -1280,6 +1319,8 @@ const API_ENDPOINTS = {
   WRONG_QUESTIONS: {
     ADD: `${MCQ_BASE_URL}/wrong_questions/add`,
     LIST: `${MCQ_BASE_URL}/wrong_questions/list`,
+    IMAGES: `${MCQ_BASE_URL}/wrong_questions/images`,
+    PRACTICE_DATA: `${MCQ_BASE_URL}/wrong_questions/practice_data`,
     REMOVE: `${MCQ_BASE_URL}/wrong_questions/remove`,
     MARK_REVIEWED: `${MCQ_BASE_URL}/wrong_questions/mark_reviewed`,
     CLEAR: `${MCQ_BASE_URL}/wrong_questions/clear`
@@ -1713,11 +1754,17 @@ export default defineComponent({
     }
 
     // ======= 错题本相关 =======
-    const wrongBook = ref<any[]>([])  // 错题本列表
+    const wrongBook = ref<any[]>([])  // 错题本列表（当前页）
     const wrongBookTotal = ref(0)  // 错题本总数
+    const wrongBookPage = ref(1)  // 当前页码
+    const wrongBookPageSize = ref(20)  // 每页数量
+    const wrongBookTotalPages = ref(0)  // 总页数
     const wrongBookVisible = ref(false)  // 错题本弹窗
     const loadingWrongBook = ref(false)  // 加载中
     const savingToWrongBook = ref(false)  // 保存中
+    // 错题本图片懒加载缓存：qid -> { stem_images, option_images, analysis_images }
+    const wrongBookImageCache = ref<Record<string, any>>({})
+    const wrongBookImageLoading = ref<Record<string, boolean>>({})
     const randomPracticeVisible = ref(false)  // 随机练习弹窗
 
     // ======= 考试记录相关 =======
@@ -1846,9 +1893,80 @@ export default defineComponent({
     const examNotificationPage = ref(1)
     const EXAM_PAGE_SIZE = 3
 
-    // 按状态筛选的考试列表（排除已结束）
+    // 提前显示通知的窗口（考试开始前 5 分钟开始显示）
+    const NOTIFY_LEAD_MS = 5 * 60 * 1000
+
+    // 服务器时钟偏移（serverNow = Date.now() + serverClockOffset）
+    // 用于校正本机时钟不准的情况，让 UI 显示与后端实际判定一致
+    const serverClockOffset = ref(0)
+
+    const serverNow = (): number => Date.now() + serverClockOffset.value
+
+    // 校准服务器时钟偏移：考虑网络往返时间，取请求发出与响应到达的中点估算
+    const syncServerClock = async (): Promise<void> => {
+      try {
+        const t0 = Date.now()
+        const resp = await fetch(`${MCQ_BASE_URL}/server_time`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        })
+        const t1 = Date.now()
+        if (!resp.ok) return
+        const data = await resp.json()
+        if (!data || !data.ok || typeof data.ts_ms !== 'number') return
+        const rtt = t1 - t0
+        // 假设网络上下行对称，请求到服务器的时刻约为 t0 + rtt/2
+        const serverAtArrival = data.ts_ms + rtt / 2
+        const offset = serverAtArrival - t1
+        serverClockOffset.value = Math.round(offset)
+        // 偏移过大时打警告（>30s 提示用户）
+        if (Math.abs(offset) > 30000) {
+          console.warn(`[ServerClock] 本机时钟与服务器偏差 ${Math.round(offset / 1000)}s，已校准`)
+        }
+      } catch (e) {
+        // 校准失败不影响主流程，仍使用本机时钟
+        console.warn('[ServerClock] 校准失败:', e)
+      }
+    }
+
+    // 本地时钟 tick（每 10 秒触发一次响应式重算 status / 倒计时）
+    const nowMs = ref(serverNow())
+
+    // 距离考试开始的剩余毫秒（pending 状态下用于倒计时显示）
+    const getMsUntilStart = (exam: any): number => {
+      const s = exam.start_time ? new Date(exam.start_time).getTime() : NaN
+      if (isNaN(s)) return Infinity
+      return s - nowMs.value
+    }
+
+    // 格式化倒计时（用于"距开始 X 分 Y 秒"显示）
+    const formatCountdown = (ms: number): string => {
+      if (ms <= 0) return '即将开始'
+      const total = Math.floor(ms / 1000)
+      const m = Math.floor(total / 60)
+      const s = String(total % 60).padStart(2, '0')
+      if (m >= 60) {
+        const h = Math.floor(m / 60)
+        return `${h}小时${m % 60}分后开始`
+      }
+      return `${m}:${s} 后开始`
+    }
+
+    // 按状态筛选的考试列表：
+    // - 排除 ended
+    // - pending 仅显示距开始 ≤ 5 分钟的（提前 5 分钟弹出通知）
     const filteredPublishedExams = computed(() => {
-      return publishedExams.value.filter(e => getExamStatus(e) !== 'ended')
+      // 显式读取 nowMs 触发响应式依赖收集（getMsUntilStart 内部也依赖 nowMs）
+      void nowMs.value
+      return publishedExams.value.filter(e => {
+        const status = getExamStatus(e)
+        if (status === 'ended') return false
+        if (status === 'pending') {
+          return getMsUntilStart(e) <= NOTIFY_LEAD_MS
+        }
+        return true  // active
+      })
     })
 
     // 分页后的考试列表
@@ -1862,9 +1980,10 @@ export default defineComponent({
       return Math.max(1, Math.ceil(filteredPublishedExams.value.length / EXAM_PAGE_SIZE))
     })
 
-    // 进行中考试数量（用于角标）
+    // 进行中考试数量（用于角标）—— 含 active 与 5 分钟内即将开始的 pending
     const activeExamCount = computed(() => {
-      return publishedExams.value.filter(e => getExamStatus(e) === 'active').length
+      void nowMs.value  // 触发响应式依赖收集
+      return filteredPublishedExams.value.length
     })
 
     const timerDisplay = computed(() => {
@@ -2093,10 +2212,12 @@ export default defineComponent({
     // 当前高亮的题目ID
     const currentQid = ref('')
 
-    // 滚动到指定题目
+    // 滚动到指定题目（复盘态时跳转到 review 区，否则跳转到答题区）
     const scrollToQuestion = (qid: string) => {
       currentQid.value = qid
-      const element = document.getElementById('q-' + qid)
+      const isReview = !!reviewData.value
+      const targetId = isReview ? ('review-q-' + qid) : ('q-' + qid)
+      const element = document.getElementById(targetId)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' })
         // 添加高亮效果
@@ -2105,6 +2226,55 @@ export default defineComponent({
           element.classList.remove('highlight-question')
         }, 1500)
       }
+    }
+
+    // 复盘态下用 qid 快速查找成绩条目
+    const reviewItemMapByQid = computed(() => {
+      const map: Record<string, any> = {}
+      if (reviewData.value?.items) {
+        for (const it of reviewData.value.items) {
+          map[it.qid] = it
+        }
+      }
+      return map
+    })
+
+    // 题目导航按钮的状态类：
+    // - 复盘态：根据正确性返回 nav-ok / nav-partial / nav-bad / nav-unanswered / nav-pending
+    // - 答题态：保留原有 answered + current 状态
+    const getNavStateClass = (qid: string): Record<string, boolean> => {
+      if (reviewData.value) {
+        const item: any = reviewItemMapByQid.value[qid]
+        if (!item) {
+          return { 'nav-unanswered': true, current: currentQid.value === qid }
+        }
+        // 简答题待人工评分
+        if (item.is_correct === null) {
+          return { 'nav-pending': true, current: currentQid.value === qid }
+        }
+        // 完全正确
+        if (item.is_correct === true) {
+          return { 'nav-ok': true, current: currentQid.value === qid }
+        }
+        // 部分正确（简答题）
+        if (item.is_correct === 'partial') {
+          return { 'nav-partial': true, current: currentQid.value === qid }
+        }
+        // 未作答（选择题：my_labels 为空数组；简答：my_answer 为空）
+        const myLabels: string[] = item.my_labels || []
+        const myAnswer: string = typeof item.my_answer === 'string' ? item.my_answer.trim() : ''
+        if (item.qtype === 'saq') {
+          if (!myAnswer || myAnswer === '[]') {
+            return { 'nav-unanswered': true, current: currentQid.value === qid }
+          }
+        } else if (myLabels.length === 0) {
+          return { 'nav-unanswered': true, current: currentQid.value === qid }
+        }
+        // 答错
+        return { 'nav-bad': true, current: currentQid.value === qid }
+      }
+      // 答题态
+      return { answered: isAnswered(qid), current: currentQid.value === qid }
     }
 
     // 从解析文本中提取知识点
@@ -3002,17 +3172,22 @@ export default defineComponent({
       }
     }
 
-    // 获取考试状态（优先使用后端返回的 status，回退到前端时间计算）
+    // 获取考试状态：用本地时钟 + start_time/end_time 计算（每 10s tick 自动重算）
+    // 服务器侧 exam_start 接口仍会做硬校验，前端时钟被改也无法实际进入
     const getExamStatus = (exam: any): string => {
+      const startTs = exam.start_time ? new Date(exam.start_time).getTime() : NaN
+      const endTs = exam.end_time ? new Date(exam.end_time).getTime() : NaN
+      if (!isNaN(startTs) && !isNaN(endTs)) {
+        const n = nowMs.value  // 依赖响应式 tick
+        if (n < startTs) return 'pending'
+        if (n > endTs) return 'ended'
+        return 'active'
+      }
+      // 时间字段缺失时回退使用服务器下发的 status
       if (exam.status && ['active', 'pending', 'ended'].includes(exam.status)) {
         return exam.status
       }
-      const now = new Date()
-      const startTime = new Date(exam.start_time)
-      const endTime = new Date(exam.end_time)
-      if (now < startTime) return 'pending'
-      if (now > endTime) return 'ended'
-      return 'active'
+      return 'pending'
     }
 
 
@@ -3470,6 +3645,10 @@ export default defineComponent({
         // 加载答案解析
         await loadReview()
 
+        // 提交完成后回到页顶，方便查看考试结果
+        await nextTick()
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+
         ElMessage.success('提交成功')
       } catch (error: any) {
         submitMessage.value = '提交失败'
@@ -3604,14 +3783,15 @@ export default defineComponent({
     }
 
     // ======= 错题本功能函数 =======
-    // 加载错题本
-    const loadWrongBook = async () => {
+    // 加载错题本（强制分页 + 图片懒加载）
+    const loadWrongBook = async (page: number = 1) => {
       const studentId = store.state.user.username
       if (!studentId) return
       
       loadingWrongBook.value = true
       try {
-        const data = await mcqFetch(`${API_ENDPOINTS.WRONG_QUESTIONS.LIST}?student_id=${encodeURIComponent(studentId)}`)
+        const url = `${API_ENDPOINTS.WRONG_QUESTIONS.LIST}?student_id=${encodeURIComponent(studentId)}&page=${page}&page_size=${wrongBookPageSize.value}`
+        const data = await mcqFetch(url)
         if (data.ok) {
           wrongBook.value = (data.questions || []).map((q: any) => {
             const item = { ...q }
@@ -3629,14 +3809,84 @@ export default defineComponent({
             if (Array.isArray(item.knowledge_clauses)) {
               item.knowledge_clauses = item.knowledge_clauses.map((c: string) => stripNL(c))
             }
+            // 后端默认剥离了图片，这里先初始化为空数组占位；真实图片通过 ensureWrongBookImages 懒加载
+            item.stem_images = item.stem_images || []
+            item.option_images = item.option_images || {}
+            item.analysis_images = item.analysis_images || []
             return item
           })
           wrongBookTotal.value = data.total || 0
+          wrongBookPage.value = data.page || page
+          wrongBookPageSize.value = data.page_size || wrongBookPageSize.value
+          wrongBookTotalPages.value = data.total_pages || 0
+          // 触发本页所有含图题目的图片懒加载（限制并发，避免一次打多请求）
+          schedulePageImageLoading()
         }
       } catch (error: any) {
         console.error('加载错题本失败:', error)
       } finally {
         loadingWrongBook.value = false
+      }
+    }
+
+    // 切换分页
+    const onWrongBookPageChange = (newPage: number) => {
+      loadWrongBook(newPage)
+    }
+
+    // 加载单题图片（带缓存 + 去重）
+    const ensureWrongBookImages = async (q: any) => {
+      if (!q || !q.qid) return
+      if (!q.has_images) return
+      const qid = q.qid
+      if (wrongBookImageCache.value[qid]) {
+        // 直接合并缓存
+        Object.assign(q, wrongBookImageCache.value[qid])
+        return
+      }
+      if (wrongBookImageLoading.value[qid]) return
+      wrongBookImageLoading.value[qid] = true
+      try {
+        const studentId = store.state.user.username
+        if (!studentId) return
+        const data = await mcqFetch(
+          `${API_ENDPOINTS.WRONG_QUESTIONS.IMAGES}?student_id=${encodeURIComponent(studentId)}&qid=${encodeURIComponent(qid)}`
+        )
+        if (data && data.ok) {
+          const payload = {
+            stem_images: data.stem_images || [],
+            option_images: data.option_images || {},
+            analysis_images: data.analysis_images || []
+          }
+          wrongBookImageCache.value[qid] = payload
+          // 找到列表中对应的题目并合并（reactive 触发重新渲染）
+          const target = wrongBook.value.find((it: any) => it.qid === qid)
+          if (target) {
+            target.stem_images = payload.stem_images
+            target.option_images = payload.option_images
+            target.analysis_images = payload.analysis_images
+          }
+        }
+      } catch (e) {
+        console.warn('[错题本] 图片加载失败:', q.qid, e)
+      } finally {
+        wrongBookImageLoading.value[qid] = false
+      }
+    }
+
+    // 分批加载本页图片，避免一次打过多请求
+    const schedulePageImageLoading = () => {
+      const items = wrongBook.value.filter((q: any) => q.has_images)
+      const concurrency = 3
+      let idx = 0
+      const next = async () => {
+        while (idx < items.length) {
+          const cur = items[idx++]
+          await ensureWrongBookImages(cur)
+        }
+      }
+      for (let i = 0; i < concurrency; i++) {
+        next()
       }
     }
 
@@ -3916,15 +4166,31 @@ export default defineComponent({
         return
       }
       
-      if (wrongBook.value.length === 0) {
+      if (wrongBookTotal.value === 0) {
         ElMessage.warning('错题本为空')
         return
       }
       
       startingPractice.value = true
       try {
+        // 拉取完整错题数据（含图片，硬上限 200 条），列表分页只展示当前页元数据
+        const practiceResp = await mcqFetch(
+          `${API_ENDPOINTS.WRONG_QUESTIONS.PRACTICE_DATA}?student_id=${encodeURIComponent(studentId)}&limit=200`
+        )
+        if (!practiceResp || !practiceResp.ok) {
+          throw new Error(practiceResp?.msg || '获取错题练习数据失败')
+        }
+        const practiceSource: any[] = practiceResp.questions || []
+        if (practiceSource.length === 0) {
+          ElMessage.warning('错题本为空')
+          return
+        }
+        if (practiceResp.truncated) {
+          ElMessage.warning(`错题数过多，本次仅练习最近的 ${practiceResp.returned} 道（共 ${practiceResp.total} 道）`)
+        }
+        
         // 构建错题练习题目数据
-        const practiceQuestions = wrongBook.value.map((q: any) => ({
+        const practiceQuestions = practiceSource.map((q: any) => ({
           qid: q.qid,
           stem: q.stem,
           options: q.options,
@@ -3940,7 +4206,7 @@ export default defineComponent({
         
         // 直接使用临时题目数据开始练习（不保存为试卷文件）
         const practiceTitle = `错题练习_${localTimestamp()}`
-        const durationSec = Math.max(30, wrongBook.value.length * 2) * 60  // 每题2分钟
+        const durationSec = Math.max(30, practiceQuestions.length * 2) * 60  // 每题2分钟
         
         const startResult = await mcqFetch(API_ENDPOINTS.EXAM.START_TEMP, {
           method: 'POST',
@@ -3997,14 +4263,93 @@ export default defineComponent({
       next()
     })
 
+    // 通知面板自动刷新定时器
+    let _notifyPollHandle: number | null = null
+    let _statusTickHandle: number | null = null
+
+    // 自适应轮询：根据最近考试距离开始的时间动态调整刷新间隔
+    // 平时几乎不发请求，临近考试才频繁刷新，避免 200+ 学生固定 60s 同步打后端
+    const computeNextPollDelay = (): number => {
+      const exams = publishedExams.value
+      if (!exams.length) return 10 * 60 * 1000  // 暂无数据：10分钟试一次
+
+      const now = nowMs.value
+      let hasActive = false
+      let minMsToStart = Infinity
+      for (const e of exams) {
+        if (e.status === 'cancelled') continue
+        const startTs = e.start_time ? new Date(e.start_time).getTime() : NaN
+        const endTs = e.end_time ? new Date(e.end_time).getTime() : NaN
+        if (!isNaN(endTs) && now > endTs) continue  // 已结束
+        if (!isNaN(startTs) && !isNaN(endTs) && now >= startTs && now <= endTs) {
+          hasActive = true
+        } else if (!isNaN(startTs) && now < startTs) {
+          const ms = startTs - now
+          if (ms < minMsToStart) minMsToStart = ms
+        }
+      }
+
+      if (hasActive) return 60 * 1000               // 有进行中考试：60s（捕捉管理员取消/延期）
+      if (minMsToStart <= 5 * 60 * 1000) return 30 * 1000   // ≤ 5 分钟：30s（关键过渡期）
+      if (minMsToStart <= 30 * 60 * 1000) return 5 * 60 * 1000  // ≤ 30 分钟：5 分钟
+      return 15 * 60 * 1000                          // >30 分钟或无即将考试：15 分钟
+    }
+
+    const scheduleNextPoll = () => {
+      if (_notifyPollHandle !== null) {
+        clearTimeout(_notifyPollHandle)
+        _notifyPollHandle = null
+      }
+      // 加 ±2s 随机抖动避免 200 人同步打到后端
+      const delay = computeNextPollDelay() + Math.floor(Math.random() * 4000) - 2000
+      _notifyPollHandle = window.setTimeout(async () => {
+        if (!examStarted.value) {
+          await loadPublishedExams()
+        }
+        scheduleNextPoll()  // 链式调度，每次根据最新数据重新计算下次间隔
+      }, Math.max(5000, delay))
+    }
+
+    // 页面可见时重新校准时钟（处理用户长时间挂起后回到前台的情况）
+    const handleVisibilityForClock = () => {
+      if (document.visibilityState === 'visible') {
+        syncServerClock().then(() => {
+          nowMs.value = serverNow()
+        })
+      }
+    }
+
     onMounted(() => {
       // 错开 API 请求，避免30人同时进入页面导致 150+ 并发请求打崩后端
       loadPapers()
       loadAntiCheatConfig()
-      // 延迟加载非关键数据，错开请求时间
-      setTimeout(() => loadPublishedExams(), 500 + Math.random() * 1000)
-      setTimeout(() => loadWrongBook(), 1000 + Math.random() * 1000)
-      setTimeout(() => checkInProgressExam(), 1500 + Math.random() * 1000)
+      // 先校准服务器时钟偏移，再加载考试通知（保证状态判断准确）
+      // 1~4s 大窗口随机延迟：把 200 人同时进入页面的请求摊开到 3 秒，避免同步爆发
+      setTimeout(async () => {
+        await syncServerClock()
+        nowMs.value = serverNow()
+        await loadPublishedExams()
+        scheduleNextPoll()  // 首次加载后启动自适应轮询链
+      }, 1000 + Math.random() * 3000)
+      setTimeout(() => loadWrongBook(), 2000 + Math.random() * 3000)
+      setTimeout(() => checkInProgressExam(), 3000 + Math.random() * 3000)
+
+      // 本地时钟 tick：每 1s 推动一次响应式重算（让倒计时秒级流畅、pending→active 即时切换）
+      // 用 serverNow()（已加偏移）保证 UI 与后端时间一致
+      // 纯客户端计算，无网络开销，不影响后端并发
+      let _tickCount = 0
+      _statusTickHandle = window.setInterval(() => {
+        nowMs.value = serverNow()
+        // 每 10 分钟（600 次 tick）重新校准一次时钟，防止长时间页面运行后偏移漂移
+        _tickCount++
+        if (_tickCount >= 600) {
+          _tickCount = 0
+          syncServerClock().then(() => { nowMs.value = serverNow() })
+        }
+      }, 1000)
+
+      // 页面回到前台时立即重新校准（电脑休眠后唤醒、切换标签页回来等）
+      document.addEventListener('visibilitychange', handleVisibilityForClock)
       // 添加页面关闭前警告
       window.addEventListener('beforeunload', handleBeforeUnload)
       // 添加 pagehide 事件（比 beforeunload 更可靠）
@@ -4020,6 +4365,9 @@ export default defineComponent({
       stopTimer()
       stopAutoSave()
       if (_notificationRetryTimer) { clearTimeout(_notificationRetryTimer); _notificationRetryTimer = null }
+      if (_notifyPollHandle !== null) { clearTimeout(_notifyPollHandle); _notifyPollHandle = null }
+      if (_statusTickHandle !== null) { clearInterval(_statusTickHandle); _statusTickHandle = null }
+      document.removeEventListener('visibilitychange', handleVisibilityForClock)
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('pagehide', handlePageHide)
       // 移除防作弊检测
@@ -4087,6 +4435,7 @@ export default defineComponent({
       answeredCount,
       currentQid,
       scrollToQuestion,
+      getNavStateClass,
       knowledgePointStats,
       scrollToWrongByKp,
       exporting,
@@ -4130,6 +4479,8 @@ export default defineComponent({
       enteringExam,
       loadPublishedExams,
       getExamStatus,
+      getMsUntilStart,
+      formatCountdown,
       enterPublishedExam,
       notificationCollapsed,
       examNotificationPage,
@@ -4160,6 +4511,11 @@ export default defineComponent({
       // 错题本相关
       wrongBook,
       wrongBookTotal,
+      wrongBookPage,
+      wrongBookPageSize,
+      wrongBookTotalPages,
+      onWrongBookPageChange,
+      ensureWrongBookImages,
       wrongBookVisible,
       loadingWrongBook,
       savingToWrongBook,
@@ -4460,6 +4816,18 @@ export default defineComponent({
   border-bottom: none;
 }
 
+.exam-countdown {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .notification-item:hover {
   background: rgba(96, 165, 250, 0.05);
 }
@@ -4734,6 +5102,37 @@ export default defineComponent({
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
   color: #667eea;
   font-weight: 600;
+}
+
+/* 复盘态导航：与考试结果格子配色一致 */
+.navbtn.nav-ok {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.18) 100%);
+  color: #047857;
+  font-weight: 600;
+}
+.navbtn.nav-bad {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(220, 38, 38, 0.18) 100%);
+  color: #b91c1c;
+  font-weight: 600;
+}
+.navbtn.nav-partial {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%);
+  color: #92400e;
+  font-weight: 600;
+}
+.navbtn.nav-pending {
+  border-color: #94a3b8;
+  background: rgba(148, 163, 184, 0.18);
+  color: #475569;
+  font-weight: 600;
+}
+.navbtn.nav-unanswered {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
 }
 
 .navbtn.current {
@@ -5037,6 +5436,76 @@ export default defineComponent({
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
   color: #059669;
   font-weight: 600;
+}
+
+/* 复盘态：用户选中且正确（绿底 + 内描边强调"我也选了"） */
+.opt.correct-picked {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.18) 100%);
+  box-shadow: inset 0 0 0 2px rgba(102, 126, 234, 0.55), 0 4px 12px rgba(16, 185, 129, 0.18);
+  color: #047857;
+}
+
+/* 复盘态：用户未选但是正确答案（绿色虚线边） */
+.opt.correct-missed {
+  border-style: dashed;
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(5, 150, 105, 0.06) 100%);
+  color: #059669;
+}
+
+/* 复盘态：用户选了但是错误（红色） */
+.opt.wrong-picked {
+  border-color: #ef4444 !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(220, 38, 38, 0.12) 100%) !important;
+  color: #dc2626 !important;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.18);
+}
+
+/* 选项内容与徽标布局：仅在复盘面板生效，不影响答题态 */
+.review-panel .opt {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.review-panel .opt-content {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.review-panel .opt-badges {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.opt-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.badge-mine-ok {
+  background: rgba(16, 185, 129, 0.18);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+.badge-mine-bad {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+.badge-correct-missed {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px dashed rgba(16, 185, 129, 0.6);
 }
 
 .opt:disabled {
@@ -6604,6 +7073,32 @@ export default defineComponent({
   color: #4f46e5;
 }
 
+.exam-page.light-mode .navbtn.nav-ok {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #065f46;
+}
+.exam-page.light-mode .navbtn.nav-bad {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.exam-page.light-mode .navbtn.nav-partial {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+}
+.exam-page.light-mode .navbtn.nav-pending {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #475569;
+}
+.exam-page.light-mode .navbtn.nav-unanswered {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
 .exam-page.light-mode .navbtn.current {
   outline: 2px solid #4f46e5;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
@@ -6682,8 +7177,29 @@ export default defineComponent({
   color: #059669;
 }
 
+.exam-page.light-mode .opt.correct-picked {
+  border-color: #10b981;
+  background: #d1fae5;
+  color: #047857;
+  box-shadow: inset 0 0 0 2px #4f46e5, 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.exam-page.light-mode .opt.correct-missed {
+  border-style: dashed;
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.exam-page.light-mode .opt.wrong-picked {
+  border-color: #ef4444 !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.18);
+}
+
 .exam-page.light-mode .opt:disabled {
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 /* 选项/题干图片 */

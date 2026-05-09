@@ -1627,7 +1627,19 @@
                         <span style="color: #909399; font-size: 12px;">分</span>
                       </span>
                     </template>
-                    <el-tag v-if="hasParseIssue(item) && item.qtype !== 'saq'" type="danger" size="small">需检查</el-tag>
+                    <el-tooltip
+                      v-if="Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0"
+                      placement="top"
+                      effect="dark"
+                    >
+                      <template #content>
+                        <div style="max-width: 360px; line-height: 1.6;">
+                          <div v-for="(w, wi) in item.parse_warnings" :key="wi">• {{ w }}</div>
+                        </div>
+                      </template>
+                      <el-tag type="danger" size="small" effect="dark">⚠ 解析告警 ({{ item.parse_warnings.length }})</el-tag>
+                    </el-tooltip>
+                    <el-tag v-if="hasParseIssue(item) && item.qtype !== 'saq' && !(item.parse_warnings && item.parse_warnings.length)" type="danger" size="small">需检查</el-tag>
                     <el-tag v-if="!item.answer && item.qtype !== 'saq'" type="warning" size="small">缺少答案</el-tag>
                     <el-tag v-if="getOptionsCount(item) < 2 && item.qtype !== 'saq'" type="warning" size="small">选项不足</el-tag>
                     <el-tag v-if="item.has_images" type="info" size="small">📷 图片题</el-tag>
@@ -1871,6 +1883,155 @@
                     <el-button @click="paperPreviewVisible = false">取消</el-button>
                     <el-button type="primary" @click="saveUploadedPaper" :loading="savingUploadedPaper">
                       保存试卷
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+            </el-dialog>
+
+            <!-- 题库上传：解析告警审核对话框（识别有问题的题目卡片，可直接编辑修改） -->
+            <el-dialog
+              v-model="reviewVisible"
+              title="解析告警 - 请审核并修改后再上传"
+              width="900px"
+              :close-on-click-modal="false"
+              append-to-body
+              @closed="onReviewDialogClosed"
+            >
+              <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <el-tag type="info">共 {{ reviewItems.length }} 题</el-tag>
+                <el-tag type="danger">{{ reviewIssueCount }} 题存在问题</el-tag>
+                <el-checkbox v-model="reviewOnlyIssues" size="default">仅显示问题题目</el-checkbox>
+                <span style="color: #909399; font-size: 12px;">
+                  提示：点击卡片右上角"编辑此题"修改题干 / 选项 / 答案 / 解析，修改完成后点击"保存"清除告警。
+                </span>
+              </div>
+
+              <div style="max-height: 60vh; overflow-y: auto;">
+                <template v-for="(item, idx) in reviewItems" :key="idx">
+                  <div
+                    v-if="!reviewOnlyIssues || hasParseIssue(item)"
+                    class="paper-preview-item"
+                    :class="{ 'has-issue': hasParseIssue(item) }"
+                  >
+                    <div class="preview-header">
+                      <span class="preview-num">{{ idx + 1 }}.</span>
+                      <el-tag v-if="item.qtype === 'saq'" type="primary" size="small">简答</el-tag>
+                      <el-tag v-else-if="item.qtype === 'indeterminate'" type="success" size="small">不定项</el-tag>
+                      <el-tag v-else-if="item.qtype === 'judge'" size="small" style="background: #9c27b0; color: #fff; border-color: #9c27b0;">判断</el-tag>
+                      <el-tag v-else-if="item.qtype === 'multi'" type="warning" size="small">多选</el-tag>
+                      <el-tag v-else type="info" size="small">单选</el-tag>
+                      <el-tag
+                        v-if="Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0"
+                        type="danger" size="small" effect="dark"
+                      >⚠ {{ item.parse_warnings.length }} 个告警</el-tag>
+                      <el-button
+                        size="small" type="primary" link
+                        style="margin-left: auto;"
+                        @click="reviewEditingIdx = (reviewEditingIdx === idx ? null : idx)"
+                      >
+                        {{ reviewEditingIdx === idx ? '收起编辑' : '编辑此题' }}
+                      </el-button>
+                      <el-button
+                        size="small" type="danger" link
+                        @click="deleteReviewItem(idx)"
+                      >删除此题</el-button>
+                    </div>
+
+                    <!-- 告警明细 -->
+                    <div
+                      v-if="Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0"
+                      style="margin: 6px 0; padding: 6px 10px; background: #fef0f0; border-left: 3px solid #f56c6c; border-radius: 3px;"
+                    >
+                      <div v-for="(w, wi) in item.parse_warnings" :key="wi"
+                           style="color: #f56c6c; font-size: 13px; line-height: 1.6;">• {{ w }}</div>
+                    </div>
+
+                    <!-- 预览模式 -->
+                    <div v-if="reviewEditingIdx !== idx" class="preview-content">
+                      <div class="preview-stem" style="white-space: pre-wrap;">{{ item.stem || '（题干为空）' }}</div>
+                      <div v-if="item.qtype !== 'saq'" class="preview-options">
+                        <div
+                          v-for="k in ['A','B','C','D','E','F','G','H']"
+                          :key="k"
+                          v-show="item.options && item.options[k] !== undefined"
+                          class="preview-opt-item"
+                        >
+                          <span class="preview-opt">{{ k }}. {{ item.options[k] || '' }}</span>
+                        </div>
+                      </div>
+                      <div v-if="item.qtype !== 'saq'" class="preview-answer" :class="{ 'no-answer': !item.answer }">
+                        {{ item.answer ? `答案：${item.answer}` : '⚠️ 缺少答案' }}
+                      </div>
+                      <div v-if="item.qtype === 'saq' && item.answer" class="preview-answer" style="white-space: pre-wrap; color: #409eff;">
+                        答案：{{ item.answer }}
+                      </div>
+                      <div v-if="item.explain" class="preview-answer" style="white-space: pre-wrap; color: #67c23a;">
+                        解析：{{ item.explain }}
+                      </div>
+                    </div>
+
+                    <!-- 编辑模式 -->
+                    <div v-else class="preview-edit">
+                      <el-form label-width="60px" size="small">
+                        <el-form-item label="题型">
+                          <el-radio-group v-model="item.qtype" size="small">
+                            <el-radio-button value="single">单选</el-radio-button>
+                            <el-radio-button value="multi">多选</el-radio-button>
+                            <el-radio-button value="indeterminate">不定项</el-radio-button>
+                            <el-radio-button value="judge">判断</el-radio-button>
+                            <el-radio-button value="saq">简答</el-radio-button>
+                          </el-radio-group>
+                        </el-form-item>
+                        <el-form-item label="题干">
+                          <el-input v-model="item.stem" type="textarea" :autosize="{ minRows: 2, maxRows: 8 }" />
+                        </el-form-item>
+                        <el-form-item v-if="item.qtype !== 'saq'" label="选项">
+                          <div style="width: 100%;">
+                            <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="margin-bottom: 6px; display: flex; align-items: center;">
+                              <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
+                              <el-input
+                                :model-value="item.options ? item.options[k] : undefined"
+                                placeholder="留空则不显示此选项"
+                                style="flex: 1;"
+                                @update:model-value="onReviewOptionInput(item, k, $event)"
+                              />
+                            </div>
+                          </div>
+                        </el-form-item>
+                        <el-form-item label="答案">
+                          <el-input v-model="item.answer" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
+                                    placeholder="如 A 或 ABC（简答题填写参考答案）" />
+                        </el-form-item>
+                        <el-form-item label="解析">
+                          <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
+                        </el-form-item>
+                      </el-form>
+                      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+                        <el-button size="small" @click="reviewEditingIdx = null">取消</el-button>
+                        <el-button size="small" type="primary" @click="saveReviewItem(item)">
+                          保存（清除告警）
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <div v-if="reviewOnlyIssues && reviewIssueCount === 0"
+                     style="padding: 24px; text-align: center; color: #67c23a; font-size: 14px;">
+                  ✅ 已修复全部告警，可点击下方"确认上传"继续。
+                </div>
+              </div>
+
+              <template #footer>
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                  <span style="color: #909399; font-size: 12px;">
+                    取消后不会上传任何题目；确认后将进入查重阶段并保存到当前题库。
+                  </span>
+                  <div>
+                    <el-button @click="cancelReview">取消上传</el-button>
+                    <el-button type="primary" @click="confirmReview">
+                      确认上传 ({{ reviewItems.length }} 题{{ reviewIssueCount > 0 ? `，仍有 ${reviewIssueCount} 题告警` : '' }})
                     </el-button>
                   </div>
                 </div>
@@ -3252,6 +3413,78 @@ export default defineComponent({
 
     const uploadRef = ref<any>(null)
     const uploadFile = ref<File | null>(null)
+
+    // ========== 题库上传：解析告警审核对话框（可直接编辑修改） ==========
+    const reviewVisible = ref(false)
+    const reviewItems = ref<any[]>([])           // 直接引用 upsertPayload，编辑即原地生效
+    const reviewOnlyIssues = ref(true)            // 仅显示问题题目
+    const reviewEditingIdx = ref<number | null>(null)
+    // eslint-disable-next-line no-unused-vars
+    let _reviewResolver: ((ok: boolean) => void) | null = null
+
+    const reviewIssueCount = computed(() =>
+      reviewItems.value.filter((it: any) => hasParseIssue(it)).length
+    )
+
+    // 编辑后清空对应告警，使前端 hasParseIssue/告警标签自动消失
+    const onReviewItemEdited = (item: any) => {
+      if (Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0) {
+        item.parse_warnings = []
+      }
+    }
+
+    const onReviewOptionInput = (item: any, key: string, val: string) => {
+      if (!item.options || typeof item.options !== 'object') item.options = {}
+      if (val === '' || val === null || val === undefined) {
+        delete item.options[key]
+      } else {
+        item.options[key] = val
+      }
+      // 不在输入瞬间清除告警；保留 parse_warnings，由"保存"按钮显式确认
+    }
+
+    // 点击"保存"：清空该题告警 → 红框/告警标签消失，并收起编辑面板
+    const saveReviewItem = (item: any) => {
+      if (Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0) {
+        item.parse_warnings = []
+      }
+      reviewEditingIdx.value = null
+    }
+
+    const deleteReviewItem = (idx: number) => {
+      reviewItems.value.splice(idx, 1)
+      if (reviewEditingIdx.value !== null) {
+        if (reviewEditingIdx.value === idx) reviewEditingIdx.value = null
+        else if (reviewEditingIdx.value > idx) reviewEditingIdx.value -= 1
+      }
+    }
+
+    const openParseReview = (items: any[]): Promise<boolean> => {
+      reviewItems.value = items   // 共享引用：编辑直接改动 upsertPayload
+      reviewEditingIdx.value = null
+      reviewOnlyIssues.value = true
+      reviewVisible.value = true
+      return new Promise((resolve) => { _reviewResolver = resolve })
+    }
+
+    const confirmReview = () => {
+      reviewVisible.value = false
+      const r = _reviewResolver; _reviewResolver = null
+      if (r) r(true)
+    }
+    const cancelReview = () => {
+      reviewVisible.value = false
+      const r = _reviewResolver; _reviewResolver = null
+      if (r) r(false)
+    }
+    const onReviewDialogClosed = () => {
+      // 点击右上角 X / ESC 关闭也视为取消
+      if (_reviewResolver) {
+        const r = _reviewResolver; _reviewResolver = null
+        r(false)
+      }
+    }
+
     const normalizeOptions = (opts: any, optionImages?: Record<string, QuestionImage[]>): Array<{ label: string; text: string; images?: QuestionImage[] }> => {
       const out: Array<{ label: string; text: string; images?: QuestionImage[] }> = []
       const o = opts || {}
@@ -4651,6 +4884,10 @@ export default defineComponent({
           if (Array.isArray(x.knowledge_clauses) && x.knowledge_clauses.length > 0) {
             item.knowledge_clauses = x.knowledge_clauses
           }
+          // 后端解析告警（仅前端预检使用，不写入题库）
+          if (Array.isArray(x.parse_warnings) && x.parse_warnings.length > 0) {
+            item.parse_warnings = x.parse_warnings
+          }
           return item
         })
 
@@ -4674,11 +4911,40 @@ export default defineComponent({
           if (Array.isArray(x.knowledge_clauses) && x.knowledge_clauses.length > 0) {
             item.knowledge_clauses = x.knowledge_clauses
           }
+          // 后端解析告警（仅前端预检使用，不写入题库）
+          if (Array.isArray(x.parse_warnings) && x.parse_warnings.length > 0) {
+            item.parse_warnings = x.parse_warnings
+          }
           return item
         })
 
         // 合并选择题和简答题
         const upsertPayload = [...mcqPayload, ...saqPayload]
+
+        // 2.5）解析告警预检：若任一题存在 parse_warnings，弹出可编辑卡片对话框，
+        //      用户可以直接在卡片里修改题干 / 选项 / 答案 / 解析，无需回到 docx 文档。
+        //      共享引用：openParseReview(upsertPayload) 内的编辑会原地改动 upsertPayload。
+        const hasAnyWarning = upsertPayload.some(
+          (it: any) => Array.isArray(it.parse_warnings) && it.parse_warnings.length > 0
+        )
+        if (hasAnyWarning) {
+          uploadMessage.value = '请审核解析告警…'
+          const ok = await openParseReview(upsertPayload)
+          if (!ok) {
+            uploadMessage.value = '已取消上传'
+            ElMessage.info('已取消上传')
+            uploading.value = false
+            return
+          }
+          // 用户在弹窗中可能删除了部分题目，upsertPayload 已被原地修改
+          if (upsertPayload.length === 0) {
+            uploadMessage.value = '没有需要上传的题目'
+            ElMessage.info('没有需要上传的题目')
+            uploading.value = false
+            return
+          }
+          uploadMessage.value = '已审核，准备上传…'
+        }
 
         // 3）检查重复题目（仅在当前题库内查重）
         uploadMessage.value = '检查重复题目中…'
@@ -5246,18 +5512,33 @@ export default defineComponent({
         })
         const j = await r.json()
         if (j?.ok && j.images) {
-          for (const q of questions.value) {
-            const imgData = j.images[q.qid]
-            if (!imgData) continue
-            q.stem_images = imgData.stem_images || []
-            q.analysis_images = imgData.analysis_images || []
-            // 将 option_images 合并到已有的 options 中
-            const oi = imgData.option_images || {}
+          const mergeOptionImages = (q: any, oi: Record<string, QuestionImage[]>) => {
+            const existing = new Set<string>((q.options || []).map((o: any) => o.label))
+            // 1) 已有标签：直接挂载图片
             for (const opt of q.options) {
               if (oi[opt.label] && oi[opt.label].length > 0) {
                 opt.images = oi[opt.label]
               }
             }
+            // 2) 兼容"纯图片选项"：选项文本为空时，bank_list 默认不返回 option_images，
+            //    normalizeOptions 会过滤掉这些标签，导致 q.options 为空。
+            //    此时图片到达后需要补齐对应标签，避免选项图片完全丢失。
+            for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+              if (!existing.has(k) && oi[k] && oi[k].length > 0) {
+                q.options.push({ label: k, text: '', images: oi[k] })
+              }
+            }
+            // 保持选项按字母顺序展示
+            q.options.sort((a: any, b: any) => a.label.localeCompare(b.label))
+          }
+          // questions.value 是题库管理与试卷管理共用的题目源（pagedPaperQuestions 由其派生），
+          // 因此只需遍历一次即可覆盖两个 tab 的渲染。
+          for (const q of questions.value) {
+            const imgData = j.images[q.qid]
+            if (!imgData) continue
+            q.stem_images = imgData.stem_images || []
+            q.analysis_images = imgData.analysis_images || []
+            mergeOptionImages(q, imgData.option_images || {})
           }
         }
       } catch (e) {
@@ -6872,9 +7153,22 @@ export default defineComponent({
     // 判断题目是否有解析问题（简答题不检查选项）
     const hasParseIssue = (item: any): boolean => {
       if (!item.stem || item.stem.trim().length === 0) return true
+      // 后端解析告警（答案误识 / 答案-解析串入 / 选项缺失等）
+      if (Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0) return true
       // 简答题不需要选项
       if (item.qtype === 'saq') return false
       if (getOptionsCount(item) < 2) return true
+      // 答案不在选项范围
+      const ans = (item.answer || '').toString().toUpperCase()
+      if (ans) {
+        const optKeys = new Set(Object.keys(item.options || {}).map((k: string) => k.toUpperCase()))
+        const optImgKeys = Object.keys(item.option_images || {}).map((k: string) => k.toUpperCase())
+        for (const k of optImgKeys) optKeys.add(k)
+        for (const c of ans) {
+          if (!/[A-H]/.test(c)) continue
+          if (!optKeys.has(c)) return true
+        }
+      }
       return false
     }
 
@@ -6939,6 +7233,7 @@ export default defineComponent({
           has_images: Boolean(x.has_images || (x.stem_images && x.stem_images.length > 0) ||
                               (x.option_images && Object.keys(x.option_images).length > 0) ||
                               (x.analysis_images && x.analysis_images.length > 0)),
+          parse_warnings: Array.isArray(x.parse_warnings) ? x.parse_warnings : [],
         }))
 
         // 处理简答题（三字段：题干、答案、解析）
@@ -6955,6 +7250,7 @@ export default defineComponent({
           analysis_images: x.analysis_images || [],
           has_images: Boolean((x.stem_images && x.stem_images.length > 0) ||
                               (x.analysis_images && x.analysis_images.length > 0)),
+          parse_warnings: Array.isArray(x.parse_warnings) ? x.parse_warnings : [],
         }))
 
         // 合并选择题和简答题
@@ -8328,6 +8624,10 @@ export default defineComponent({
       changingPassword, resettingPassword, uploading, uploadMessage, generating, generateMessage, parseTargetStatuses,
       pendingUsers, loadingPending, approvalLoadingId, rejectLoadingId, pendingSearch, pendingPage, pendingPageSize, filteredPending, pagedPending,
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
+      // 解析告警审核对话框（题库上传）
+      reviewVisible, reviewItems, reviewOnlyIssues, reviewEditingIdx, reviewIssueCount,
+      onReviewItemEdited, onReviewOptionInput, deleteReviewItem, saveReviewItem,
+      confirmReview, cancelReview, onReviewDialogClosed,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
       approveAll, createPaper, loadExportPapers, exportZip, exportDocx, exportXlsx, exportingXlsx, isEditing,editRow,
       addNewBankQuestion, addingBankQuestion,
