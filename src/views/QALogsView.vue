@@ -43,8 +43,9 @@
           >
             <el-option label="全部" value="" />
             <el-option label="公文写作" value="official_document" />
+            <el-option label="自由问答" value="general_writing" />
+            <el-option label="错别字校对" value="typo_check" />
             <el-option label="数据分析报告" value="data_analysis_report" />
-            <el-option label="通用写作" value="general_writing" />
           </el-select>
         </div>
         <div class="filter-item">
@@ -143,12 +144,16 @@
           <span class="value">{{ writingStats.writing_types.official_document || 0 }}</span>
         </div>
         <div class="writing-stat-card">
-          <span class="label">数据分析报告</span>
-          <span class="value">{{ writingStats.writing_types.data_analysis_report || 0 }}</span>
+          <span class="label">自由问答</span>
+          <span class="value">{{ writingStats.writing_types.general_writing || 0 }}</span>
         </div>
         <div class="writing-stat-card">
-          <span class="label">通用写作</span>
-          <span class="value">{{ writingStats.writing_types.general_writing || 0 }}</span>
+          <span class="label">错别字校对</span>
+          <span class="value">{{ writingStats.writing_types.typo_check || 0 }}</span>
+        </div>
+        <div class="writing-stat-card">
+          <span class="label">数据分析报告</span>
+          <span class="value">{{ writingStats.writing_types.data_analysis_report || 0 }}</span>
         </div>
         <div class="writing-stat-card">
           <span class="label">统计周期</span>
@@ -709,7 +714,8 @@ function getWritingTypeLabel(type?: WritingType): string {
   const map: Record<string, string> = {
     official_document: '公文写作',
     data_analysis_report: '数据分析报告',
-    general_writing: '通用写作'
+    general_writing: '自由问答',
+    typo_check: '错别字校对'
   };
   return type ? (map[type] || type) : '全部';
 }

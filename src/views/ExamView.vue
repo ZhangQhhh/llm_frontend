@@ -715,6 +715,30 @@
           </div>
         </div>
 
+        <!-- 简答题 AI 评分进度提示 -->
+        <div v-if="gradeReport && saqGradingTotal > 0" class="card saq-grading-banner" :class="{ done: !saqGradingActive }">
+          <div class="banner-row">
+            <span class="banner-icon">{{ saqGradingActive ? '🤖' : '✅' }}</span>
+            <div class="banner-text">
+              <div class="banner-title">
+                {{ saqGradingActive ? 'AI 正在自动评分简答题…' : '简答题 AI 评分已完成' }}
+              </div>
+              <div class="banner-sub">
+                <span v-if="saqGradingActive">本次有 {{ saqGradingTotal }} 道可 AI 评分简答题，已完成 {{ saqGradingDone }} 题，请稍候，成绩将自动刷新</span>
+                <span v-else>已完成 {{ saqGradingDone }}/{{ saqGradingTotal }} 题 AI 评分，最终成绩已更新</span>
+              </div>
+            </div>
+            <span v-if="saqGradingActive" class="banner-percent">{{ saqGradingPercent }}%</span>
+          </div>
+          <el-progress
+            v-if="saqGradingActive"
+            :percentage="saqGradingPercent"
+            :stroke-width="6"
+            :show-text="false"
+            status="warning"
+          />
+        </div>
+
         <!-- 成绩展示 -->
         <div v-if="gradeReport" class="card result-panel">
           <h3>考试结果</h3>
@@ -2671,10 +2695,10 @@ export default defineComponent({
       }
     }
 
-    // 启动自动保存定时器（低配模式60秒，正常模式30秒）
+    // 启动自动保存定时器（低配模式300秒，正常模式180秒）
     const startAutoSave = () => {
       if (autoSaveHandle.value) clearInterval(autoSaveHandle.value)
-      const interval = isLowPerformanceMode.value ? 120000 : 60000  // 低配模式120秒，正常60秒（降低并发压力）
+      const interval = isLowPerformanceMode.value ? 300000 : 180000  // 低配模式300秒，正常180秒（进一步降低并发压力）
       autoSaveHandle.value = window.setInterval(() => {
         saveProgress()
       }, interval)
@@ -2755,10 +2779,23 @@ export default defineComponent({
       if (!studentId) {
         return
       }
+      // 关键：如果用户已经在做题（attemptId 已设 / examStarted=true / 已交卷），
+      // 不再弹"未完成考试"——避免如下时序 bug：
+      //   onMounted 里 3~6s 后触发本检查，若用户在这 3~6s 内点开了一场新考试，
+      //   后端会如实返回他刚刚自己创建的 in_progress，被误报成"未完成考试"。
+      if (attemptId.value || examStarted.value || submitted.value) {
+        return
+      }
       try {
         const url = `${API_ENDPOINTS.EXAM.PROGRESS}?student_id=${encodeURIComponent(studentId)}`
         const data = await mcqFetch(url)
-        
+
+        // 二次守卫：如果在等待响应期间用户已经开始了某场考试，
+        // 后端返回的多半就是他刚创建的 attempt，不应弹"未完成"提示
+        if (attemptId.value || examStarted.value || submitted.value) {
+          return
+        }
+
         if (data.ok && data.has_progress) {
           // 检查是否已放弃过此考试（本次会话内不再提醒）
           const abandonedList = getAbandonedAttempts()
@@ -3585,6 +3622,121 @@ export default defineComponent({
       return answers
     }
 
+    // ==================== 简答题 AI 自动评分状态轮询 ====================
+    const saqGradingActive = ref(false)
+    const saqGradingTotal = ref(0)
+    const saqGradingDone = ref(0)
+    const saqGradingPercent = computed(() => {
+      if (saqGradingTotal.value === 0) return 0
+      return Math.round((saqGradingDone.value / saqGradingTotal.value) * 100)
+    })
+    let saqPollTimer: ReturnType<typeof setInterval> | null = null
+
+    const stopSaqPolling = () => {
+      if (saqPollTimer) {
+        clearInterval(saqPollTimer)
+        saqPollTimer = null
+      }
+    }
+
+    // 用 reviewData 中的简答题 score / is_correct 反向更新 gradeReport，使总分与正确数即时刷新
+    const syncGradeReportFromReview = () => {
+      if (!gradeReport.value || !reviewData.value) return
+      const itemMap: Record<string, any> = {}
+      for (const it of reviewData.value.items) {
+        itemMap[it.qid] = it
+      }
+      let total = 0
+      for (const gi of gradeReport.value.items) {
+        const ri = itemMap[gi.qid]
+        if (ri && ri.qtype === 'saq') {
+          gi.score = ri.score ?? gi.score
+          gi.is_correct = ri.is_correct
+        }
+        total += Number(gi.score || 0)
+      }
+      gradeReport.value.total_score = Number(total.toFixed(2))
+    }
+
+    // 仅统计"具备 AI 评分依据"且尚未评分的 SAQ。
+    // 兼容老数据：当 review item 完全没有 auto_gradable 字段时，回退到"全部 SAQ"集合。
+    const countGradableSaq = (items: any[]) => {
+      const saqItems = items.filter((it: any) => it.qtype === 'saq')
+      const hasFlag = saqItems.some((it: any) => 'auto_gradable' in it)
+      const gradable = hasFlag
+        ? saqItems.filter((it: any) => it.auto_gradable)
+        : saqItems
+      const pending = gradable.filter((it: any) => it.is_correct === null)
+      return { total: gradable.length, pending: pending.length, totalSaq: saqItems.length }
+    }
+
+    const startSaqAutoGradePolling = async () => {
+      const items = reviewData.value?.items || []
+      const { total, pending, totalSaq } = countGradableSaq(items)
+      console.log('[SAQ-Poll] 提交后简答题状态:',
+        { saqTotal: totalSaq, gradable: total, pending })
+      if (total === 0) {
+        console.log('[SAQ-Poll] 无可 AI 评分简答题，跳过')
+        return
+      }
+
+      // 检查后端配置是否启用了"提交后自动 AI 评分"
+      // 注意：本文件中所有 mcqFetch 调用都使用绝对 URL（含 MCQ_BASE_URL 前缀）
+      let cfgEnabled = true
+      try {
+        const cfg = await mcqFetch(`${MCQ_BASE_URL}/saq/auto_grade_config`, { method: 'GET' })
+        cfgEnabled = !!cfg?.ok && cfg.config?.enabled !== false
+        console.log('[SAQ-Poll] 后端自动评分配置 enabled =', cfgEnabled)
+      } catch (e) {
+        console.warn('[SAQ-Poll] 读取自动评分配置失败，跳过', e)
+        return
+      }
+      if (!cfgEnabled) return
+
+      // 即便所有 SAQ 已经被后端在 loadReview 之前评分完成，也展示一次"已完成"状态
+      saqGradingTotal.value = total
+      saqGradingDone.value = total - pending
+      if (pending === 0) {
+        console.log('[SAQ-Poll] 后端在前端轮询前已全部评分完成')
+        saqGradingActive.value = false
+        syncGradeReportFromReview()
+        if (scoreChartRef.value) {
+          drawRing(scoreChartRef.value, correctCount.value, questions.value.length)
+        }
+        ElMessage.success('简答题已 AI 评分完成')
+        return
+      }
+      saqGradingActive.value = true
+
+      const startTs = Date.now()
+      const MAX_WAIT_MS = 5 * 60 * 1000 // 最长等待 5 分钟，超时则停止轮询
+      stopSaqPolling()
+      saqPollTimer = setInterval(async () => {
+        try {
+          await loadReview()
+          syncGradeReportFromReview()
+          const newItems = reviewData.value?.items || []
+          const { pending: stillPending } = countGradableSaq(newItems)
+          saqGradingDone.value = saqGradingTotal.value - stillPending
+          if (stillPending === 0) {
+            saqGradingActive.value = false
+            stopSaqPolling()
+            // 重绘正确率圆环
+            if (scoreChartRef.value) {
+              drawRing(scoreChartRef.value, correctCount.value, questions.value.length)
+            }
+            ElMessage.success('简答题 AI 评分已完成，成绩已刷新')
+          } else if (Date.now() - startTs > MAX_WAIT_MS) {
+            saqGradingActive.value = false
+            stopSaqPolling()
+            ElMessage.warning('AI 评分超时，请稍后回来查看成绩或联系管理员')
+          }
+        } catch (e) {
+          console.debug('[SAQ-Poll] 刷新失败', e)
+        }
+      }, 4000)
+    }
+
     const submitExam = async (auto = false) => {
       if (!attemptId.value) {
         ElMessage.warning('请先开始作答')
@@ -3644,6 +3796,9 @@ export default defineComponent({
 
         // 加载答案解析
         await loadReview()
+
+        // 若包含未评分简答题且后端启用自动评分：启动轮询
+        startSaqAutoGradePolling()
 
         // 提交完成后回到页顶，方便查看考试结果
         await nextTick()
@@ -4382,6 +4537,8 @@ export default defineComponent({
       }
       // 停止窗口缩小检测定时器
       stopShrinkInterval()
+      // 停止简答题 AI 评分轮询
+      stopSaqPolling()
     })
 
     return {
@@ -4454,6 +4611,11 @@ export default defineComponent({
       startPractice,
       startExam,
       submitExam,
+      // 简答题 AI 自动评分进度
+      saqGradingActive,
+      saqGradingTotal,
+      saqGradingDone,
+      saqGradingPercent,
       exportReport,
       getQuestionNumber,
       isAnswered,
@@ -5519,6 +5681,59 @@ export default defineComponent({
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* 简答题 AI 自动评分进度横幅 */
+.saq-grading-banner {
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(96, 165, 250, 0.12));
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+.saq-grading-banner.done {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(96, 165, 250, 0.08));
+}
+.saq-grading-banner .banner-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.saq-grading-banner.done .banner-row {
+  margin-bottom: 0;
+}
+.saq-grading-banner .banner-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.saq-grading-banner .banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.saq-grading-banner .banner-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f59e0b;
+  margin-bottom: 2px;
+}
+.saq-grading-banner.done .banner-title {
+  color: #10b981;
+}
+.saq-grading-banner .banner-sub {
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+.saq-grading-banner .banner-percent {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f59e0b;
+  min-width: 56px;
+  text-align: right;
+}
+.exam-page.light-mode .saq-grading-banner .banner-sub {
+  color: #4b5563;
 }
 
 /* 成绩展示 */

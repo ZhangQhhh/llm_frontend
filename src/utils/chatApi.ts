@@ -682,7 +682,7 @@ export async function getQALogDates(token: string): Promise<QALogDatesResponse> 
 /**
  * 写作日志记录项
  */
-export type WritingType = 'official_document' | 'data_analysis_report' | 'general_writing';
+export type WritingType = 'official_document' | 'data_analysis_report' | 'general_writing' | 'typo_check';
 
 /**
  * Writing log item

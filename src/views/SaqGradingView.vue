@@ -368,6 +368,26 @@
       <div class="list-header">
         <h1>📝 简答题评分</h1>
         <div class="header-actions">
+          <el-tag
+            v-if="autoGradeConfig.enabled"
+            type="success"
+            effect="dark"
+            size="small"
+            class="auto-grade-tag"
+            title="学生提交后将自动 AI 评分简答题（点击右侧 AI 自动评分配置可修改）"
+          >
+            <el-icon style="margin-right: 4px"><Check /></el-icon>提交后自动评分：开
+          </el-tag>
+          <el-tag
+            v-else
+            type="info"
+            effect="plain"
+            size="small"
+            class="auto-grade-tag"
+            title="提交后自动评分已关闭，需要手动批改或在此触发批量 AI 评分"
+          >
+            提交后自动评分：关
+          </el-tag>
           <el-button 
             type="warning" 
             @click="openAiGradeDialog"
@@ -478,53 +498,104 @@
     <el-dialog 
       v-model="aiConfigVisible" 
       title="🤖 AI自动评分配置" 
-      width="520px" 
+      width="560px" 
       :close-on-click-modal="false"
     >
-      <el-form label-width="90px" class="ai-config-form">
-        <el-form-item label="目标考试">
-          <el-select 
-            v-model="aiConfig.examId" 
-            placeholder="选择考试" 
-            style="width: 100%"
-            :disabled="!!currentExam"
-          >
-            <el-option 
-              v-for="exam in examList" 
-              :key="exam.exam_id" 
-              :label="`${exam.exam_name || exam.paper_title}（${exam.student_count}人 / ${exam.total_pending}题）`" 
-              :value="exam.exam_id" 
-            />
-          </el-select>
-          <div class="ai-config-tip" v-if="currentExam">已在评分界面，固定为当前考试</div>
-        </el-form-item>
-        <el-form-item label="AI模型">
-          <el-select v-model="aiConfig.modelId" placeholder="选择模型" style="width: 100%">
-            <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="评分范围">
-          <el-radio-group v-model="aiConfig.scope">
-            <el-radio value="ungraded">所有未评分考生</el-radio>
-            <el-radio value="all">全部考生（覆盖已有评分）</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="自动提交">
-          <el-switch v-model="aiConfig.autoSubmit" />
-          <span class="ai-config-tip">评分完成后自动提交到服务器</span>
-        </el-form-item>
-      </el-form>
-      <div class="ai-config-summary" v-if="aiConfig.examId">
-        <el-icon style="color: #e6a23c; margin-right: 4px"><Warning /></el-icon>
-        将评分 <b>{{ aiScopeSummary.studentCount }}</b> 位考生的约 <b>{{ aiScopeSummary.questionCount }}</b> 道题目
-      </div>
-      <div class="ai-config-summary" v-else style="border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06);">
-        <el-icon style="color: #ef4444; margin-right: 4px"><Warning /></el-icon>
-        请先选择目标考试
-      </div>
+      <el-tabs v-model="aiConfigTab" class="ai-config-tabs">
+        <!-- Tab 1: 手动发起评分 -->
+        <el-tab-pane label="手动发起评分" name="manual">
+          <el-form label-width="90px" class="ai-config-form">
+            <el-form-item label="目标考试">
+              <el-select
+                v-model="aiConfig.examId"
+                placeholder="选择考试"
+                style="width: 100%"
+                :disabled="!!currentExam"
+              >
+                <el-option
+                  v-for="exam in examList"
+                  :key="exam.exam_id"
+                  :label="`${exam.exam_name || exam.paper_title}（${exam.student_count}人 / ${exam.total_pending}题）`"
+                  :value="exam.exam_id"
+                />
+              </el-select>
+              <div class="ai-config-tip" v-if="currentExam">已在评分界面，固定为当前考试</div>
+            </el-form-item>
+            <el-form-item label="AI模型">
+              <el-select v-model="aiConfig.modelId" placeholder="选择模型" style="width: 100%">
+                <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="评分范围">
+              <el-radio-group v-model="aiConfig.scope">
+                <el-radio value="ungraded">所有未评分考生</el-radio>
+                <el-radio value="all">全部考生（覆盖已有评分）</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="自动提交">
+              <el-switch v-model="aiConfig.autoSubmit" />
+              <span class="ai-config-tip">评分完成后自动提交到服务器</span>
+            </el-form-item>
+          </el-form>
+
+          <div class="ai-config-summary" v-if="aiConfig.examId">
+            <el-icon style="color: #e6a23c; margin-right: 4px"><Warning /></el-icon>
+            将评分 <b>{{ aiScopeSummary.studentCount }}</b> 位考生的约 <b>{{ aiScopeSummary.questionCount }}</b> 道题目
+          </div>
+          <div class="ai-config-summary" v-else style="border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06);">
+            <el-icon style="color: #ef4444; margin-right: 4px"><Warning /></el-icon>
+            请先选择目标考试
+          </div>
+        </el-tab-pane>
+
+        <!-- Tab 2: 配置自动评分 -->
+        <el-tab-pane label="配置自动评分" name="auto">
+          <div class="auto-config-hint">
+            学生提交考试/练习后，后台自动使用 AI 评分简答题（仅对有参考答案/知识条款的题目生效）。此处配置持久保存。
+          </div>
+          <el-form label-width="90px" class="ai-config-form">
+            <el-form-item label="总开关">
+              <el-switch
+                v-model="autoGradeConfig.enabled"
+                :loading="autoGradeSaving"
+                @change="saveAutoGradeConfig"
+              />
+              <span class="ai-config-tip">开启后学生提交即自动评分</span>
+            </el-form-item>
+            <el-form-item label="默认模型">
+              <el-select
+                v-model="autoGradeConfig.model_id"
+                placeholder="选择默认模型"
+                style="width: 100%"
+                :disabled="!autoGradeConfig.enabled"
+                @change="saveAutoGradeConfig"
+              >
+                <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+              </el-select>
+              <div class="ai-config-tip">后台自动评分使用的模型</div>
+            </el-form-item>
+            <el-form-item label="包含练习">
+              <el-switch
+                v-model="autoGradeConfig.include_practice"
+                :disabled="!autoGradeConfig.enabled"
+                @change="saveAutoGradeConfig"
+              />
+              <span class="ai-config-tip">关闭后仅正式考试自动评分，随机练习/错题练习不自动评分</span>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
+
       <template #footer>
-        <el-button @click="aiConfigVisible = false">取消</el-button>
-        <el-button type="warning" @click="startBatchAiGrade" :disabled="!aiConfig.examId || aiScopeSummary.studentCount === 0">
+        <el-button @click="aiConfigVisible = false">
+          {{ aiConfigTab === 'auto' ? '关闭' : '取消' }}
+        </el-button>
+        <el-button
+          v-if="aiConfigTab === 'manual'"
+          type="warning"
+          @click="startBatchAiGrade"
+          :disabled="!aiConfig.examId || aiScopeSummary.studentCount === 0"
+        >
           开始评分
         </el-button>
       </template>
@@ -986,11 +1057,70 @@ const totalStudents = computed(() => {
   return currentExam.value?.students.length || 0
 })
 
+// ==================== 提交后自动 AI 评分（持久配置）====================
+// 后端字段（来自 mcq_service.DEFAULT_SAQ_AUTO_GRADE_CONFIG）：
+//   enabled: 总开关；学生提交考试/练习后是否自动调用 LLM 评分简答题
+//   model_id: 默认模型ID；为空时后端回退到 Settings.DEFAULT_LLM_ID
+//   include_practice: 是否对练习模式同样自动评分
+const autoGradeConfig = reactive({
+  enabled: true,
+  model_id: 'deepseek',
+  include_practice: true,
+})
+const autoGradeSaving = ref(false)
+// 缓存"上一次成功的配置"，用于保存失败时回滚
+let _lastAutoGradeConfig = { ...autoGradeConfig }
+
+async function loadAutoGradeConfig() {
+  try {
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/auto_grade_config`, { method: 'GET' })
+    if (res.data?.ok && res.data.config) {
+      const c = res.data.config
+      autoGradeConfig.enabled = c.enabled !== false
+      autoGradeConfig.model_id = c.model_id || 'deepseek'
+      autoGradeConfig.include_practice = c.include_practice !== false
+      _lastAutoGradeConfig = { ...autoGradeConfig }
+    }
+  } catch (e) {
+    console.debug('[SAQ] 加载自动评分配置失败', e)
+  }
+}
+
+async function saveAutoGradeConfig() {
+  autoGradeSaving.value = true
+  try {
+    const res = await fetchMcqWithAuth(`${MCQ_BASE_URL}/saq/auto_grade_config`, {
+      method: 'POST',
+      data: {
+        config: {
+          enabled: autoGradeConfig.enabled,
+          model_id: autoGradeConfig.model_id,
+          include_practice: autoGradeConfig.include_practice,
+        },
+      },
+    })
+    if (res.data?.ok) {
+      _lastAutoGradeConfig = { ...autoGradeConfig }
+      ElMessage.success('自动评分配置已保存')
+    } else {
+      Object.assign(autoGradeConfig, _lastAutoGradeConfig) // 回滚
+      ElMessage.error(res.data?.msg || '保存失败')
+    }
+  } catch (e: any) {
+    Object.assign(autoGradeConfig, _lastAutoGradeConfig) // 回滚
+    ElMessage.error('保存失败：' + (e?.message || '网络错误'))
+  } finally {
+    autoGradeSaving.value = false
+  }
+}
+
 // ==================== 生命周期 ====================
 onMounted(() => {
   loadPendingList()
   // 检查是否有进行中或已完成的评分任务
   checkPendingTask()
+  // 加载自动评分配置
+  loadAutoGradeConfig()
 })
 
 // 浏览器关闭/刷新时的提示
@@ -1661,6 +1791,9 @@ const {
   onProgressChange,
   latestGradedResults,
 } = useAiGrading()
+
+// AI配置弹窗当前激活的tab：'manual' | 'auto'
+const aiConfigTab = ref<'manual' | 'auto'>('manual')
 
 // AI模型选项配置（可直接在此修改）
 const llmOptions = ref([
@@ -2424,6 +2557,25 @@ function goBack() {
   gap: 12px;
 }
 
+.auto-grade-tag {
+  margin-right: 4px;
+  cursor: help;
+  font-weight: 500;
+}
+
+.config-section-divider {
+  margin: 16px 0 12px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.3);
+  display: flex;
+  align-items: center;
+}
+.config-section-divider .config-section-title {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
 /* 统计行 */
 .stats-row {
   display: flex;
@@ -2590,6 +2742,34 @@ function goBack() {
 :deep(.el-empty__description p) { color: #94a3b8; }
 
 /* ==================== AI自动评分弹窗 ==================== */
+.ai-config-tabs {
+  margin-top: -8px;
+}
+
+.ai-config-tabs :deep(.el-tabs__item) {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.ai-config-tabs :deep(.el-tabs__item.is-active) {
+  color: #e6a23c;
+}
+
+.ai-config-tabs :deep(.el-tabs__active-bar) {
+  background-color: #e6a23c;
+}
+
+.auto-config-hint {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(230, 162, 60, 0.25);
+  background: rgba(230, 162, 60, 0.08);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .ai-config-form {
   margin-bottom: 12px;
 }

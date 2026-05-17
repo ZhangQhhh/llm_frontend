@@ -4,7 +4,7 @@
 
 import { mockDelay, generateId } from './mockService';
 
-export type MockWritingType = 'official_document' | 'data_analysis_report' | 'general_writing';
+export type MockWritingType = 'official_document' | 'data_analysis_report' | 'general_writing' | 'typo_check';
 export type MockWritingLogType = 'writing_start' | 'retrieval_result' | 'writing_result' | 'writing_error';
 
 export interface MockWritingLogItem {

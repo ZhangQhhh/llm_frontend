@@ -1900,10 +1900,14 @@
             >
               <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                 <el-tag type="info">共 {{ reviewItems.length }} 题</el-tag>
-                <el-tag type="danger">{{ reviewIssueCount }} 题存在问题</el-tag>
+                <el-tag type="danger">{{ reviewIssueCount }} 题疑似存在问题，请人工确认审核，无问题则无需修改</el-tag>
                 <el-checkbox v-model="reviewOnlyIssues" size="default">仅显示问题题目</el-checkbox>
+                <el-button
+                  type="success" plain size="small" :icon="Plus"
+                  @click="addNewReviewItem(null)"
+                >新增一题</el-button>
                 <span style="color: #909399; font-size: 12px;">
-                  提示：点击卡片右上角"编辑此题"修改题干 / 选项 / 答案 / 解析，修改完成后点击"保存"清除告警。
+                  提示：点击卡片右上角"编辑此题"修改题干 / 选项 / 答案 / 解析；若解析中混入了下一题，可点击"在此后插入一题"将混入内容拆分到新题。
                 </span>
               </div>
 
@@ -1933,6 +1937,11 @@
                         {{ reviewEditingIdx === idx ? '收起编辑' : '编辑此题' }}
                       </el-button>
                       <el-button
+                        size="small" type="success" link
+                        @click="addNewReviewItem(idx)"
+                        title="在当前题之后插入一道空白题（用于拆分混入的下一题）"
+                      >在此后插入一题</el-button>
+                      <el-button
                         size="small" type="danger" link
                         @click="deleteReviewItem(idx)"
                       >删除此题</el-button>
@@ -1950,6 +1959,16 @@
                     <!-- 预览模式 -->
                     <div v-if="reviewEditingIdx !== idx" class="preview-content">
                       <div class="preview-stem" style="white-space: pre-wrap;">{{ item.stem || '（题干为空）' }}</div>
+                      <!-- 题干图片预览 -->
+                      <div v-if="item.stem_images && item.stem_images.length > 0" style="display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0;">
+                        <img
+                          v-for="(img, imgIdx) in item.stem_images" :key="imgIdx"
+                          :src="'data:' + img.content_type + ';base64,' + img.base64"
+                          class="q-image"
+                          style="max-height: 60px; cursor: pointer;"
+                          @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                        />
+                      </div>
                       <div v-if="item.qtype !== 'saq'" class="preview-options">
                         <div
                           v-for="k in ['A','B','C','D','E','F','G','H']"
@@ -1958,6 +1977,16 @@
                           class="preview-opt-item"
                         >
                           <span class="preview-opt">{{ k }}. {{ item.options[k] || '' }}</span>
+                          <!-- 选项图片预览 -->
+                          <template v-if="item.option_images && item.option_images[k] && item.option_images[k].length > 0">
+                            <img
+                              v-for="(img, imgIdx) in item.option_images[k]" :key="imgIdx"
+                              :src="'data:' + img.content_type + ';base64,' + img.base64"
+                              class="q-image"
+                              style="max-height: 50px; margin-left: 6px; vertical-align: middle; cursor: pointer;"
+                              @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                            />
+                          </template>
                         </div>
                       </div>
                       <div v-if="item.qtype !== 'saq'" class="preview-answer" :class="{ 'no-answer': !item.answer }">
@@ -1968,6 +1997,16 @@
                       </div>
                       <div v-if="item.explain" class="preview-answer" style="white-space: pre-wrap; color: #67c23a;">
                         解析：{{ item.explain }}
+                      </div>
+                      <!-- 解析图片预览 -->
+                      <div v-if="item.analysis_images && item.analysis_images.length > 0" style="display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0;">
+                        <img
+                          v-for="(img, imgIdx) in item.analysis_images" :key="imgIdx"
+                          :src="'data:' + img.content_type + ';base64,' + img.base64"
+                          class="q-image"
+                          style="max-height: 60px; cursor: pointer;"
+                          @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                        />
                       </div>
                     </div>
 
@@ -1985,17 +2024,59 @@
                         </el-form-item>
                         <el-form-item label="题干">
                           <el-input v-model="item.stem" type="textarea" :autosize="{ minRows: 2, maxRows: 8 }" />
+                          <!-- 题干图片编辑 -->
+                          <div style="margin-top: 6px;">
+                            <span style="color: #909399; font-size: 12px;">题干图片：</span>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center;">
+                              <div v-for="(img, imgIdx) in (item.stem_images || [])" :key="imgIdx" class="editable-image-wrapper">
+                                <img
+                                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                  class="q-image"
+                                  style="max-height: 70px; cursor: pointer;"
+                                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                                />
+                                <el-button class="img-replace-btn" type="primary" size="small" circle :icon="Refresh"
+                                  @click="triggerReplaceUploadedItemImage(Number(idx), 'stem', Number(imgIdx), undefined, 'review')"
+                                  title="替换此图片" />
+                                <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete"
+                                  @click="deleteUploadedItemImage(Number(idx), 'stem', Number(imgIdx), undefined, 'review')" />
+                              </div>
+                              <el-button size="small" type="primary" plain :icon="Plus"
+                                @click="triggerUploadItemImage(idx, 'stem', undefined, 'review')">添加</el-button>
+                            </div>
+                          </div>
                         </el-form-item>
                         <el-form-item v-if="item.qtype !== 'saq'" label="选项">
                           <div style="width: 100%;">
-                            <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="margin-bottom: 6px; display: flex; align-items: center;">
-                              <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
-                              <el-input
-                                :model-value="item.options ? item.options[k] : undefined"
-                                placeholder="留空则不显示此选项"
-                                style="flex: 1;"
-                                @update:model-value="onReviewOptionInput(item, k, $event)"
-                              />
+                            <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="margin-bottom: 8px;">
+                              <div style="display: flex; align-items: center;">
+                                <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
+                                <el-input
+                                  :model-value="item.options ? item.options[k] : undefined"
+                                  placeholder="留空则不显示此选项"
+                                  style="flex: 1;"
+                                  @update:model-value="onReviewOptionInput(item, k, $event)"
+                                />
+                                <el-button size="small" type="primary" plain :icon="Plus" style="margin-left: 4px;"
+                                  @click="triggerUploadItemImage(idx, 'option', k, 'review')">图</el-button>
+                              </div>
+                              <!-- 选项图片编辑 -->
+                              <div v-if="item.option_images && item.option_images[k] && item.option_images[k].length > 0"
+                                   style="margin-left: 24px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                                <div v-for="(img, imgIdx) in item.option_images[k]" :key="imgIdx" class="editable-image-wrapper">
+                                  <img
+                                    :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                    class="q-image"
+                                    style="max-height: 50px; cursor: pointer;"
+                                    @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                                  />
+                                  <el-button class="img-replace-btn" type="primary" size="small" circle :icon="Refresh"
+                                    @click="triggerReplaceUploadedItemImage(Number(idx), 'option', Number(imgIdx), k, 'review')"
+                                    title="替换此图片" />
+                                  <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete"
+                                    @click="deleteUploadedItemImage(Number(idx), 'option', Number(imgIdx), k, 'review')" />
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </el-form-item>
@@ -2005,6 +2086,27 @@
                         </el-form-item>
                         <el-form-item label="解析">
                           <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
+                          <!-- 解析图片编辑 -->
+                          <div style="margin-top: 6px;">
+                            <span style="color: #909399; font-size: 12px;">解析图片：</span>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center;">
+                              <div v-for="(img, imgIdx) in (item.analysis_images || [])" :key="imgIdx" class="editable-image-wrapper">
+                                <img
+                                  :src="'data:' + img.content_type + ';base64,' + img.base64"
+                                  class="q-image"
+                                  style="max-height: 60px; cursor: pointer;"
+                                  @click="previewImage('data:' + img.content_type + ';base64,' + img.base64)"
+                                />
+                                <el-button class="img-replace-btn" type="primary" size="small" circle :icon="Refresh"
+                                  @click="triggerReplaceUploadedItemImage(Number(idx), 'analysis', Number(imgIdx), undefined, 'review')"
+                                  title="替换此图片" />
+                                <el-button class="img-delete-btn" type="danger" size="small" circle :icon="Delete"
+                                  @click="deleteUploadedItemImage(Number(idx), 'analysis', Number(imgIdx), undefined, 'review')" />
+                              </div>
+                              <el-button size="small" type="primary" plain :icon="Plus"
+                                @click="triggerUploadItemImage(idx, 'analysis', undefined, 'review')">添加</el-button>
+                            </div>
+                          </div>
                         </el-form-item>
                       </el-form>
                       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
@@ -2339,9 +2441,10 @@
                       >详情</el-button>
                     </template>
                   </el-table-column>
-                  <el-table-column v-if="isSuperAdminUser" label="操作" width="100" fixed="right" align="left">
+                  <el-table-column v-if="showBjzxTabs" label="操作" :width="isSuperAdminUser ? 150 : 90" fixed="right" align="left">
                     <template #default="scope">
-                      <el-button size="small" link type="primary" @click="openScoreEditDialog(scope.row)">改分</el-button>
+                      <el-button v-if="isSuperAdminUser" size="small" link type="primary" @click="openScoreEditDialog(scope.row)">改分</el-button>
+                      <el-button size="small" link type="danger" @click="resetAttempt(scope.row)">重置</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -3102,25 +3205,29 @@
       <el-dialog
         v-model="scoreEditDialogVisible"
         :title="`修改分数 — ${scoreEditData?.student_name || ''}`"
-        width="420px"
+        width="460px"
         destroy-on-close
       >
         <template v-if="scoreEditData">
-          <el-form label-width="90px" size="default">
+          <el-form label-width="100px" size="default">
             <el-form-item label="学生">
               <span>{{ scoreEditData.student_name }} ({{ scoreEditData.student_id }})</span>
             </el-form-item>
-            <el-form-item label="选择题分数">
-              <el-input-number v-model="scoreEditForm.mcq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
+            <el-form-item :label="`选择题 / ${(gradesStats?.total_mcq_max || 0).toFixed(1)}`">
+              <el-input-number v-model="scoreEditForm.mcq_score" :min="0" :max="gradesStats?.total_mcq_max || undefined" :precision="1" :step="1" style="width: 160px;" />
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_mcq?.toFixed(1) }}</span>
             </el-form-item>
-            <el-form-item v-if="gradesStats?.has_judge" label="判断题分数">
-              <el-input-number v-model="scoreEditForm.judge_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
+            <el-form-item v-if="gradesStats?.has_judge" :label="`判断题 / ${(gradesStats?.total_judge_max || 0).toFixed(1)}`">
+              <el-input-number v-model="scoreEditForm.judge_score" :min="0" :max="gradesStats?.total_judge_max || undefined" :precision="1" :step="1" style="width: 160px;" />
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_judge?.toFixed(1) }}</span>
             </el-form-item>
-            <el-form-item v-if="gradesStats?.has_saq" label="简答题分数">
-              <el-input-number v-model="scoreEditForm.saq_score" :min="0" :precision="1" :step="1" style="width: 160px;" />
+            <el-form-item v-if="gradesStats?.has_saq" :label="`简答题 / ${(gradesStats?.total_saq_max || 0).toFixed(1)}`">
+              <el-input-number v-model="scoreEditForm.saq_score" :min="0" :max="gradesStats?.total_saq_max || undefined" :precision="1" :step="1" style="width: 160px;" />
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_saq?.toFixed(1) }}</span>
+            </el-form-item>
+            <el-form-item :label="`正确题数 / ${scoreEditData.total_count || gradesStats?.total_question_count || 0}`">
+              <el-input-number v-model="scoreEditForm.correct_count" :min="0" :max="(scoreEditData.total_count || gradesStats?.total_question_count) || undefined" :precision="0" :step="1" style="width: 160px;" />
+              <span style="margin-left: 8px; color: #909399; font-size: 12px;">原始: {{ scoreEditData.orig_correct ?? '-' }}</span>
             </el-form-item>
             <el-form-item label="修改后总分">
               <span style="font-size: 18px; font-weight: 600; color: #409eff;">
@@ -3293,9 +3400,26 @@ export default defineComponent({
 
     // ======= 题库管理（MCQ） =======
     // --- 题库选择器 ---
-    const currentBankId = ref('default')
+    // 当前选中的题库 ID 持久化到 localStorage，避免页面刷新后被重置回 'default'
+    const BANK_ID_STORAGE_KEY = 'admin_mcq_current_bank_id'
+    const _restoredBankId = (() => {
+      try { return localStorage.getItem(BANK_ID_STORAGE_KEY) || '' } catch { return '' }
+    })()
+    const currentBankId = ref(_restoredBankId || 'default')
     const banksList = ref<Array<{id: string; name: string; question_count?: number; created_at?: string}>>([])
     const loadingBanks = ref(false)
+    // loadQuestions 请求版本号：每次发起 +1，旧请求返回时若版本号不匹配则丢弃
+    let loadQuestionsToken = 0
+    // 当前进行中的 loadQuestions AbortController，用于切换题库时主动取消旧请求
+    let loadQuestionsAbort: AbortController | null = null
+
+    // currentBankId 变更时同步到 localStorage
+    watch(currentBankId, (v) => {
+      try {
+        if (v) localStorage.setItem(BANK_ID_STORAGE_KEY, v)
+        else localStorage.removeItem(BANK_ID_STORAGE_KEY)
+      } catch (_e) { /* ignore storage errors */ }
+    })
 
     const loadBanksList = async () => {
       loadingBanks.value = true
@@ -3308,9 +3432,10 @@ export default defineComponent({
           if (banksList.value.length === 0) {
             currentBankId.value = ''
           } else if (!banksList.value.find(b => b.id === currentBankId.value)) {
-            // 如果当前选中的题库不存在，切换到第一个题库
+            // 如果当前选中的题库不存在（如已被删除），切换到第一个题库
             currentBankId.value = banksList.value[0].id
           }
+          // 否则保留用户当前选择（即使是从 localStorage 恢复的也保持不变）
         }
       } catch (e: any) {
         console.warn('加载题库列表失败:', e)
@@ -3320,6 +3445,9 @@ export default defineComponent({
     }
 
     const onBankChange = () => {
+      // 切换题库时立即清空旧题目，避免上一题库的内容残留显示
+      questions.value = []
+      page.value = 1
       loadQuestions()
       loadDeletedQuestions()
     }
@@ -3449,6 +3577,41 @@ export default defineComponent({
         item.parse_warnings = []
       }
       reviewEditingIdx.value = null
+    }
+
+    // 在审核对话框内新增一道空白题目（可指定插入位置：默认追加到末尾，或在 insertAfter 之后）
+    // 用于"解析中混入下一题"等场景：用户可以把混入的内容拆分到新题
+    const addNewReviewItem = (insertAfter: number | null = null) => {
+      const newItem: any = {
+        qtype: 'single',
+        stem: '',
+        options: { A: '', B: '', C: '', D: '' },
+        answer: '',
+        explain: '',
+        stem_images: [],
+        option_images: {},
+        analysis_images: [],
+        has_images: false,
+        knowledge_clauses: [],
+        parse_warnings: [],
+      }
+      let newIdx: number
+      if (insertAfter !== null && insertAfter >= 0 && insertAfter < reviewItems.value.length) {
+        reviewItems.value.splice(insertAfter + 1, 0, newItem)
+        newIdx = insertAfter + 1
+        // 维护当前编辑索引（若当前正在编辑的题在插入位置之后，索引需要+1）
+        if (reviewEditingIdx.value !== null && reviewEditingIdx.value > insertAfter) {
+          reviewEditingIdx.value++
+        }
+      } else {
+        reviewItems.value.push(newItem)
+        newIdx = reviewItems.value.length - 1
+      }
+      // 自动展开新题的编辑面板
+      reviewEditingIdx.value = newIdx
+      // 关闭"仅显示问题题目"以确保新题可见（新题暂无告警）
+      reviewOnlyIssues.value = false
+      ElMessage.success('已新增一道空白题目，请在下方编辑')
     }
 
     const deleteReviewItem = (idx: number) => {
@@ -4435,7 +4598,7 @@ export default defineComponent({
     // ========== 改分功能 ==========
     const scoreEditDialogVisible = ref(false)
     const scoreEditData = ref<any>(null)
-    const scoreEditForm = reactive({ mcq_score: 0, judge_score: 0, saq_score: 0 })
+    const scoreEditForm = reactive({ mcq_score: 0, judge_score: 0, saq_score: 0, correct_count: 0 })
     const scoreEditSaving = ref(false)
 
     const openScoreEditDialog = (row: any) => {
@@ -4446,11 +4609,14 @@ export default defineComponent({
         orig_mcq: row.mcq_score || 0,
         orig_judge: row.judge_score || 0,
         orig_saq: row.saq_score || 0,
+        orig_correct: row.correct_count ?? 0,
+        total_count: row.total_count || 0,
         has_override: row.has_override || false
       }
       scoreEditForm.mcq_score = row.mcq_score || 0
       scoreEditForm.judge_score = row.judge_score || 0
       scoreEditForm.saq_score = row.saq_score || 0
+      scoreEditForm.correct_count = row.correct_count ?? 0
       scoreEditDialogVisible.value = true
     }
 
@@ -4458,24 +4624,44 @@ export default defineComponent({
       if (!scoreEditData.value?.attempt_id) return
       scoreEditSaving.value = true
       try {
+        // 仅提交"实际改动"过的字段，避免无意把当前值写成覆盖
+        const payload: Record<string, any> = {
+          attempt_id: scoreEditData.value.attempt_id,
+        }
+        const newMcq = (Number(scoreEditForm.mcq_score) || 0) + (Number(scoreEditForm.judge_score) || 0)
+        const origMcq = (Number(scoreEditData.value.orig_mcq) || 0) + (Number(scoreEditData.value.orig_judge) || 0)
+        if (Math.abs(newMcq - origMcq) > 1e-6) {
+          // 后端 score_overrides.mcq_score 语义为"全部非简答"合并分（含判断题），保持向后兼容
+          payload.mcq_score = newMcq
+        }
+        const newSaq = Number(scoreEditForm.saq_score) || 0
+        const origSaq = Number(scoreEditData.value.orig_saq) || 0
+        if (Math.abs(newSaq - origSaq) > 1e-6) {
+          payload.saq_score = newSaq
+        }
+        const newCorrect = Number(scoreEditForm.correct_count)
+        const origCorrect = Number(scoreEditData.value.orig_correct)
+        if (Number.isFinite(newCorrect) && newCorrect !== origCorrect) {
+          payload.correct_count = Math.max(0, Math.round(newCorrect))
+        }
+        // 至少需要改动一项
+        if (payload.mcq_score === undefined && payload.saq_score === undefined && payload.correct_count === undefined) {
+          ElMessage.info('未检测到任何改动')
+          scoreEditSaving.value = false
+          return
+        }
         const resp = await fetch(`${MCQ_BASE_URL}/grades/score_override`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({
-            attempt_id: scoreEditData.value.attempt_id,
-            // 后端 score_overrides.mcq_score 语义为“全部非简答”合并分，
-            // 这里将选择题分 + 判断题分合并传递，保持向后兼容
-            mcq_score: (scoreEditForm.mcq_score || 0) + (scoreEditForm.judge_score || 0),
-            saq_score: scoreEditForm.saq_score
-          })
+          body: JSON.stringify(payload)
         })
         const j = await resp.json()
         if (j.ok) {
           ElMessage.success('分数修改成功')
           scoreEditDialogVisible.value = false
-          // 刷新成绩数据
+          // 静默刷新成绩明细，避免整面板 skeleton 闪烁
           if (selectedExportExam.value) {
-            onExportExamChange(selectedExportExam.value)
+            reloadGradesDetailsSilently()
           }
         } else {
           ElMessage.error(j.detail || j.msg || '修改失败')
@@ -4503,7 +4689,7 @@ export default defineComponent({
           ElMessage.success('已恢复原始分数')
           scoreEditDialogVisible.value = false
           if (selectedExportExam.value) {
-            onExportExamChange(selectedExportExam.value)
+            reloadGradesDetailsSilently()
           }
         } else {
           ElMessage.error(j.detail || j.msg || '恢复失败')
@@ -4512,6 +4698,47 @@ export default defineComponent({
         ElMessage.error('恢复失败：' + (e?.message || e))
       } finally {
         scoreEditSaving.value = false
+      }
+    }
+
+    // ========== 重置考试记录（删除 attempt） ==========
+    const resetAttempt = async (row: any) => {
+      if (!row?.attempt_id) {
+        ElMessage.error('无效的考试记录ID')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `确认重置 ${row.student_name || row.student_id} 的本次考试记录？\n该操作将删除其本次考试数据，使其可以重新参加考试，且无法恢复。`,
+          '重置考试记录',
+          {
+            type: 'warning',
+            confirmButtonText: '确认重置',
+            cancelButtonText: '取消',
+            confirmButtonClass: 'el-button--danger',
+            dangerouslyUseHTMLString: false,
+          }
+        )
+      } catch {
+        return  // 用户取消
+      }
+      try {
+        const resp = await fetch(`${MCQ_BASE_URL}/grades/attempt_reset`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ attempt_id: row.attempt_id })
+        })
+        const j = await resp.json()
+        if (j.ok) {
+          ElMessage.success(j.detail || '重置成功')
+          if (selectedExportExam.value) {
+            reloadGradesDetailsSilently()
+          }
+        } else {
+          ElMessage.error(j.detail || j.msg || '重置失败')
+        }
+      } catch (e: any) {
+        ElMessage.error('重置失败：' + (e?.message || e))
       }
     }
 
@@ -5152,6 +5379,8 @@ export default defineComponent({
         asyncMsg.value = '请至少选择一个解析目标状态'
         return
       }
+      // 重置 dismiss 标志，确保新任务的进度消息栏可见
+      pendingTaskDismissed.value = false
       asyncExplaining.value = true; asyncMsg.value = '创建任务中…'
       try{
         const req:any = {
@@ -5262,6 +5491,7 @@ export default defineComponent({
     // 恢复任务
     const resumeTask = async () => {
       resumingTask.value = true
+      pendingTaskDismissed.value = false  // 重置 dismiss 标志，确保进度消息栏可见
       asyncMsg.value = '正在恢复任务...'
       try {
         const r = await fetch(`${MCQ_BASE_URL}/tasks/resume`, {
@@ -5457,11 +5687,27 @@ export default defineComponent({
     }
 
     const loadQuestions = async () => {
+      // 主动中止上一个仍在进行中的请求，避免它覆盖新题库的数据
+      if (loadQuestionsAbort) {
+        try { loadQuestionsAbort.abort() } catch (_e) { /* ignore */ }
+      }
+      const ac = new AbortController()
+      loadQuestionsAbort = ac
       loadingQuestions.value = true
+      // 记录本次请求的题库 ID 和递增 token，用于丢弃过期响应（双保险）
+      const reqBankId = currentBankId.value
+      const reqToken = ++loadQuestionsToken
       try {
         // 不分页(page=0)，不加载图片（图片由 loadPageImages 懒加载），按题库筛选
-        const r = await fetch(`${MCQ_BASE_URL}/bank/list?page=0&bank_id=${encodeURIComponent(currentBankId.value)}`, { method: 'GET', headers: getAuthHeaders(false) })
+        const r = await fetch(
+          `${MCQ_BASE_URL}/bank/list?page=0&bank_id=${encodeURIComponent(reqBankId)}`,
+          { method: 'GET', headers: getAuthHeaders(false), signal: ac.signal },
+        )
         const j = await r.json()
+        // 若期间用户已切换题库或发起新请求，则丢弃本次响应
+        if (reqToken !== loadQuestionsToken || reqBankId !== currentBankId.value) {
+          return
+        }
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
         }
@@ -5490,9 +5736,16 @@ export default defineComponent({
         // 题目加载完成后，异步加载当前页图片
         nextTick(() => loadPageImages())
       } catch (error: any) {
+        // 主动中止的请求不报错
+        if (error?.name === 'AbortError') return
+        if (reqToken !== loadQuestionsToken || reqBankId !== currentBankId.value) return
         ElMessage.error('加载题库失败：' + (error?.message || String(error)))
       } finally {
-        loadingQuestions.value = false
+        // 仅当本次仍是最新请求时才清除 loading 与 AbortController，避免覆盖新请求的状态
+        if (reqToken === loadQuestionsToken) {
+          loadingQuestions.value = false
+          loadQuestionsAbort = null
+        }
       }
     }
 
@@ -6313,10 +6566,21 @@ export default defineComponent({
     }
 
     const regenAndSave = async (row:any) => {
+      // 限制：带图片的题目（题干/选项/解析含图片）不解析
+      if (row?.has_images) {
+        ElMessage.warning('该题包含图片，已跳过 AI 解析')
+        return
+      }
       rowRegenLoading[row.qid] = true
       try{
         const req:any = {
-          items: [{ qid: row.qid, stem: row.stem, options: Object.fromEntries((row.options||[]).map((o:any)=>[o.label,o.text])) }],
+          items: [{
+            qid: row.qid,
+            stem: row.stem,
+            options: Object.fromEntries((row.options||[]).map((o:any)=>[o.label,o.text])),
+            qtype: row.qtype || '',
+            has_images: !!row.has_images,
+          }],
           thinking: thinking.value,
           model_id: llmModelId.value,
           fallback_model_id: fallbackModelId.value || undefined,
@@ -7335,8 +7599,8 @@ export default defineComponent({
     }
 
     // 删除上传试卷题目中的图片
-    const deleteUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string) => {
-      const item = uploadedPaperItems.value[itemIdx]
+    const deleteUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string, target: 'paper' | 'review' = 'paper') => {
+      const item = _getItemsByTarget(target)[itemIdx]
       if (!item) return
 
       if (type === 'stem') {
@@ -7378,11 +7642,17 @@ export default defineComponent({
     }
 
     // 图片上传状态（replaceIdx 非空表示替换该位置的现有图片）
-    const pendingImageUpload = ref<{ itemIdx: number; type: 'stem' | 'option' | 'analysis'; optionKey?: string; replaceIdx?: number } | null>(null)
+    // target 指明操作的题目数组：'paper' = 上传试卷预览, 'review' = 题库上传告警审核
+    const pendingImageUpload = ref<{ itemIdx: number; type: 'stem' | 'option' | 'analysis'; optionKey?: string; replaceIdx?: number; target?: 'paper' | 'review' } | null>(null)
+
+    // 根据 target 取得对应的题目数组
+    const _getItemsByTarget = (target?: 'paper' | 'review') => {
+      return target === 'review' ? reviewItems.value : uploadedPaperItems.value
+    }
 
     // 触发上传图片（新增）
-    const triggerUploadItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', optionKey?: string) => {
-      pendingImageUpload.value = { itemIdx, type, optionKey }
+    const triggerUploadItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', optionKey?: string, target: 'paper' | 'review' = 'paper') => {
+      pendingImageUpload.value = { itemIdx, type, optionKey, target }
       // 创建临时input
       const input = document.createElement('input')
       input.type = 'file'
@@ -7392,8 +7662,8 @@ export default defineComponent({
     }
 
     // 触发替换图片
-    const triggerReplaceUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string) => {
-      pendingImageUpload.value = { itemIdx, type, optionKey, replaceIdx: imgIdx }
+    const triggerReplaceUploadedItemImage = (itemIdx: number, type: 'stem' | 'option' | 'analysis', imgIdx: number, optionKey?: string, target: 'paper' | 'review' = 'paper') => {
+      pendingImageUpload.value = { itemIdx, type, optionKey, replaceIdx: imgIdx, target }
       const input = document.createElement('input')
       input.type = 'file'
       input.accept = 'image/*'
@@ -7407,8 +7677,8 @@ export default defineComponent({
       const file = input?.files?.[0]
       if (!file || !pendingImageUpload.value) return
 
-      const { itemIdx, type, optionKey, replaceIdx } = pendingImageUpload.value
-      const item = uploadedPaperItems.value[itemIdx]
+      const { itemIdx, type, optionKey, replaceIdx, target } = pendingImageUpload.value
+      const item = _getItemsByTarget(target)[itemIdx]
       if (!item) return
 
       try {
@@ -7967,14 +8237,16 @@ export default defineComponent({
       }
     }
 
-    const loadGradesStats = async (paperId?: string, examId?: string) => {
+    const loadGradesStats = async (paperId?: string, examId?: string, silent: boolean = false) => {
       const pId = paperId || selectedExportPaper.value
       const eId = examId || selectedExportExam.value
       if (!pId) {
         gradesStats.value = null
         return
       }
-      loadingGradesStats.value = true
+      // 静默模式：不切换 loading 状态，避免整面板 skeleton 闪烁
+      // （用于改分/重置/恢复分数后的局部刷新场景）
+      if (!silent) loadingGradesStats.value = true
       try {
         let url = `${MCQ_BASE_URL}/grades/stats?paper_id=${encodeURIComponent(pId)}`
         if (eId) {
@@ -7984,14 +8256,19 @@ export default defineComponent({
         const data = await response.json()
         if (data?.ok !== false) {
           gradesStats.value = data
-        } else {
+        } else if (!silent) {
           gradesStats.value = null
         }
       } catch (error: any) {
-        gradesStats.value = null
+        if (!silent) gradesStats.value = null
       } finally {
-        loadingGradesStats.value = false
+        if (!silent) loadingGradesStats.value = false
       }
+    }
+
+    // 静默刷新成绩明细（不闪整面板）
+    const reloadGradesDetailsSilently = () => {
+      return loadGradesStats(selectedExportPaper.value, selectedExportExam.value, true)
     }
 
     // ========== 考试发布相关函数 ==========
@@ -8626,7 +8903,7 @@ export default defineComponent({
       changeMyPassword, resetUserPassword, handleFileChange, uploadQuestions, downloadTemplate,
       // 解析告警审核对话框（题库上传）
       reviewVisible, reviewItems, reviewOnlyIssues, reviewEditingIdx, reviewIssueCount,
-      onReviewItemEdited, onReviewOptionInput, deleteReviewItem, saveReviewItem,
+      onReviewItemEdited, onReviewOptionInput, deleteReviewItem, saveReviewItem, addNewReviewItem,
       confirmReview, cancelReview, onReviewDialogClosed,
       generateExplanations, loadQuestions, toggleAnalysis, approveQuestion, rejectQuestion, deleteQuestion, cancelEdit,saveRow,
       approveAll, createPaper, loadExportPapers, exportZip, exportDocx, exportXlsx, exportingXlsx, isEditing,editRow,
@@ -8720,7 +8997,7 @@ export default defineComponent({
       cheatDetailDialogVisible, cheatDetailData, viewCheatDetail,
       // 改分功能
       scoreEditDialogVisible, scoreEditData, scoreEditForm, scoreEditSaving,
-      openScoreEditDialog, submitScoreOverride, clearScoreOverride, EditPen,
+      openScoreEditDialog, submitScoreOverride, clearScoreOverride, resetAttempt, EditPen,
       // 修正答案功能
       fixAnswerDialogVisible, fixAnswerForm, fixAnswerSaving, fixAnswerResult,
       mcqQuestionsOverview, fixAnswerSelectedQ, qtypeLabelMap,
