@@ -1148,6 +1148,20 @@
                   </div>
                 </el-form-item>
 
+                <!-- 题库模式（同时影响手动选题和随机抽取） -->
+                <el-form-item label="题库模式" style="margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <el-radio-group v-model="multiBankEnabled">
+                      <el-radio :value="false">单题库（仅当前题库）</el-radio>
+                      <el-radio :value="true">多题库（跨题库选题/抽取）</el-radio>
+                    </el-radio-group>
+                    <span v-if="multiBankEnabled" style="color: #909399; font-size: 12px;">
+                      <span v-if="loadingMultiBankQuestions">正在合并所有题库已通过题目…</span>
+                      <span v-else>已合并 {{ multiBankApprovedQuestions.length }} 道已通过题目</span>
+                    </span>
+                  </div>
+                </el-form-item>
+
                 <!-- 生成模式选择 -->
                 <el-form-item label="生成模式" style="margin-bottom: 12px;">
                   <el-radio-group v-model="paperGenerateMode">
@@ -1158,35 +1172,90 @@
 
                 <!-- 随机抽取配置 -->
                 <el-form-item v-if="paperGenerateMode === 'random'" label="题目数量" style="margin-bottom: 12px;">
-                  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
-                    <span>
-                      <span style="margin-right: 4px;">单选</span>
-                      <el-input-number v-model="randomSingleCount" :min="0" :max="singleApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">题</span>
-                    </span>
-                    <span>
-                      <span style="margin-right: 4px;">多选</span>
-                      <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">题</span>
-                    </span>
-                    <span>
-                      <span style="margin-right: 4px;">判断</span>
-                      <el-input-number v-model="randomJudgeCount" :min="0" :max="judgeApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">题</span>
-                    </span>
-                    <span>
-                      <span style="margin-right: 4px;">简答</span>
-                      <el-input-number v-model="randomSaqCount" :min="0" :max="saqApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
-                      <span style="margin-left: 4px;">题</span>
-                    </span>
-                    <span style="display: flex; align-items: center; gap: 8px;">
-                      <span style="margin-right: 4px;">不定项：</span>
-                      <span>单选</span>
-                      <el-input-number v-model="randomIndeterminateSingleCount" :min="0" :max="singleApprovedCount" :value-on-clear="0" size="small" style="width: 90px;" />
-                      <span>多选</span>
-                      <el-input-number v-model="randomIndeterminateMultiCount" :min="0" :max="multiApprovedCount" :value-on-clear="0" size="small" style="width: 90px;" />
-                      <span style="color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
-                    </span>
+                  <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                    <!-- 单题库模式 -->
+                    <div v-if="!multiBankEnabled" style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                      <span>
+                        <span style="margin-right: 4px;">单选</span>
+                        <el-input-number v-model="randomSingleCount" :min="0" :max="singleApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
+                        <span style="margin-left: 4px;">题</span>
+                      </span>
+                      <span>
+                        <span style="margin-right: 4px;">多选</span>
+                        <el-input-number v-model="randomMultiCount" :min="0" :max="multiApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
+                        <span style="margin-left: 4px;">题</span>
+                      </span>
+                      <span>
+                        <span style="margin-right: 4px;">判断</span>
+                        <el-input-number v-model="randomJudgeCount" :min="0" :max="judgeApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
+                        <span style="margin-left: 4px;">题</span>
+                      </span>
+                      <span>
+                        <span style="margin-right: 4px;">简答</span>
+                        <el-input-number v-model="randomSaqCount" :min="0" :max="saqApprovedCount" :value-on-clear="0" size="small" style="width: 80px;" />
+                        <span style="margin-left: 4px;">题</span>
+                      </span>
+                      <span style="display: flex; align-items: center; gap: 8px;">
+                        <span style="margin-right: 4px;">不定项：</span>
+                        <span>单选</span>
+                        <el-input-number v-model="randomIndeterminateSingleCount" :min="0" :max="singleApprovedCount" :value-on-clear="0" size="small" style="width: 90px;" />
+                        <span>多选</span>
+                        <el-input-number v-model="randomIndeterminateMultiCount" :min="0" :max="multiApprovedCount" :value-on-clear="0" size="small" style="width: 90px;" />
+                        <span style="color: #909399; font-size: 12px;">（从剩余题目中抽取）</span>
+                      </span>
+                    </div>
+
+                    <!-- 多题库模式 -->
+                    <div v-else style="display: flex; flex-direction: column; gap: 8px; border: 1px solid #dcdfe6; border-radius: 6px; padding: 10px; background: #fafbfc;">
+                      <div v-if="multiBankConfigs.length === 0" style="color: #909399; font-size: 13px;">
+                        请点击下方"添加题库"按钮，为每个题库分别配置抽取数量。
+                      </div>
+                      <div
+                        v-for="(cfg, idx) in multiBankConfigs"
+                        :key="idx"
+                        style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #ebeef5;"
+                      >
+                        <span style="font-weight: 600; color: #303133; min-width: 56px;">第{{ idx + 1 }}组</span>
+                        <el-select v-model="cfg.bank_id" placeholder="选择题库" size="small" filterable style="width: 200px;">
+                          <el-option
+                            v-for="b in banksList"
+                            :key="b.id"
+                            :label="`${b.name}（${b.question_count ?? 0} 题）`"
+                            :value="b.id"
+                          />
+                        </el-select>
+                        <span><span style="margin-right: 4px;">单选</span>
+                          <el-input-number v-model="cfg.single_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                        </span>
+                        <span><span style="margin-right: 4px;">多选</span>
+                          <el-input-number v-model="cfg.multi_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                        </span>
+                        <span><span style="margin-right: 4px;">判断</span>
+                          <el-input-number v-model="cfg.judge_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                        </span>
+                        <span><span style="margin-right: 4px;">简答</span>
+                          <el-input-number v-model="cfg.saq_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                          <span>不定项：单选</span>
+                          <el-input-number v-model="cfg.indeterminate_single_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 90px;" />
+                          <span>多选</span>
+                          <el-input-number v-model="cfg.indeterminate_multi_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 90px;" />
+                        </span>
+                        <el-button size="small" type="danger" plain @click="removeMultiBankConfig(idx)">
+                          <el-icon><Delete /></el-icon> 移除
+                        </el-button>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 12px; padding-top: 4px;">
+                        <el-button size="small" type="primary" plain @click="addMultiBankConfig">
+                          <el-icon><Plus /></el-icon> 添加题库
+                        </el-button>
+                        <span style="color: #909399; font-size: 12px;">
+                          合计 {{ multiBankTotalCount }} 题
+                          <span v-if="multiBankTotalCount > 0">（跨题库题干+选项相同自动去重并替换抽取）</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </el-form-item>
 
@@ -1236,7 +1305,9 @@
                 <el-form-item label="" style="margin-bottom: 0;">
                   <el-button type="primary" @click="createPaper" :loading="creatingPaper">
                     {{ paperGenerateMode === 'random'
-                      ? `随机生成试卷 (${randomSingleCount + randomMultiCount + randomJudgeCount + randomSaqCount + randomIndeterminateCount}题)`
+                      ? (multiBankEnabled
+                        ? `多题库随机生成试卷 (${multiBankTotalCount}题)`
+                        : `随机生成试卷 (${randomSingleCount + randomMultiCount + randomJudgeCount + randomSaqCount + randomIndeterminateCount}题)`)
                       : `生成试卷 ${selectedPaperQuestions.length > 0 ? '(' + selectedPaperQuestions.length + '题)' : '(全部)'}` }}
                   </el-button>
                   <span class="status-msg">{{ paperMessage }}</span>
@@ -4038,6 +4109,44 @@ export default defineComponent({
       return approvedQuestions.value.filter(q => q.qtype === 'saq').length
     })
 
+    // 多题库随机抽取配置（同一套试卷从多个题库分别抽取，跨题库按"题干+选项文字"去重并替换）
+    interface MultiBankConfig {
+      bank_id: string
+      single_count: number
+      multi_count: number
+      judge_count: number
+      saq_count: number
+      indeterminate_single_count: number
+      indeterminate_multi_count: number
+    }
+    const multiBankEnabled = ref(false)
+    const multiBankConfigs = ref<MultiBankConfig[]>([])
+    const multiBankTotalCount = computed(() => {
+      let total = 0
+      for (const c of multiBankConfigs.value) {
+        total += (c.single_count || 0) + (c.multi_count || 0) + (c.judge_count || 0)
+          + (c.saq_count || 0) + (c.indeterminate_single_count || 0) + (c.indeterminate_multi_count || 0)
+      }
+      return total
+    })
+    const addMultiBankConfig = () => {
+      // 默认选中当前题库；若该题库已被添加过，留空让用户选
+      const usedIds = new Set(multiBankConfigs.value.map(c => c.bank_id))
+      const firstUnused = banksList.value.find(b => !usedIds.has(b.id))
+      multiBankConfigs.value.push({
+        bank_id: firstUnused ? firstUnused.id : (currentBankId.value || ''),
+        single_count: 0,
+        multi_count: 0,
+        judge_count: 0,
+        saq_count: 0,
+        indeterminate_single_count: 0,
+        indeterminate_multi_count: 0,
+      })
+    }
+    const removeMultiBankConfig = (idx: number) => {
+      multiBankConfigs.value.splice(idx, 1)
+    }
+
     // 不定项配置（手动模式下使用）
     const enableIndeterminate = ref(false)
     const indeterminateMode = ref<'select' | 'count'>('select')
@@ -4818,8 +4927,87 @@ export default defineComponent({
       return answer.length > 1
     }
 
-    // 已通过的题目列表
+    // 多题库模式：合并所有题库的已通过题目（按"题干+选项文字"去重）
+    const multiBankApprovedQuestions = ref<Question[]>([])
+    const loadingMultiBankQuestions = ref(false)
+
+    // 题目查重签名（与后端 _paper_question_signature 对齐）：
+    // NFKC 归一 + 去除所有空白/标点/符号/控制字符 + 小写化，保留纯文字内容（汉字/字母/数字）。
+    // 题干 + 选项文字 完全相同即视为同一题（不含答案）。
+    // 这样可消除中英标点(，./。)、全/半角、句末标点、零宽字符等非文字差异。
+    const normTextForSig = (s: string): string => {
+      if (!s) return ''
+      // \p{P} 标点 \p{S} 符号 \p{Z} 分隔 \p{C} 控制 \s 空白
+      return s.normalize('NFKC').replace(/[\p{P}\p{S}\p{Z}\p{C}\s]/gu, '').toLowerCase()
+    }
+    const buildPaperQuestionSig = (q: Question): string => {
+      const stem = normTextForSig(q.stem || '')
+      const opts = q.options || []
+      const sorted = [...opts].sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+      const parts = sorted.map(o => (o.label || '').toUpperCase() + normTextForSig(o.text || ''))
+      return stem + '||' + parts.join('|')
+    }
+
+    // silent=true：已有缓存时静默后台刷新，不显示 "正在合并…" 提示
+    const loadMultiBankApprovedQuestions = async (silent: boolean = false) => {
+      if (!silent) loadingMultiBankQuestions.value = true
+      try {
+        // 单次请求获取所有题库题目；后端支持 all_banks=true
+        const r = await fetch(
+          `${MCQ_BASE_URL}/bank/list?page=0&all_banks=true`,
+          { method: 'GET', headers: getAuthHeaders(false) },
+        )
+        const j = await r.json()
+        if (!j || j.ok === false) throw new Error(j?.msg || `HTTP ${r.status}`)
+        const items = Array.isArray(j.items) ? j.items : []
+        // 仅保留已通过题目，并按签名去重
+        const seen = new Set<string>()
+        const merged: Question[] = []
+        for (const it of items) {
+          if ((it.status || '') !== 'approved') continue
+          const q: Question = {
+            qid: String(it.id ?? it.qid ?? ''),
+            stem: it.stem || '',
+            options: normalizeOptions(it.options, it.option_images),
+            answer: (it.answer || '').toString().toUpperCase(),
+            analysis: it.explain || '',
+            status: 'approved',
+            qtype: it.qtype || '',
+            category: it.category || '',
+            reference_answer: it.reference_answer || '',
+            ai_generated_answer: Boolean(it.ai_generated_answer),
+            has_images: Boolean(it.has_images),
+            stem_images: it.stem_images || [],
+            analysis_images: it.analysis_images || [],
+            knowledge_clauses: it.knowledge_clauses || [],
+            knowledge_points: it.knowledge_points || [],
+          }
+          const sig = buildPaperQuestionSig(q)
+          if (seen.has(sig)) continue
+          seen.add(sig)
+          merged.push(q)
+        }
+        multiBankApprovedQuestions.value = merged
+      } catch (error: any) {
+        ElMessage.error('加载多题库已通过题目失败：' + (error?.message || String(error)))
+        multiBankApprovedQuestions.value = []
+      } finally {
+        loadingMultiBankQuestions.value = false
+      }
+    }
+
+    // 启用多题库模式时拉取数据：
+    //  - 无缓存 → 显示 "正在合并…" 提示加载；
+    //  - 已有缓存 → 立即使用缓存数据，后台静默刷新，避免闪烁。
+    watch(multiBankEnabled, (v) => {
+      if (!v) return
+      const hasCache = multiBankApprovedQuestions.value.length > 0
+      loadMultiBankApprovedQuestions(/* silent */ hasCache)
+    })
+
+    // 已通过的题目列表（多题库模式下使用合并视图）
     const approvedQuestions = computed(() => {
+      if (multiBankEnabled.value) return multiBankApprovedQuestions.value
       return questions.value.filter(q => q.status === 'approved')
     })
 
@@ -7115,14 +7303,38 @@ export default defineComponent({
       }
 
       if (paperGenerateMode.value === 'random') {
-        // 随机抽取模式
-        requestBody.random_mode = {
-          single_count: randomSingleCount.value,
-          multi_count: randomMultiCount.value,
-          judge_count: randomJudgeCount.value,
-          saq_count: randomSaqCount.value,
-          indeterminate_single_count: randomIndeterminateSingleCount.value,
-          indeterminate_multi_count: randomIndeterminateMultiCount.value
+        if (multiBankEnabled.value) {
+          // 多题库随机抽取：过滤掉未选题库或全 0 的配置
+          const cfgs = multiBankConfigs.value
+            .filter(c => c.bank_id && (
+              (c.single_count || 0) + (c.multi_count || 0) + (c.judge_count || 0)
+              + (c.saq_count || 0) + (c.indeterminate_single_count || 0) + (c.indeterminate_multi_count || 0) > 0
+            ))
+            .map(c => ({
+              bank_id: c.bank_id,
+              single_count: c.single_count || 0,
+              multi_count: c.multi_count || 0,
+              judge_count: c.judge_count || 0,
+              saq_count: c.saq_count || 0,
+              indeterminate_single_count: c.indeterminate_single_count || 0,
+              indeterminate_multi_count: c.indeterminate_multi_count || 0,
+            }))
+          if (cfgs.length === 0) {
+            ElMessage.warning('请至少为一个题库配置抽取数量')
+            creatingPaper.value = false
+            return
+          }
+          requestBody.multi_bank_random_mode = cfgs
+        } else {
+          // 单题库随机抽取
+          requestBody.random_mode = {
+            single_count: randomSingleCount.value,
+            multi_count: randomMultiCount.value,
+            judge_count: randomJudgeCount.value,
+            saq_count: randomSaqCount.value,
+            indeterminate_single_count: randomIndeterminateSingleCount.value,
+            indeterminate_multi_count: randomIndeterminateMultiCount.value
+          }
         }
       } else {
         // 手动选择模式
@@ -7131,6 +7343,10 @@ export default defineComponent({
           ? selectedPaperQuestions.value
           : null
         requestBody.question_ids = questionIds
+        // 多题库手动模式：跨题库查找题目（题目 ID 全局唯一），后端跳过 bank_id 过滤
+        if (multiBankEnabled.value) {
+          requestBody.cross_bank = true
+        }
 
         // 构建不定项配置
         if (enableIndeterminate.value) {
@@ -8942,6 +9158,10 @@ export default defineComponent({
       userSearch, users, loadingUsers, actionLoadingId, userPage, userPageSize, pagedUsers,
       // 试卷生成模式
       paperGenerateMode, randomSingleCount, randomMultiCount, randomJudgeCount, randomSaqCount, randomIndeterminateSingleCount, randomIndeterminateMultiCount, randomIndeterminateCount,
+      // 多题库随机抽取
+      multiBankEnabled, multiBankConfigs, multiBankTotalCount, addMultiBankConfig, removeMultiBankConfig,
+      // 多题库合并已通过题目
+      multiBankApprovedQuestions, loadingMultiBankQuestions,
       singleApprovedCount, multiApprovedCount, judgeApprovedCount, saqApprovedCount,
       // 不定项配置
       enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,

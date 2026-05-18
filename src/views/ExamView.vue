@@ -259,7 +259,7 @@
           </div>
         </div>
         <div class="nav-summary" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(96, 165, 250, 0.2);">
-          <span class="muted" v-if="!reviewData">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题</span>
+          <span class="muted" v-if="!reviewData">共 {{ questions.length }} 题，已答 {{ answeredCount }} 题<span v-if="markedCount > 0" class="marked-summary">，<span class="marked-text">🚩 标记 {{ markedCount }} 题</span></span></span>
           <span class="muted" v-else>共 {{ questions.length }} 题，答对 {{ correctCount }} 题</span>
         </div>
       </div>
@@ -347,6 +347,10 @@
               <div class="qheader">
                 <b><span>{{ getQuestionIndexInType(q, idx, 'single') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
                 <span class="tag single">单选</span>
+                <button v-if="!submitted && !reviewData" type="button" class="mark-btn" :class="{ active: isMarked(q.qid) }" @click.stop="toggleMark(q.qid)" :title="isMarked(q.qid) ? '取消标记' : '标记此题以便检查'">
+                  <span class="mark-icon">🚩</span>
+                  <span class="mark-text">{{ isMarked(q.qid) ? '已标记' : '标记' }}</span>
+                </button>
               </div>
               <!-- 题干图片（低配模式懒加载；表格内嵌入的图片在表格内渲染，这里不重复显示） -->
               <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
@@ -408,6 +412,10 @@
               <div class="qheader">
                 <b><span>{{ getQuestionIndexInType(q, idx, 'multi') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
                 <span class="tag multi">多选</span>
+                <button v-if="!submitted && !reviewData" type="button" class="mark-btn" :class="{ active: isMarked(q.qid) }" @click.stop="toggleMark(q.qid)" :title="isMarked(q.qid) ? '取消标记' : '标记此题以便检查'">
+                  <span class="mark-icon">🚩</span>
+                  <span class="mark-text">{{ isMarked(q.qid) ? '已标记' : '标记' }}</span>
+                </button>
               </div>
               <!-- 题干图片（低配模式懒加载；表格内嵌入的图片在表格内渲染，这里不重复显示） -->
               <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
@@ -469,6 +477,10 @@
               <div class="qheader">
                 <b><span>{{ getQuestionIndexInType(q, idx, 'indeterminate') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
                 <span class="tag indeterminate">不定项</span>
+                <button v-if="!submitted && !reviewData" type="button" class="mark-btn" :class="{ active: isMarked(q.qid) }" @click.stop="toggleMark(q.qid)" :title="isMarked(q.qid) ? '取消标记' : '标记此题以便检查'">
+                  <span class="mark-icon">🚩</span>
+                  <span class="mark-text">{{ isMarked(q.qid) ? '已标记' : '标记' }}</span>
+                </button>
               </div>
               <!-- 题干图片（低配模式懒加载；表格内嵌入的图片在表格内渲染，这里不重复显示） -->
               <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
@@ -530,6 +542,10 @@
               <div class="qheader">
                 <b><span>{{ getQuestionIndexInType(q, idx, 'judge') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
                 <span class="tag judge">判断</span>
+                <button v-if="!submitted && !reviewData" type="button" class="mark-btn" :class="{ active: isMarked(q.qid) }" @click.stop="toggleMark(q.qid)" :title="isMarked(q.qid) ? '取消标记' : '标记此题以便检查'">
+                  <span class="mark-icon">🚩</span>
+                  <span class="mark-text">{{ isMarked(q.qid) ? '已标记' : '标记' }}</span>
+                </button>
               </div>
               <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
                 <img
@@ -576,6 +592,10 @@
               <div class="qheader">
                 <b><span>{{ getQuestionIndexInType(q, idx, 'saq') }}. </span><span class="stem-html" v-html="formatText(q.stem, q)" @click="onStemContentClick"></span></b>
                 <span class="tag saq">简答</span>
+                <button v-if="!submitted && !reviewData" type="button" class="mark-btn" :class="{ active: isMarked(q.qid) }" @click.stop="toggleMark(q.qid)" :title="isMarked(q.qid) ? '取消标记' : '标记此题以便检查'">
+                  <span class="mark-icon">🚩</span>
+                  <span class="mark-text">{{ isMarked(q.qid) ? '已标记' : '标记' }}</span>
+                </button>
               </div>
               <!-- 题干图片（低配模式懒加载；表格内嵌入的图片在表格内渲染，这里不重复显示） -->
               <div v-if="visibleStemImagesOf(q).length > 0" class="stem-images">
@@ -1569,6 +1589,38 @@ export default defineComponent({
     const answersState = ref<Record<string, any>>({})
     const currentPage = ref(1)
     const pageSize = ref(10)  // 低配模式每页10题
+
+    // 题目标记（疑问题标记，仅前端持久化到 localStorage，按 attemptId 隔离）
+    const markedQids = ref<Set<string>>(new Set())
+    const _markedKey = (aid: string) => `exam_marked_${aid}`
+    const loadMarkedFromLocal = (aid: string): Set<string> => {
+      try {
+        const raw = localStorage.getItem(_markedKey(aid))
+        if (!raw) return new Set()
+        const arr = JSON.parse(raw)
+        return Array.isArray(arr) ? new Set(arr) : new Set()
+      } catch { return new Set() }
+    }
+    const saveMarkedToLocal = () => {
+      const aid = attemptId.value
+      if (!aid) return
+      try {
+        localStorage.setItem(_markedKey(aid), JSON.stringify(Array.from(markedQids.value)))
+      } catch (e) { void e }
+    }
+    const clearMarkedLocal = (aid?: string) => {
+      const target = aid || attemptId.value
+      if (!target) return
+      try { localStorage.removeItem(_markedKey(target)) } catch (e) { void e }
+    }
+    const isMarked = (qid: string): boolean => markedQids.value.has(qid)
+    const toggleMark = (qid: string) => {
+      const s = new Set(markedQids.value)
+      if (s.has(qid)) s.delete(qid); else s.add(qid)
+      markedQids.value = s
+      saveMarkedToLocal()
+    }
+    const markedCount = computed(() => markedQids.value.size)
     
     // 自动保存相关
     const autoSaveHandle = ref<number | null>(null)
@@ -2298,7 +2350,11 @@ export default defineComponent({
         return { 'nav-bad': true, current: currentQid.value === qid }
       }
       // 答题态
-      return { answered: isAnswered(qid), current: currentQid.value === qid }
+      return {
+        answered: isAnswered(qid),
+        'nav-marked': isMarked(qid),
+        current: currentQid.value === qid,
+      }
     }
 
     // 从解析文本中提取知识点
@@ -2826,6 +2882,8 @@ export default defineComponent({
             markAttemptAbandoned(data.attempt_id)
             // 清除本地存储的切屏次数
             localStorage.removeItem(`exam_switch_count_${data.attempt_id}`)
+            // 清除本地存储的标记
+            clearMarkedLocal(data.attempt_id)
             // 静默调用后端 API 清除进度
             mcqFetch(API_ENDPOINTS.EXAM.ABANDON_PROGRESS, {
               method: 'POST',
@@ -2846,6 +2904,8 @@ export default defineComponent({
     const resumeExam = (progressData: any) => {
       attemptId.value = progressData.attempt_id
       leftSeconds.value = progressData.left_sec
+      // 恢复本地标记
+      markedQids.value = loadMarkedFromLocal(progressData.attempt_id)
       questions.value = normalizeQuestions(progressData.items || [])
       paperTitle.value = formatPracticeTitle(progressData.title || '试卷')
       selectedPaperId.value = progressData.paper_id
@@ -3258,6 +3318,33 @@ export default defineComponent({
     }
 
     // 开始随机练习（从题库随机抽题）
+    // 题目查重签名（与后端 _paper_question_signature / AdminView 对齐）：
+    // NFKC 归一 + 去除所有空白/标点/符号/控制字符 + 小写化，仅保留纯文字内容（汉字/字母/数字）。
+    // 题干 + 选项 文字完全相同即视为同一题（不含答案），用于跨题库随机抽题去重。
+    const _normTextForSig = (s: string): string => {
+      if (!s) return ''
+      return String(s).normalize('NFKC').replace(/[\p{P}\p{S}\p{Z}\p{C}\s]/gu, '').toLowerCase()
+    }
+    const _buildBankQuestionSig = (q: any): string => {
+      const stem = _normTextForSig(q?.stem || '')
+      const opts = q?.options
+      const parts: string[] = []
+      if (opts && typeof opts === 'object' && !Array.isArray(opts)) {
+        // dict 格式：{A: "xxx", B: "yyy"}
+        const keys = Object.keys(opts).sort()
+        for (const k of keys) {
+          parts.push(String(k).toUpperCase() + _normTextForSig(opts[k] || ''))
+        }
+      } else if (Array.isArray(opts)) {
+        // list 格式：[{label, text}, ...]
+        const sorted = [...opts].sort((a: any, b: any) => String(a?.label || '').localeCompare(String(b?.label || '')))
+        for (const o of sorted) {
+          parts.push(String(o?.label || '').toUpperCase() + _normTextForSig(o?.text || ''))
+        }
+      }
+      return stem + '||' + parts.join('|')
+    }
+
     const startRandomPractice = async () => {
       // 检查用户是否已登录
       const username = store.state.user.username
@@ -3287,7 +3374,21 @@ export default defineComponent({
 
         // 2. 按题型分类（只取已通过的题目）
         let approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
-        
+
+        // 2.0 跨题库去重：题干 + 选项 文字完全相同即视为同一题（忽略空白/标点/符号/控制字符、全/半角、大小写）。
+        // 不同题库可能各自录入了相同题目，避免随机练习抽到重复题目。
+        {
+          const _seen = new Set<string>()
+          const _dedup: any[] = []
+          for (const q of approvedQuestions) {
+            const sig = _buildBankQuestionSig(q)
+            if (_seen.has(sig)) continue
+            _seen.add(sig)
+            _dedup.push(q)
+          }
+          approvedQuestions = _dedup
+        }
+
         // 2.1 按知识点筛选（如果选择了知识点），优先使用结构化字段
         if (selectedPracticeKnowledgePoints.value.length > 0) {
           approvedQuestions = approvedQuestions.filter((q: any) => {
@@ -3453,6 +3554,7 @@ export default defineComponent({
 
         // 7. 直接进入考试状态
         attemptId.value = startResult.attempt_id
+        markedQids.value = new Set()  // 新会话：清空标记
         questions.value = normalizeQuestions(startResult.items || [])
         leftSeconds.value = startResult.left_sec || practiceConfig.duration * 60
         examStarted.value = true
@@ -3537,6 +3639,8 @@ export default defineComponent({
 
         attemptId.value = startData.attempt_id
         leftSeconds.value = startData.left_sec || durationMin.value * 60
+        // 新会话：清空标记
+        markedQids.value = new Set()
 
         // 直接使用 exam_start 返回的题目（已根据学生ID随机打乱顺序）
         questions.value = normalizeQuestions(startData.items || [])
@@ -3787,6 +3891,7 @@ export default defineComponent({
         stopTimer()
         stopAutoSave()
         clearSwitchCountLocal()  // 清除本地存储的切屏次数
+        clearMarkedLocal()  // 清除本地存储的标记
 
         // 绘制圆环图
         await nextTick()
@@ -4380,6 +4485,7 @@ export default defineComponent({
         
         // 直接进入考试状态
         attemptId.value = startResult.attempt_id
+        markedQids.value = new Set()  // 新会话：清空标记
         questions.value = normalizeQuestions(startResult.items || [])
         leftSeconds.value = startResult.left_sec || durationSec
         examStarted.value = true
@@ -4593,6 +4699,9 @@ export default defineComponent({
       currentQid,
       scrollToQuestion,
       getNavStateClass,
+      isMarked,
+      toggleMark,
+      markedCount,
       knowledgePointStats,
       scrollToWrongByKp,
       exporting,
@@ -5383,6 +5492,84 @@ export default defineComponent({
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+/* 题目标记按钮 */
+.mark-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.mark-btn:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  transform: translateY(-1px);
+}
+.mark-btn.active {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.25) 100%);
+  color: #92400e;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+  font-weight: 600;
+}
+.mark-btn .mark-icon {
+  font-size: 13px;
+  filter: grayscale(0.6);
+  transition: filter 0.2s ease;
+}
+.mark-btn.active .mark-icon {
+  filter: grayscale(0);
+}
+
+/* 浅色模式适配 */
+.exam-page.light-mode .mark-btn {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #b45309;
+}
+.exam-page.light-mode .mark-btn.active {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* 导航按钮标记态：不覆盖背景，仅叠加旗帜图标 + 琥珀色描边，保留 answered/未答 的原色识别 */
+.navbtn.nav-marked {
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.55), 0 2px 6px rgba(245, 158, 11, 0.25);
+}
+.navbtn.nav-marked::after {
+  content: '🚩';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 16px;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  z-index: 2;
+}
+.exam-page.light-mode .navbtn.nav-marked {
+  box-shadow: 0 0 0 2px #f59e0b, 0 2px 6px rgba(245, 158, 11, 0.25);
+}
+
+/* 标记数量文字 */
+.marked-summary .marked-text {
+  color: #d97706;
+  font-weight: 600;
 }
 
 .qheader b {
