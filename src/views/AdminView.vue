@@ -1170,6 +1170,53 @@
                   </el-radio-group>
                 </el-form-item>
 
+                <!-- 多题库 + 手动选题：题库筛选（限定下方题目列表显示范围） -->
+                <el-form-item
+                  v-if="multiBankEnabled && paperGenerateMode === 'manual'"
+                  label="题库筛选"
+                  style="margin-bottom: 12px;"
+                >
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <el-select
+                      v-model="paperBankFilter"
+                      multiple
+                      collapse-tags
+                      collapse-tags-tooltip
+                      :max-collapse-tags="3"
+                      placeholder="选择题库（可多选，不选则显示全部）"
+                      clearable
+                      filterable
+                      style="width: 500px;"
+                      size="default"
+                      @change="paperQuestionPage = 1"
+                    >
+                      <el-option
+                        v-for="b in banksList"
+                        :key="b.id"
+                        :label="`${b.name}（${b.question_count ?? 0} 题）`"
+                        :value="b.id"
+                      />
+                    </el-select>
+                    <span style="color: #909399; font-size: 13px;">
+                      <span v-if="paperBankFilter.length === 0">显示所有题库的已通过题目</span>
+                      <span v-else style="color: #67c23a;">仅显示已选 {{ paperBankFilter.length }} 个题库的题目</span>
+                    </span>
+                  </div>
+                </el-form-item>
+
+                <!-- 多题库 + 随机抽取：题库筛选自动跟随抽取配置 -->
+                <el-form-item
+                  v-if="multiBankEnabled && paperGenerateMode === 'random' && activeBankFilter.length > 0"
+                  label="题库筛选"
+                  style="margin-bottom: 12px;"
+                >
+                  <span style="color: #909399; font-size: 13px;">
+                    随机抽取模式下，下方题目列表自动按已配置的
+                    <span style="color: #67c23a;">{{ activeBankFilter.length }} 个题库</span>
+                    筛选显示
+                  </span>
+                </el-form-item>
+
                 <!-- 随机抽取配置 -->
                 <el-form-item v-if="paperGenerateMode === 'random'" label="题目数量" style="margin-bottom: 12px;">
                   <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
@@ -1252,7 +1299,7 @@
                         </el-button>
                         <span style="color: #909399; font-size: 12px;">
                           合计 {{ multiBankTotalCount }} 题
-                          <span v-if="multiBankTotalCount > 0">（跨题库题干+选项相同自动去重并替换抽取）</span>
+                          <span v-if="multiBankTotalCount > 0">（跨题库题干+选项+题目图片均相同才自动去重并替换抽取）</span>
                         </span>
                       </div>
                     </div>
@@ -3186,7 +3233,9 @@
             </div>
           </div>
 
-          <el-divider v-if="questionDetailData.question?.qtype !== 'saq'" content-position="left">错误选项分布</el-divider>
+          <el-divider v-if="questionDetailData.question?.qtype !== 'saq'" content-position="left">
+            {{ ['multi','indeterminate'].includes(questionDetailData.question?.qtype) ? '错误作答组合分布' : '错误选项分布' }}
+          </el-divider>
           <div v-if="questionDetailData.question?.qtype !== 'saq'" class="wrong-choice-dist">
             <div v-for="[label, count] in questionDetailData.wrong_choice_distribution" :key="label" class="wcd-item">
               <span class="wcd-label">{{ label }}</span>
@@ -3265,6 +3314,22 @@
               </template>
             </el-table-column>
           </el-table>
+          <!-- 因人工改分而被跳过的考生（保留管理员手动判定，不参与本次自动重算） -->
+          <div v-if="fixAnswerResult.skipped_overridden_count > 0" style="margin-top: 12px;">
+            <el-alert
+              :title="`已跳过 ${fixAnswerResult.skipped_overridden_count} 名有人工改分的考生（其分数保留不变）`"
+              type="warning"
+              :closable="false"
+              style="margin-bottom: 8px;"
+            >
+              <div style="font-size: 12px; color: #909399;">如需对这些考生重新自动重算，请先在改分管理中清除其分数覆盖。</div>
+            </el-alert>
+            <el-table :data="fixAnswerResult.skipped_overridden" border size="small" max-height="200" style="width: 100%;">
+              <el-table-column prop="student_name" label="姓名" width="100" />
+              <el-table-column prop="student_id" label="学号" width="120" />
+              <el-table-column prop="reason" label="跳过原因" />
+            </el-table>
+          </div>
         </div>
         <template #footer>
           <el-button @click="fixAnswerDialogVisible = false">{{ fixAnswerResult ? '关闭' : '取消' }}</el-button>
@@ -3418,6 +3483,7 @@ interface Question {
   analysis_images?: QuestionImage[]  // 解析图片
   knowledge_clauses?: string[]  // 知识条款
   knowledge_points?: string[]  // 结构化知识点列表
+  bank_ids?: string[]  // 题目所属题库 ID 列表（多题库模式下，跨题库去重时会累积）
 }
 
 interface Paper {
@@ -4079,6 +4145,7 @@ export default defineComponent({
     const selectedPaperQuestions = ref<string[]>([])
     const selectAllPaperQuestions = ref(false)
     const selectedKnowledgePoints = ref<string[]>([])  // 知识点筛选
+    const paperBankFilter = ref<string[]>([])  // 多题库模式下手动选题时的题库筛选
     const paperQuestionPage = ref(1)
     const paperQuestionPageSize = ref(50)
 
@@ -4329,7 +4396,7 @@ export default defineComponent({
     const loadAntiCheatConfig = async () => {
       loadingAntiCheat.value = true
       try {
-        const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`)
+        const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`, { headers: getAuthHeaders(false) })
         const data = await resp.json()
         if (data?.ok && data.config) {
           Object.assign(antiCheatConfig, data.config)
@@ -4348,7 +4415,7 @@ export default defineComponent({
       try {
         const resp = await fetch(`${MCQ_BASE_URL}/anti_cheat_config`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ config: { ...antiCheatConfig } })
         })
         const data = await resp.json()
@@ -4420,7 +4487,7 @@ export default defineComponent({
     const loadKnowledgePointOptions = async () => {
       loadingKnowledgePoints.value = true
       try {
-        const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points`)
+        const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points`, { headers: getAuthHeaders(false) })
         const data = await resp.json()
         if (data?.ok && Array.isArray(data.points)) {
           knowledgePointOptions.value = data.points
@@ -4437,7 +4504,7 @@ export default defineComponent({
       try {
         const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ points: knowledgePointOptions.value })
         })
         const data = await resp.json()
@@ -4510,7 +4577,8 @@ export default defineComponent({
     const resetKnowledgePoints = async () => {
       try {
         const resp = await fetch(`${MCQ_BASE_URL}/knowledge_points/reset`, {
-          method: 'POST'
+          method: 'POST',
+          headers: getAuthHeaders()
         })
         const data = await resp.json()
         if (data?.ok && Array.isArray(data.points)) {
@@ -4651,7 +4719,7 @@ export default defineComponent({
         const exam = publishedExams.value.find((e: any) => e.exam_id === selectedExportExam.value)
         const paperId = exam?.paper_id || ''
         const url = `${MCQ_BASE_URL}/grades/kp_detail?paper_id=${encodeURIComponent(paperId)}&exam_id=${encodeURIComponent(selectedExportExam.value)}&kp_name=${encodeURIComponent(kpName)}`
-        const r = await fetch(url)
+        const r = await fetch(url, { headers: getAuthHeaders(false) })
         const j = await r.json()
         if (j?.ok) {
           kpDetailData.value = j
@@ -4675,7 +4743,7 @@ export default defineComponent({
         const exam = publishedExams.value.find((e: any) => e.exam_id === selectedExportExam.value)
         const paperId = exam?.paper_id || ''
         const url = `${MCQ_BASE_URL}/grades/question_detail?paper_id=${encodeURIComponent(paperId)}&exam_id=${encodeURIComponent(selectedExportExam.value)}&qid=${encodeURIComponent(qid)}`
-        const r = await fetch(url)
+        const r = await fetch(url, { headers: getAuthHeaders(false) })
         const j = await r.json()
         if (j?.ok) {
           questionDetailData.value = j
@@ -4927,26 +4995,12 @@ export default defineComponent({
       return answer.length > 1
     }
 
-    // 多题库模式：合并所有题库的已通过题目（按"题干+选项文字"去重）
+    // 多题库模式：合并所有题库的已通过题目（不在前端去重）
+    // 每条记录独立保留其真实归属题库，便于"按题库筛选"准确命中数量。
+    // 跨题库重复题的去重发生在后端"随机抽取"环节（避免抽到相同题），
+    // 前端列表始终保持原始数量，以免与题库管理中的"已通过"数对不上、让用户困惑。
     const multiBankApprovedQuestions = ref<Question[]>([])
     const loadingMultiBankQuestions = ref(false)
-
-    // 题目查重签名（与后端 _paper_question_signature 对齐）：
-    // NFKC 归一 + 去除所有空白/标点/符号/控制字符 + 小写化，保留纯文字内容（汉字/字母/数字）。
-    // 题干 + 选项文字 完全相同即视为同一题（不含答案）。
-    // 这样可消除中英标点(，./。)、全/半角、句末标点、零宽字符等非文字差异。
-    const normTextForSig = (s: string): string => {
-      if (!s) return ''
-      // \p{P} 标点 \p{S} 符号 \p{Z} 分隔 \p{C} 控制 \s 空白
-      return s.normalize('NFKC').replace(/[\p{P}\p{S}\p{Z}\p{C}\s]/gu, '').toLowerCase()
-    }
-    const buildPaperQuestionSig = (q: Question): string => {
-      const stem = normTextForSig(q.stem || '')
-      const opts = q.options || []
-      const sorted = [...opts].sort((a, b) => (a.label || '').localeCompare(b.label || ''))
-      const parts = sorted.map(o => (o.label || '').toUpperCase() + normTextForSig(o.text || ''))
-      return stem + '||' + parts.join('|')
-    }
 
     // silent=true：已有缓存时静默后台刷新，不显示 "正在合并…" 提示
     const loadMultiBankApprovedQuestions = async (silent: boolean = false) => {
@@ -4960,12 +5014,13 @@ export default defineComponent({
         const j = await r.json()
         if (!j || j.ok === false) throw new Error(j?.msg || `HTTP ${r.status}`)
         const items = Array.isArray(j.items) ? j.items : []
-        // 仅保留已通过题目，并按签名去重
-        const seen = new Set<string>()
+        // 不在前端去重：每条已通过记录独立保留其真实归属题库（bank_ids 始终为单元素）
+        // 这样题库筛选时数量天然等于该库的已通过数，与题库管理页计数一致。
         const merged: Question[] = []
         for (const it of items) {
           if ((it.status || '') !== 'approved') continue
-          const q: Question = {
+          const bid = String(it.bank_id || 'default')
+          merged.push({
             qid: String(it.id ?? it.qid ?? ''),
             stem: it.stem || '',
             options: normalizeOptions(it.options, it.option_images),
@@ -4981,11 +5036,8 @@ export default defineComponent({
             analysis_images: it.analysis_images || [],
             knowledge_clauses: it.knowledge_clauses || [],
             knowledge_points: it.knowledge_points || [],
-          }
-          const sig = buildPaperQuestionSig(q)
-          if (seen.has(sig)) continue
-          seen.add(sig)
-          merged.push(q)
+            bank_ids: [bid],
+          })
         }
         multiBankApprovedQuestions.value = merged
       } catch (error: any) {
@@ -5005,10 +5057,30 @@ export default defineComponent({
       loadMultiBankApprovedQuestions(/* silent */ hasCache)
     })
 
-    // 已通过的题目列表（多题库模式下使用合并视图）
+    // 当前生效的题库筛选 ID 列表（仅多题库模式下使用）
+    //  - 随机抽取模式：从 multiBankConfigs 自动派生（已配置抽取的题库）
+    //  - 手动选题模式：用户在"题库筛选"下拉中手动选择
+    //  - 单题库模式：恒为空（题目天然只属于当前题库，无需再过滤）
+    const activeBankFilter = computed<string[]>(() => {
+      if (!multiBankEnabled.value) return []
+      if (paperGenerateMode.value === 'random') {
+        const ids = multiBankConfigs.value
+          .map(c => (c.bank_id || '').trim())
+          .filter(id => !!id)
+        return Array.from(new Set(ids))
+      }
+      return paperBankFilter.value.filter(id => !!id)
+    })
+
+    // 已通过的题目列表
+    //  - 单题库模式：仅当前题库的已通过题目
+    //  - 多题库模式：所有题库的已通过题目原始合并（不前端去重）
+    //    跨题库重复题的去重交由后端"随机抽取"环节，保证用户看到的数量与题库管理一致。
     const approvedQuestions = computed(() => {
-      if (multiBankEnabled.value) return multiBankApprovedQuestions.value
-      return questions.value.filter(q => q.status === 'approved')
+      if (!multiBankEnabled.value) {
+        return questions.value.filter(q => q.status === 'approved')
+      }
+      return multiBankApprovedQuestions.value
     })
 
     // 标准化知识点字符串（用于比较和去重）
@@ -5079,6 +5151,16 @@ export default defineComponent({
     // 根据筛选和搜索过滤后的题目
     const filteredPaperQuestions = computed(() => {
       let result = approvedQuestions.value
+
+      // 按题库筛选（仅多题库模式生效）
+      if (multiBankEnabled.value && activeBankFilter.value.length > 0) {
+        const allowed = new Set(activeBankFilter.value)
+        result = result.filter(q => {
+          const ids = q.bank_ids || []
+          if (ids.length === 0) return false
+          return ids.some(id => allowed.has(id))
+        })
+      }
 
       // 按类型筛选
       if (paperQuestionFilter.value === 'single') {
@@ -5264,7 +5346,7 @@ export default defineComponent({
         const fd = new FormData()
         fd.append('file', uploadFile.value)
 
-        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', body: fd })
+        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', headers: getAuthHeaders(false), body: fd })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `上传/解析失败（HTTP ${r.status})`)
@@ -6408,7 +6490,7 @@ export default defineComponent({
     const exportBankDocx = async () => {
       exportingBank.value = true
       try {
-        const r = await fetch(`${MCQ_BASE_URL}/bank/export_docx?bank_id=${encodeURIComponent(currentBankId.value)}`)
+        const r = await fetch(`${MCQ_BASE_URL}/bank/export_docx?bank_id=${encodeURIComponent(currentBankId.value)}`, { headers: getAuthHeaders(false) })
         const blob = await r.blob()
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
@@ -6428,7 +6510,7 @@ export default defineComponent({
       importingBank.value = true
       try {
         const fd = new FormData(); fd.append('file', f); fd.append('bank_id', currentBankId.value)
-        const r = await fetch(`${MCQ_BASE_URL}/bank/import_docx`, { method:'POST', body: fd })
+        const r = await fetch(`${MCQ_BASE_URL}/bank/import_docx`, { method:'POST', headers: getAuthHeaders(false), body: fd })
         const j = await r.json(); if (!j?.ok) throw new Error(j?.msg || '导入失败')
         // 显示更详细的导入结果
         const msg = j.msg || `导入成功：更新 ${j.updated||0} 题，新增 ${j.added||0} 题`
@@ -7156,7 +7238,7 @@ export default defineComponent({
 
     // 试卷管理 tab：翻页 / 筛选 / 搜索 / 知识点筛选 变化时懒加载当前页图片
     watch(
-      [paperQuestionPage, paperQuestionPageSize, paperQuestionFilter, paperQuestionSearch, selectedKnowledgePoints],
+      [paperQuestionPage, paperQuestionPageSize, paperQuestionFilter, paperQuestionSearch, selectedKnowledgePoints, paperBankFilter, activeBankFilter],
       () => { nextTick(() => loadPageImages()) }
     )
 
@@ -7461,9 +7543,25 @@ export default defineComponent({
       }
     }
 
-    const downloadPaperDirect = (paperId: string) => {
-      const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(paperId)}`
-      openInNewTab(url)
+    const downloadPaperDirect = async (paperId: string) => {
+      try {
+        const url = `${MCQ_BASE_URL}/bank/paper_docx?paper_id=${encodeURIComponent(paperId)}`
+        const r = await fetch(url, { headers: getAuthHeaders(false) })
+        if (!r.ok) {
+          // 出错时尝试解析后端 JSON 错误体
+          let msg = `HTTP ${r.status}`
+          try { const j = await r.json(); if (j?.msg) msg = j.msg } catch { /* ignore */ }
+          throw new Error(msg)
+        }
+        const blob = await r.blob()
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${paperId}`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        URL.revokeObjectURL(a.href)
+      } catch (e: any) {
+        ElMessage.error('下载失败：' + (e?.message || e))
+      }
     }
 
     // 带密码保护的下载
@@ -7685,7 +7783,7 @@ export default defineComponent({
         const fd = new FormData()
         fd.append('file', f)
 
-        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', body: fd })
+        const r = await fetch(`${MCQ_BASE_URL}/upload`, { method: 'POST', headers: getAuthHeaders(false), body: fd })
         const j = await r.json()
 
         if (!j || j.ok === false) {
@@ -8205,7 +8303,7 @@ export default defineComponent({
 
       paperPollingInterval.value = window.setInterval(async () => {
         try {
-          const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache: 'no-store' })
+          const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache: 'no-store', headers: getAuthHeaders(false) })
           const j = await r.json()
 
           if (!j || !j.ok) return
@@ -8317,7 +8415,7 @@ export default defineComponent({
       loadingExportPapers.value = true
       try {
         // 直接走 MCQ 试卷列表：GET {MCQ_BASE_URL}/bank/papers
-        const r = await fetch(`${MCQ_BASE_URL}/bank/papers`, { method: 'GET', cache: 'no-store' })
+        const r = await fetch(`${MCQ_BASE_URL}/bank/papers`, { method: 'GET', cache: 'no-store', headers: getAuthHeaders(false) })
         const j = await r.json()
         if (!j || j.ok === false) {
           throw new Error(j?.msg || `HTTP ${r.status}`)
@@ -8344,7 +8442,7 @@ export default defineComponent({
         if (selectedExportExam.value) {
           url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
         }
-        const response = await fetch(url)
+        const response = await fetch(url, { headers: getAuthHeaders(false) })
         if (!response.ok) {
           const error = await response.json().catch(() => ({ msg: '导出失败' }))
           throw new Error(error.msg || '导出失败')
@@ -8380,7 +8478,7 @@ export default defineComponent({
         if (selectedExportExam.value) {
           url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
         }
-        const response = await fetch(url)
+        const response = await fetch(url, { headers: getAuthHeaders(false) })
         if (!response.ok) {
           const error = await response.json().catch(() => ({ msg: '导出失败' }))
           throw new Error(error.msg || '导出失败')
@@ -8415,7 +8513,7 @@ export default defineComponent({
         if (selectedExportExam.value) {
           url += `&exam_id=${encodeURIComponent(selectedExportExam.value)}`
         }
-        const response = await fetch(url)
+        const response = await fetch(url, { headers: getAuthHeaders(false) })
         if (!response.ok) {
           const error = await response.json().catch(() => ({ msg: '导出失败' }))
           throw new Error(error.msg || '导出失败')
@@ -8468,7 +8566,7 @@ export default defineComponent({
         if (eId) {
           url += `&exam_id=${encodeURIComponent(eId)}`
         }
-        const response = await fetch(url)
+        const response = await fetch(url, { headers: getAuthHeaders(false) })
         const data = await response.json()
         if (data?.ok !== false) {
           gradesStats.value = data
@@ -9152,6 +9250,7 @@ export default defineComponent({
       singleScore, multiScore, indeterminateScore, judgeScore, saqScore, saqScoreMode, saqCustomScores, saqClauseScores, distributeScore, getSaqClauseTotal,
       paperQuestionFilter, paperQuestionSearch, selectedPaperQuestions, selectAllPaperQuestions,
       selectedKnowledgePoints, availableKnowledgePoints, mergedKnowledgePointOptions,
+      paperBankFilter, activeBankFilter,
       approvedQuestions, filteredPaperQuestions, pagedPaperQuestions, paperQuestionPage, paperQuestionPageSize, toggleSelectAllPaperQuestions, isMultiChoice,
       paperList, loadingPaperList, deletingPaper, togglingVisibility, loadPaperList, downloadPaper, deletePaper, togglePaperVisibility, isSuperAdminUser, generatePaperPassword, paperListSearch, paperListPage, paperListPageSize, filteredPaperList, pagedPaperList,
       exportPapers, selectedExportPaper, selectedExportExam, onExportExamChange, loadingExportPapers, exportingZip, exportingDocx, exportMessage,

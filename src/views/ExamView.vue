@@ -2642,7 +2642,25 @@ export default defineComponent({
       ctx.fillText(`正确 ${correct} / ${total}`, cx, cy + 14)
     }
 
-    // MCQ 接口专用 fetch（带超时控制）
+    // 注入用户身份头：后端 get_current_user() 依赖 X-User-Name / X-User-Role
+    // 后端学生端越权防护（/exam/history、/exam/review、/exam/delete_record、
+    // /student/export_*、/student/download_report）需要这些头才能识别当前用户。
+    const buildAuthHeaders = (extra?: Record<string, string>): Record<string, string> => {
+      const headers: Record<string, string> = extra ? { ...extra } : {}
+      try {
+        const u: any = store.state.user || {}
+        if (u.username) headers['X-User-Name'] = encodeURIComponent(String(u.username))
+        if (u.role) headers['X-User-Role'] = String(u.role)
+        if (u.isBjzxAdmin) headers['X-Is-Bjzx-Admin'] = 'true'
+        const token = localStorage.getItem('llm_pro_auth_token') || localStorage.getItem('token')
+        if (token) headers['Authorization'] = `Bearer ${token}`
+      } catch {
+        // ignore
+      }
+      return headers
+    }
+
+    // MCQ 接口专用 fetch（带超时控制 + 自动注入身份头）
     const mcqFetch = async (url: string, options: any = {}, timeout = 120000) => {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeout)
@@ -2650,6 +2668,7 @@ export default defineComponent({
       try {
         const resp = await fetch(url, {
           ...options,
+          headers: buildAuthHeaders(options.headers || {}),
           signal: controller.signal
         })
         clearTimeout(timeoutId)
@@ -2662,12 +2681,69 @@ export default defineComponent({
         
         const data = await resp.json()
         if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}：${JSON.stringify(data)}`)
+          // 把 status / data 一起塞进 error，调用方可以识别 403 need_password 等场景
+          const err: any = new Error(`HTTP ${resp.status}：${JSON.stringify(data)}`)
+          err.status = resp.status
+          err.data = data
+          throw err
         }
         return data
       } catch (error: any) {
         clearTimeout(timeoutId)
         throw error
+      }
+    }
+
+    // 试卷密码 token 缓存（30 分钟内免重输密码）
+    // 后端 /papers/verify_password 成功后返回 token，后续 /papers/view、/exam/start
+    // 通过 paper_token 字段或 X-Paper-Token 头携带，无需每次重新输密码。
+    const paperTokens = ref<Record<string, string>>({})
+    const getPaperToken = (paperId: string): string => paperTokens.value[paperId] || ''
+    const setPaperToken = (paperId: string, token: string) => {
+      if (paperId && token) paperTokens.value = { ...paperTokens.value, [paperId]: token }
+    }
+    const clearPaperToken = (paperId: string) => {
+      if (paperId && paperTokens.value[paperId]) {
+        const next = { ...paperTokens.value }
+        delete next[paperId]
+        paperTokens.value = next
+      }
+    }
+
+    // 提示用户输入试卷密码并校验，成功后缓存 token 并返回
+    const promptAndVerifyPaperPassword = async (paperId: string): Promise<string> => {
+      try {
+        const { value } = await ElMessageBox.prompt(
+          '该试卷已设置密码，请输入密码以继续：',
+          '试卷密码',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            inputType: 'password',
+            inputValidator: (v: string) => !!(v && v.trim()) || '请输入密码',
+          }
+        )
+        const password = (value || '').trim()
+        if (!password) return ''
+        const r = await mcqFetch(`${MCQ_BASE_URL}/papers/verify_password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paper_id: paperId, password })
+        })
+        if (!r?.ok) {
+          ElMessage.error(r?.msg || '密码校验失败')
+          return ''
+        }
+        if (!r.verified) {
+          ElMessage.error('密码错误')
+          return ''
+        }
+        const token = r.token || ''
+        setPaperToken(paperId, token)
+        return token
+      } catch {
+        // 用户取消
+        return ''
       }
     }
 
@@ -3320,10 +3396,25 @@ export default defineComponent({
     // 开始随机练习（从题库随机抽题）
     // 题目查重签名（与后端 _paper_question_signature / AdminView 对齐）：
     // NFKC 归一 + 去除所有空白/标点/符号/控制字符 + 小写化，仅保留纯文字内容（汉字/字母/数字）。
-    // 题干 + 选项 文字完全相同即视为同一题（不含答案），用于跨题库随机抽题去重。
+    // 题干 + 选项文字 + 题目图片 完全相同才视为同一题（不含答案），用于跨题库随机抽题去重。
     const _normTextForSig = (s: string): string => {
       if (!s) return ''
       return String(s).normalize('NFKC').replace(/[\p{P}\p{S}\p{Z}\p{C}\s]/gu, '').toLowerCase()
+    }
+    // 轻量级图片指纹：仅 filename（后端保存为 `{qid}_{i}.{ext}`，按题目天然唯一），不读 base64
+    const _imgListFingerprint = (imgs: any): string => {
+      if (!imgs || !Array.isArray(imgs) || imgs.length === 0) return ''
+      const parts: string[] = []
+      for (let i = 0; i < imgs.length; i++) {
+        const img = imgs[i]
+        if (!img || typeof img !== 'object') { parts.push(`#${i}`); continue }
+        const fn = String(img.filename || img.original_filename || '')
+        if (fn) { parts.push(fn); continue }
+        const b64 = img.base64
+        if (typeof b64 === 'string' && b64) { parts.push(`len${b64.length}`); continue }
+        parts.push(`#${i}`)
+      }
+      return parts.join(',')
     }
     const _buildBankQuestionSig = (q: any): string => {
       const stem = _normTextForSig(q?.stem || '')
@@ -3342,7 +3433,27 @@ export default defineComponent({
           parts.push(String(o?.label || '').toUpperCase() + _normTextForSig(o?.text || ''))
         }
       }
-      return stem + '||' + parts.join('|')
+      const textSig = stem + '||' + parts.join('|')
+
+      // 图片指纹：题干图片 + 选项图片（按 label 排序）。
+      // /bank/list 默认不返回 base64 明细 → 退化到 has_images + qid 兜底，
+      // 确保"带图题目不被跨题库误并"。
+      const stemFp = _imgListFingerprint(q?.stem_images)
+      const optImgs = q?.option_images || {}
+      const optImgParts: string[] = []
+      if (optImgs && typeof optImgs === 'object' && !Array.isArray(optImgs)) {
+        const keys = Object.keys(optImgs).sort()
+        for (const k of keys) {
+          const fp = _imgListFingerprint(optImgs[k])
+          if (fp) optImgParts.push(String(k).toUpperCase() + ':' + fp)
+        }
+      }
+      let imgSig = stemFp + '::' + optImgParts.join('|')
+      const hasDetail = imgSig.replace(/::/g, '').replace(/\|/g, '').trim().length > 0
+      if (!hasDetail && Boolean(q?.has_images)) {
+        imgSig = 'HASIMG:' + String(q?.id || q?.qid || '')
+      }
+      return textSig + '##IMG##' + imgSig
     }
 
     const startRandomPractice = async () => {
@@ -3375,8 +3486,10 @@ export default defineComponent({
         // 2. 按题型分类（只取已通过的题目）
         let approvedQuestions = allQuestions.filter((q: any) => q.status === 'approved')
 
-        // 2.0 跨题库去重：题干 + 选项 文字完全相同即视为同一题（忽略空白/标点/符号/控制字符、全/半角、大小写）。
-        // 不同题库可能各自录入了相同题目，避免随机练习抽到重复题目。
+        // 2.0 跨题库去重：题干 + 选项文字 + 题目图片均相同才视为同一题
+        // （忽略空白/标点/符号/控制字符、全/半角、大小写）。
+        // 不同题库可能各自录入了相同题目，避免随机练习抽到重复题目；
+        // 题干/选项文字相同但题目图片不同的题目会被视为不同题目，不会被合并。
         {
           const _seen = new Set<string>()
           const _dedup: any[] = []
@@ -3619,23 +3732,47 @@ export default defineComponent({
       starting.value = true
       try {
         // 开始考试 - username 就是登录时输入的警号
-        const startData = await mcqFetch(API_ENDPOINTS.EXAM.START, {
+        // 若试卷设置了密码，第一次请求会被后端 403 need_password=true 拒绝，
+        // 此时弹窗提示输入密码 → /papers/verify_password 拿 token → 重试一次。
+        const buildStartBody = (extraToken?: string) => JSON.stringify({
+          paper_id: selectedPaperId.value,
+          duration_sec: durationMin.value * 60,
+          student_id: username,
+          student_name: username,
+          police_id: store.state.user.policeId || username,
+          is_practice: isPracticeMode.value,
+          exam_id: currentExamId.value,
+          ...(extraToken ? { paper_token: extraToken } : (getPaperToken(selectedPaperId.value)
+            ? { paper_token: getPaperToken(selectedPaperId.value) } : {}))
+        })
+
+        const callStart = async (extraToken?: string) => mcqFetch(API_ENDPOINTS.EXAM.START, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paper_id: selectedPaperId.value,
-            duration_sec: durationMin.value * 60,
-            student_id: username,
-            student_name: username,
-            police_id: store.state.user.policeId || username,  // 优先使用用户设置的警号
-            is_practice: isPracticeMode.value,  // 练习模式可重复进入，正式考试只能一次
-            exam_id: currentExamId.value  // 发布的考试ID（正式考试时传入）
-          })
+          body: buildStartBody(extraToken)
         })
+
+        let startData: any
+        try {
+          startData = await callStart()
+        } catch (err: any) {
+          // 识别"需要密码"
+          const needPwd = err?.status === 403 && err?.data?.need_password
+          if (!needPwd) throw err
+          clearPaperToken(selectedPaperId.value) // 旧 token 失效
+          const token = await promptAndVerifyPaperPassword(selectedPaperId.value)
+          if (!token) {
+            // 用户取消或输错
+            return
+          }
+          startData = await callStart(token)
+        }
 
         if (!startData.ok) {
           throw new Error(startData.detail || '创建会话失败')
         }
+        // 后端可能返回新颁发的 token，刷新缓存
+        if (startData.paper_token) setPaperToken(selectedPaperId.value, startData.paper_token)
 
         attemptId.value = startData.attempt_id
         leftSeconds.value = startData.left_sec || durationMin.value * 60
