@@ -316,6 +316,7 @@ D. 选项D内容
 
 <script setup lang="ts">
 import { ref, reactive, computed } from "vue";
+import { useStore } from "vuex";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   UploadFilled,
@@ -333,6 +334,17 @@ import {
 } from "@element-plus/icons-vue";
 import { MCQ_BASE_URL } from "@/config/api/api";
 import type { UploadFile } from "element-plus";
+
+const store = useStore();
+const getAuthHeaders = (includeContentType = true): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'X-User-Name': encodeURIComponent(store.state.user?.username || ''),
+    'X-User-Role': (store.getters.userRole || '') as string,
+    'X-Is-Bjzx-Admin': store.state.user?.isBjzxAdmin ? 'true' : 'false',
+  };
+  if (includeContentType) headers['Content-Type'] = 'application/json';
+  return headers;
+};
 
 const formatting = ref(false);
 const message = ref("");
@@ -477,7 +489,7 @@ const doFormatOnce = async (file: File): Promise<any> => {
   fd.append('file', file);
   fd.append('model_id', 'qwen3-32b');
   
-  const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', body: fd });
+  const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', headers: getAuthHeaders(false), body: fd });
   
   if (!r.ok) {
     if (r.status === 504 || r.status === 502) {
@@ -508,7 +520,7 @@ const doPrecheck = async (file: File): Promise<{ estimated_questions: number; es
     const fd = new FormData();
     fd.append('file', file);
     
-    const r = await fetch(`${MCQ_BASE_URL}/format_precheck`, { method: 'POST', body: fd });
+    const r = await fetch(`${MCQ_BASE_URL}/format_precheck`, { method: 'POST', headers: getAuthHeaders(false), body: fd });
     if (!r.ok) return null;
     
     const j = await r.json();
@@ -666,7 +678,7 @@ const downloadFormattedDocx = async () => {
     // 调用后端接口生成 docx
     const r = await fetch(`${MCQ_BASE_URL}/format_export_docx`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ 
         formatted_text: formatResult.formatted_text,
         items: formatResult.items,
@@ -868,7 +880,7 @@ const handlePdfConvert = async () => {
     const fd = new FormData();
     fd.append('file', pdfFile.value);
     
-    const r = await fetch(`${MCQ_BASE_URL}/convert_pdf_to_docx`, { method: 'POST', body: fd });
+    const r = await fetch(`${MCQ_BASE_URL}/convert_pdf_to_docx`, { method: 'POST', headers: getAuthHeaders(false), body: fd });
     
     if (!r.ok) {
       // 尝试解析错误信息

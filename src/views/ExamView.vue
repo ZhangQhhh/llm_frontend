@@ -3401,33 +3401,53 @@ export default defineComponent({
       if (!s) return ''
       return String(s).normalize('NFKC').replace(/[\p{P}\p{S}\p{Z}\p{C}\s]/gu, '').toLowerCase()
     }
-    // 轻量级图片指纹：仅 filename（后端保存为 `{qid}_{i}.{ext}`，按题目天然唯一），不读 base64
-    const _imgListFingerprint = (imgs: any): string => {
-      if (!imgs || !Array.isArray(imgs) || imgs.length === 0) return ''
-      const parts: string[] = []
-      for (let i = 0; i < imgs.length; i++) {
-        const img = imgs[i]
-        if (!img || typeof img !== 'object') { parts.push(`#${i}`); continue }
-        const fn = String(img.filename || img.original_filename || '')
-        if (fn) { parts.push(fn); continue }
-        const b64 = img.base64
-        if (typeof b64 === 'string' && b64) { parts.push(`len${b64.length}`); continue }
-        parts.push(`#${i}`)
+    // 题目查重分级比较（与后端 _paper_question_signature 对齐）：
+    //   1) 题干 + 选项 文字
+    //   2) 答案
+    //   3) 解析
+    //   4) 图片内容指纹（开关控制；默认关闭，避免老库未回填造成误判）
+    const PAPER_SIG_INCLUDE_IMAGES = false
+
+    // 答案归一：MCQ 字母排序大写；其它走文本归一
+    const _normAnswerForSig = (ans: any): string => {
+      if (ans == null) return ''
+      let s = ''
+      if (Array.isArray(ans)) s = ans.map((x: any) => String(x)).join('')
+      else s = String(ans)
+      const letters = s.replace(/[^A-Ha-h]/g, '')
+      if (letters && letters.length <= 8) {
+        return letters.toUpperCase().split('').sort().join('')
       }
-      return parts.join(',')
+      return _normTextForSig(s)
     }
+
+    // 把后端下发的 image_hashes 结构化为字符串签名（顺序敏感）。
+    const _imageHashesToSig = (h: any): string => {
+      if (!h || typeof h !== 'object') return ''
+      const stemPart = Array.isArray(h.stem) ? h.stem.map((x: any) => String(x || '?')).join(',') : ''
+      const opts = h.options || {}
+      const optParts: string[] = []
+      if (opts && typeof opts === 'object') {
+        const keys = Object.keys(opts).sort()
+        for (const k of keys) {
+          const arr = Array.isArray(opts[k]) ? opts[k] : []
+          if (arr.length) optParts.push(String(k).toUpperCase() + ':' + arr.map((x: any) => String(x || '?')).join(','))
+        }
+      }
+      return stemPart + '::' + optParts.join('|')
+    }
+
     const _buildBankQuestionSig = (q: any): string => {
+      // 1) 题干 + 选项 文字
       const stem = _normTextForSig(q?.stem || '')
       const opts = q?.options
       const parts: string[] = []
       if (opts && typeof opts === 'object' && !Array.isArray(opts)) {
-        // dict 格式：{A: "xxx", B: "yyy"}
         const keys = Object.keys(opts).sort()
         for (const k of keys) {
           parts.push(String(k).toUpperCase() + _normTextForSig(opts[k] || ''))
         }
       } else if (Array.isArray(opts)) {
-        // list 格式：[{label, text}, ...]
         const sorted = [...opts].sort((a: any, b: any) => String(a?.label || '').localeCompare(String(b?.label || '')))
         for (const o of sorted) {
           parts.push(String(o?.label || '').toUpperCase() + _normTextForSig(o?.text || ''))
@@ -3435,25 +3455,24 @@ export default defineComponent({
       }
       const textSig = stem + '||' + parts.join('|')
 
-      // 图片指纹：题干图片 + 选项图片（按 label 排序）。
-      // /bank/list 默认不返回 base64 明细 → 退化到 has_images + qid 兜底，
-      // 确保"带图题目不被跨题库误并"。
-      const stemFp = _imgListFingerprint(q?.stem_images)
-      const optImgs = q?.option_images || {}
-      const optImgParts: string[] = []
-      if (optImgs && typeof optImgs === 'object' && !Array.isArray(optImgs)) {
-        const keys = Object.keys(optImgs).sort()
-        for (const k of keys) {
-          const fp = _imgListFingerprint(optImgs[k])
-          if (fp) optImgParts.push(String(k).toUpperCase() + ':' + fp)
-        }
-      }
-      let imgSig = stemFp + '::' + optImgParts.join('|')
+      // 2) 答案
+      const ansSig = _normAnswerForSig(q?.answer)
+
+      // 3) 解析（兼容 explain / analysis / reference_answer）
+      const explainRaw = q?.explain || q?.analysis || q?.reference_answer || ''
+      const explainSig = _normTextForSig(explainRaw)
+
+      const baseSig = textSig + '##A##' + ansSig + '##E##' + explainSig
+
+      if (!PAPER_SIG_INCLUDE_IMAGES) return baseSig
+
+      // 4) 图片：优先用后端下发的 image_hashes
+      let imgSig = _imageHashesToSig(q?.image_hashes)
       const hasDetail = imgSig.replace(/::/g, '').replace(/\|/g, '').trim().length > 0
       if (!hasDetail && Boolean(q?.has_images)) {
         imgSig = 'HASIMG:' + String(q?.id || q?.qid || '')
       }
-      return textSig + '##IMG##' + imgSig
+      return baseSig + '##IMG##' + imgSig
     }
 
     const startRandomPractice = async () => {
@@ -3471,8 +3490,11 @@ export default defineComponent({
 
       startingPractice.value = true
       try {
-        // 1. 从题库获取所有已通过的题目（包含图片数据）
-        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&include_images=true&all_banks=true`)
+        // 1. 从题库获取所有已通过的题目（不带图片 base64，仅元数据 + image_hashes/has_images）
+        // 之前 include_images=true + all_banks=true 会一次性下发所有题库的图片 base64，
+        // 题量大时响应可达数百 MB，浏览器解析 JSON 直接抛 "Unexpected end of JSON input"。
+        // 改为先拉元数据做随机抽样，再仅为命中题目按 qid 懒加载图片。
+        const bankData = await mcqFetch(`${API_ENDPOINTS.BANK.LIST}?page=0&include_images=false&all_banks=true`)
         if (!bankData.ok) {
           throw new Error(bankData.msg || '获取题库失败')
         }
@@ -3646,6 +3668,36 @@ export default defineComponent({
         selectedSaq.forEach((q: any) => {
           paperItems.push(buildPaperItem(q, 'saq'))
         })
+
+        // 5.5 懒加载图片：列表接口未携带 base64 图片，按需为命中题目并发拉取图片
+        const imgTargets = paperItems.filter((it: any) => {
+          // 命中原题目里 has_images 为 true 才拉取
+          const src = [...selectedSingle, ...selectedMulti, ...selectedIndeterminate, ...selectedJudge, ...selectedSaq]
+            .find((q: any) => (q.id || q.qid) === it.qid)
+          return !!(src && src.has_images)
+        })
+        if (imgTargets.length > 0) {
+          const imgResults = await Promise.all(imgTargets.map(async (it: any) => {
+            try {
+              const data = await mcqFetch(`${MCQ_BASE_URL}/bank/images/${encodeURIComponent(it.qid)}`)
+              return { qid: it.qid, data }
+            } catch (e) {
+              console.warn('[随机练习] 加载题目图片失败 qid=', it.qid, e)
+              return { qid: it.qid, data: null }
+            }
+          }))
+          const imgMap: Record<string, any> = {}
+          for (const r of imgResults) {
+            if (r.data && r.data.ok) imgMap[r.qid] = r.data
+          }
+          for (const item of paperItems) {
+            const data = imgMap[item.qid]
+            if (!data) continue
+            if (Array.isArray(data.stem_images) && data.stem_images.length) item.stem_images = data.stem_images
+            if (data.option_images && Object.keys(data.option_images || {}).length) item.option_images = data.option_images
+            if (Array.isArray(data.analysis_images) && data.analysis_images.length) item.analysis_images = data.analysis_images
+          }
+        }
 
         // 6. 直接使用临时题目数据开始练习（不保存为试卷文件）
         const practiceTitle = `随机练习_${localTimestamp()}`
@@ -4307,11 +4359,14 @@ export default defineComponent({
           // 选择题: 错误才算错题
           return !item.is_correct
         })
-        .map(item => {
+        .map((item: any) => {
+          // 优先使用题库原始 qid（随机练习/错题练习场景下后端会透传 bank_qid）；
+          // 正式考试没有 bank_qid 时回退到 attempt 内的 qid（与试卷绑定，单卷一致）。
+          const wbQid = item.bank_qid || item.qid
           if (item.qtype === 'saq') {
             // SAQ 数据结构
             return {
-              qid: item.qid,
+              qid: wbQid,
               stem: item.stem,
               options: [],  // SAQ无选项
               answer: item.correct_answer || '',  // 参考答案
@@ -4327,7 +4382,7 @@ export default defineComponent({
           }
           // 选择题数据结构
           return {
-            qid: item.qid,
+            qid: wbQid,
             stem: item.stem,
             options: item.options,
             answer: item.correct_labels?.join('') || '',
@@ -5717,33 +5772,71 @@ export default defineComponent({
 }
 
 /* 题干 / 选项 / 解析里嵌入的表格（来自 [表格]...[/表格] 标记） */
+/* 深色模式默认样式 */
 :deep(.md-table) {
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 10px 0;
   width: 100%;
   max-width: 100%;
   font-size: 14px;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 8px;
   overflow: hidden;
   table-layout: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 :deep(.md-table th),
 :deep(.md-table td) {
-  border: 1px solid rgba(96, 165, 250, 0.25);
-  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 10px 14px;
   text-align: left;
   vertical-align: top;
-  color: #e5e7eb;
+  color: #f8fafc;
   word-break: break-word;
+  line-height: 1.6;
 }
 :deep(.md-table thead th) {
-  background: rgba(59, 130, 246, 0.18);
-  font-weight: 600;
-  color: #93c5fd;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.55) 0%, rgba(99, 102, 241, 0.45) 100%);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+  border-bottom: 2px solid rgba(147, 197, 253, 0.6);
 }
-:deep(.md-table tbody tr:nth-child(even) td) {
-  background: rgba(255, 255, 255, 0.02);
+:deep(.md-table tbody tr) {
+  background: rgba(30, 41, 59, 0.55);
+}
+:deep(.md-table tbody tr:nth-child(even)) {
+  background: rgba(15, 23, 42, 0.7);
+}
+:deep(.md-table tbody tr:hover) {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+/* 浅色模式适配：白底深字、清晰边框 */
+.exam-page.light-mode :deep(.md-table) {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.exam-page.light-mode :deep(.md-table th),
+.exam-page.light-mode :deep(.md-table td) {
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+}
+.exam-page.light-mode :deep(.md-table thead th) {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #3730a3;
+  border-bottom: 2px solid #a5b4fc;
+}
+.exam-page.light-mode :deep(.md-table tbody tr) {
+  background: #ffffff;
+}
+.exam-page.light-mode :deep(.md-table tbody tr:nth-child(even)) {
+  background: #f8fafc;
+}
+.exam-page.light-mode :deep(.md-table tbody tr:hover) {
+  background: #eff6ff;
 }
 /* 表格单元格内嵌入的图片（来自 [IMG:filename] 标记） */
 :deep(.md-table img.md-table-img) {

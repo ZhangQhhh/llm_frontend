@@ -9,7 +9,7 @@
 
       <el-tabs v-model="activeTab" type="border-card" :before-leave="beforeTabLeave">
         <!-- 账号审核 -->
-        <el-tab-pane v-if="showAdminTabs" label="账号审核" name="approval">
+        <el-tab-pane v-if="tabVisible('approval')" label="账号审核" name="approval">
           <div class="tab-content">
             <div class="action-bar">
               <el-button type="primary" @click="loadPendingUsers" :loading="loadingPending" :icon="Refresh">
@@ -96,7 +96,7 @@
         </el-tab-pane>
 
         <!-- 密码管理（管理员为普通用户重置密码） -->
-        <el-tab-pane v-if="showAdminTabs" label="密码管理" name="password">
+        <el-tab-pane v-if="tabVisible('password')" label="密码管理" name="password">
           <div class="tab-content">
             <el-alert
               title="此功能用于管理员帮助普通用户重置密码，重置后请及时通知用户新密码。"
@@ -138,7 +138,7 @@
         </el-tab-pane>
 
         <!-- ==================== 题库管理（MCQ 对接） ==================== -->
-        <el-tab-pane v-if="showBjzxTabs" label="题库管理" name="questions">
+        <el-tab-pane v-if="tabVisible('questions')" label="题库管理" name="questions">
           <div class="tab-content mcq-tab-content">
 
             <!-- 题库选择器 -->
@@ -920,7 +920,7 @@
         </el-tab-pane>
 
         <!-- 回收站 -->
-        <el-tab-pane v-if="showBjzxTabs" label="回收站" name="recycle">
+        <el-tab-pane v-if="tabVisible('recycle')" label="回收站" name="recycle">
           <div class="tab-content">
             <!-- 工具栏 -->
             <div class="action-bar">
@@ -1060,7 +1060,7 @@
         </el-tab-pane>
 
         <!-- 试卷管理 -->
-        <el-tab-pane v-if="showBjzxTabs" label="试卷管理" name="papers">
+        <el-tab-pane v-if="tabVisible('papers')" label="试卷管理" name="papers">
           <div class="tab-content">
             <!-- 生成试卷区域 -->
             <el-card shadow="never" style="margin-bottom: 20px;">
@@ -1272,22 +1272,26 @@
                           />
                         </el-select>
                         <span><span style="margin-right: 4px;">单选</span>
-                          <el-input-number v-model="cfg.single_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <el-input-number v-model="cfg.single_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).single" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <span style="color:#909399;font-size:12px;margin-left:2px;">/{{ bankApprovedCounts(cfg.bank_id).single }}</span>
                         </span>
                         <span><span style="margin-right: 4px;">多选</span>
-                          <el-input-number v-model="cfg.multi_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <el-input-number v-model="cfg.multi_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).multi" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <span style="color:#909399;font-size:12px;margin-left:2px;">/{{ bankApprovedCounts(cfg.bank_id).multi }}</span>
                         </span>
                         <span><span style="margin-right: 4px;">判断</span>
-                          <el-input-number v-model="cfg.judge_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <el-input-number v-model="cfg.judge_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).judge" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <span style="color:#909399;font-size:12px;margin-left:2px;">/{{ bankApprovedCounts(cfg.bank_id).judge }}</span>
                         </span>
                         <span><span style="margin-right: 4px;">简答</span>
-                          <el-input-number v-model="cfg.saq_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <el-input-number v-model="cfg.saq_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).saq" :value-on-clear="0" size="small" style="width: 80px;" />
+                          <span style="color:#909399;font-size:12px;margin-left:2px;">/{{ bankApprovedCounts(cfg.bank_id).saq }}</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 6px;">
                           <span>不定项：单选</span>
-                          <el-input-number v-model="cfg.indeterminate_single_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 90px;" />
+                          <el-input-number v-model="cfg.indeterminate_single_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).single" :value-on-clear="0" size="small" style="width: 90px;" />
                           <span>多选</span>
-                          <el-input-number v-model="cfg.indeterminate_multi_count" :min="0" :max="9999" :value-on-clear="0" size="small" style="width: 90px;" />
+                          <el-input-number v-model="cfg.indeterminate_multi_count" :min="0" :max="bankApprovedCounts(cfg.bank_id).multi" :value-on-clear="0" size="small" style="width: 90px;" />
                         </span>
                         <el-button size="small" type="danger" plain @click="removeMultiBankConfig(idx)">
                           <el-icon><Delete /></el-icon> 移除
@@ -1299,7 +1303,6 @@
                         </el-button>
                         <span style="color: #909399; font-size: 12px;">
                           合计 {{ multiBankTotalCount }} 题
-                          <span v-if="multiBankTotalCount > 0">（跨题库题干+选项+题目图片均相同才自动去重并替换抽取）</span>
                         </span>
                       </div>
                     </div>
@@ -2331,7 +2334,7 @@
         </el-tab-pane>
 
         <!-- 成绩导出 -->
-        <el-tab-pane v-if="showBjzxTabs" label="成绩导出" name="export">
+        <el-tab-pane v-if="tabVisible('export')" label="成绩导出" name="export">
           <div class="tab-content">
             <div class="action-bar">
               <el-select v-model="selectedExportExam" placeholder="选择考试场次" filterable style="width: 480px" @change="onExportExamChange">
@@ -2584,7 +2587,7 @@
         </el-tab-pane>
 
         <!-- 考试发布 -->
-        <el-tab-pane v-if="showBjzxTabs" label="考试发布" name="publish">
+        <el-tab-pane v-if="tabVisible('publish')" label="考试发布" name="publish">
           <div class="tab-content">
             <!-- 发布考试表单 -->
             <el-card shadow="never" style="margin-bottom: 20px;">
@@ -2765,7 +2768,113 @@
         </el-tab-pane>
 
         <!-- 考试设置 -->
-        <el-tab-pane v-if="showBjzxTabs" label="考试设置" name="exam-settings">
+        <!-- 可见模块（仅超管可见） -->
+        <el-tab-pane v-if="isSuperAdminUser" label="可见模块" name="visible-tabs">
+          <div class="tab-content">
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 12px;"
+              title="为各管理员/边检智学管理员配置在管理中心可见的 Tab。超级管理员不受此处限制。"
+              description="未配置的用户按其角色权限默认放开全部可见。配置为空表示该用户在管理中心看不到任何模块。"
+            />
+
+            <div class="action-bar" style="display: flex; gap: 8px; align-items: center;">
+              <el-button type="primary" :icon="Refresh" :loading="visibleTabsLoading" @click="loadUsers().then(() => loadVisibleTabsConfigs())">
+                刷新
+              </el-button>
+              <el-input
+                v-model="visibleTabsSearch"
+                size="small"
+                placeholder="搜索用户名"
+                clearable
+                style="width: 220px; margin-left: auto;"
+              >
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+            </div>
+
+            <el-empty v-if="!visibleTabsLoading && visibleTabsCandidates.length === 0" description="暂无管理员或边检智学管理员" />
+
+            <el-table
+              v-else
+              :data="pagedVisibleTabsCandidates"
+              v-loading="visibleTabsLoading"
+              border
+              size="small"
+              stripe
+              style="width: 100%; margin-top: 12px;"
+            >
+              <el-table-column label="用户名" prop="username" min-width="140" fixed="left" />
+              <el-table-column label="角色" min-width="130">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.isBjzxAdmin && normalizeRole(row.role) === 'user' ? 'success' : 'warning'">
+                    {{ roleName(row.role, row.isBjzxAdmin) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag
+                    size="small"
+                    :type="visibleTabsConfiguredSet.has(row.username) ? 'primary' : 'info'"
+                  >
+                    {{ visibleTabsConfiguredSet.has(row.username) ? '已配置' : '默认' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
+                v-for="tab in allTabKeys"
+                :key="tab"
+                :label="tabKeyName(tab)"
+                width="100"
+                align="center"
+              >
+                <template #default="{ row }">
+                  <el-checkbox
+                    :model-value="visibleTabsIsChecked(row.username, tab)"
+                    :disabled="!isTabAllowedForUserRole(row, tab)"
+                    @change="(v) => visibleTabsToggle(row.username, tab, !!v)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="260" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" link type="primary" @click="visibleTabsSelectAllForUser(row)">全选</el-button>
+                  <el-button size="small" link @click="visibleTabsClearForUser(row)">清空</el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :loading="visibleTabsSaving[row.username]"
+                    @click="visibleTabsSave(row)"
+                  >保存</el-button>
+                  <el-button
+                    size="small"
+                    type="warning"
+                    plain
+                    :disabled="!visibleTabsConfiguredSet.has(row.username)"
+                    :loading="visibleTabsSaving[row.username]"
+                    @click="visibleTabsReset(row)"
+                  >恢复默认</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div style="margin-top: 12px; display: flex; justify-content: center;">
+              <el-pagination
+                v-model:current-page="visibleTabsPage"
+                v-model:page-size="visibleTabsPageSize"
+                :page-sizes="[10, 20, 50, 100]"
+                :total="visibleTabsCandidates.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                small
+              />
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane v-if="tabVisible('exam-settings')" label="考试设置" name="exam-settings">
           <div class="tab-content">
             <el-card shadow="never">
               <template #header>
@@ -3452,9 +3561,10 @@ import { useStore } from 'vuex'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Refresh, Search, Document, Upload, Download, MagicStick, Filter, Check, Close, InfoFilled, Bell, TrendCharts, Histogram, Medal, List, Plus, Edit, EditPen, Warning, Delete, Failed, Setting } from '@element-plus/icons-vue'
-import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs, isSuperAdmin } from '@/config/permissions'
+import { RoleNames, UserRole, canAccessAdminTabs, canAccessBjzxTabs, isSuperAdmin, AdminTab, AdminTabNames, isTabVisible } from '@/config/permissions'
 import { API_ENDPOINTS, MCQ_BASE_URL} from '@/config/api/api'
 import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
+import llmHttp from '@/config/api/llmHttp'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTextWithTables, renderTableBlocks, buildQuestionImagesMap, visibleStemImages, extractImageMarkerFilenames, removeImageMarker } from '@/utils/tableRender'
 
@@ -3519,6 +3629,189 @@ export default defineComponent({
     // Tab权限控制
     const showAdminTabs = computed(() => canAccessAdminTabs(userRole.value))
     const showBjzxTabs = computed(() => canAccessBjzxTabs(userRole.value, isBjzxAdmin.value))
+
+    // ============ 可见模块（Admin Tab 可见性配置） ============
+    // null 表示未加载或后端未配置；数组表示已配置允许的 Tab 列表
+    const myAllowedTabs = ref<string[] | null>(null)
+    const myAllowedTabsLoaded = ref(false)
+
+    // 综合判断 Tab 是否可见（角色 + 可见模块配置）
+    const tabVisible = (tab: string): boolean => {
+      // 配置加载完成前，对超管直接放开，对其他用户暂以"未配置"处理（即按角色默认）
+      return isTabVisible(tab, userRole.value as UserRole, isBjzxAdmin.value, myAllowedTabs.value)
+    }
+
+    const loadMyAllowedTabs = async () => {
+      try {
+        const resp = await llmHttp.get('/admin/visible-tabs/me')
+        const data: any = resp.data || {}
+        if (data.ok) {
+          myAllowedTabs.value = data.configured ? (data.tabs || []) : null
+        }
+      } catch (e) {
+        // 静默失败：保持 null（默认按角色放开）
+        console.warn('[VisibleTabs] 加载我的可见模块失败', e)
+      } finally {
+        myAllowedTabsLoaded.value = true
+      }
+    }
+
+    // ============ 可见模块管理（仅超管） ============
+    const allTabKeys = computed<string[]>(() => Object.values(AdminTab) as string[])
+    const tabKeyName = (k: string) => AdminTabNames[k] || k
+
+    // 后端返回的全量配置 { username: string[] }
+    const visibleTabsConfigs = ref<Record<string, string[]>>({})
+    // 当前编辑中的快照（用户名 -> 选中的 tab 集合）
+    const visibleTabsEditing = ref<Record<string, string[]>>({})
+    const visibleTabsConfiguredSet = ref<Set<string>>(new Set())
+    const visibleTabsLoading = ref(false)
+    const visibleTabsSaving = ref<Record<string, boolean>>({})
+    const visibleTabsSearch = ref('')
+    const visibleTabsPage = ref(1)
+    const visibleTabsPageSize = ref(20)
+
+    // 候选用户：管理员 + 边检智学管理员（普通用户不显示）
+    const visibleTabsCandidates = computed(() => {
+      const list = (users.value || []).filter((u: any) => {
+        const role = normalizeRole(u.role)
+        if (role === UserRole.ADMIN) return true
+        if (role === UserRole.USER && u.isBjzxAdmin) return true
+        return false
+      })
+      const kw = visibleTabsSearch.value.trim().toLowerCase()
+      if (!kw) return list
+      return list.filter((u: any) => (u.username || '').toLowerCase().includes(kw))
+    })
+
+    // 分页后的当前页数据
+    const pagedVisibleTabsCandidates = computed(() => {
+      const start = (visibleTabsPage.value - 1) * visibleTabsPageSize.value
+      return visibleTabsCandidates.value.slice(start, start + visibleTabsPageSize.value)
+    })
+
+    // 搜索关键词变化时回到第 1 页
+    watch(visibleTabsSearch, () => { visibleTabsPage.value = 1 })
+
+    const loadVisibleTabsConfigs = async () => {
+      if (!isSuperAdminUser.value) return
+      visibleTabsLoading.value = true
+      try {
+        const resp = await llmHttp.get('/admin/visible-tabs')
+        const data: any = resp.data || {}
+        if (data.ok) {
+          {
+            const cfg: Record<string, string[]> = data.configs || {}
+            visibleTabsConfigs.value = cfg
+            visibleTabsConfiguredSet.value = new Set(Object.keys(cfg))
+            // 初始化编辑快照
+            const edit: Record<string, string[]> = {}
+            for (const u of (users.value || [])) {
+              const name = u.username
+              if (!name) continue
+              if (cfg[name]) {
+                edit[name] = [...cfg[name]]
+              } else {
+                // 未配置时，编辑态默认为该用户角色可访问的全部 Tab
+                edit[name] = allTabKeys.value.filter(t =>
+                  isTabVisible(t, normalizeRole(u.role) as UserRole, !!u.isBjzxAdmin, null)
+                )
+              }
+            }
+            visibleTabsEditing.value = edit
+            return
+          }
+        }
+        ElMessage.error('加载可见模块配置失败')
+      } catch (e: any) {
+        ElMessage.error('加载可见模块配置失败：' + (e?.message || e))
+      } finally {
+        visibleTabsLoading.value = false
+      }
+    }
+
+
+    const isTabAllowedForUserRole = (user: any, tab: string): boolean => {
+      // 该 Tab 是否在用户的角色 baseline 内（用于禁用越权 checkbox）
+      const role = normalizeRole(user.role) as UserRole
+      return isTabVisible(tab, role, !!user.isBjzxAdmin, null)
+    }
+
+    const visibleTabsToggle = (username: string, tab: string, checked: boolean) => {
+      const cur = visibleTabsEditing.value[username] || []
+      const set = new Set(cur)
+      if (checked) set.add(tab)
+      else set.delete(tab)
+      visibleTabsEditing.value[username] = Array.from(set)
+    }
+
+    const visibleTabsIsChecked = (username: string, tab: string): boolean => {
+      return (visibleTabsEditing.value[username] || []).includes(tab)
+    }
+
+    const visibleTabsSelectAllForUser = (user: any) => {
+      const all = allTabKeys.value.filter(t => isTabAllowedForUserRole(user, t))
+      visibleTabsEditing.value[user.username] = all
+    }
+
+    const visibleTabsClearForUser = (user: any) => {
+      visibleTabsEditing.value[user.username] = []
+    }
+
+    const visibleTabsSave = async (user: any) => {
+      const username = user.username
+      if (!username) return
+      const tabs = visibleTabsEditing.value[username] || []
+      visibleTabsSaving.value[username] = true
+      try {
+        const resp = await llmHttp.post('/admin/visible-tabs', { username, tabs })
+        if ((resp.data as any)?.ok) {
+          visibleTabsConfigs.value[username] = [...tabs]
+          visibleTabsConfiguredSet.value.add(username)
+          // 触发 reactivity
+          visibleTabsConfiguredSet.value = new Set(visibleTabsConfiguredSet.value)
+          ElMessage.success(`已保存：${username}`)
+        } else {
+          ElMessage.error('保存失败：' + ((resp.data as any)?.msg || ''))
+        }
+      } catch (e: any) {
+        ElMessage.error('保存失败：' + (e?.message || e))
+      } finally {
+        visibleTabsSaving.value[username] = false
+      }
+    }
+
+    const visibleTabsReset = async (user: any) => {
+      const username = user.username
+      if (!username) return
+      try {
+        await ElMessageBox.confirm(
+          `确定恢复用户 ${username} 的可见模块为默认（按角色权限放开）吗？`,
+          '提示',
+          { type: 'warning' }
+        )
+      } catch { return }
+      visibleTabsSaving.value[username] = true
+      try {
+        const resp = await llmHttp.post('/admin/visible-tabs', { username, reset: true })
+        if ((resp.data as any)?.ok) {
+          delete visibleTabsConfigs.value[username]
+          visibleTabsConfiguredSet.value.delete(username)
+          visibleTabsConfiguredSet.value = new Set(visibleTabsConfiguredSet.value)
+          // 编辑态恢复为角色 baseline
+          visibleTabsEditing.value[username] = allTabKeys.value.filter(t =>
+            isTabAllowedForUserRole(user, t)
+          )
+          ElMessage.success(`已恢复：${username}`)
+        } else {
+          ElMessage.error('恢复失败：' + ((resp.data as any)?.msg || ''))
+        }
+      } catch (e: any) {
+        ElMessage.error('恢复失败：' + (e?.message || e))
+      } finally {
+        visibleTabsSaving.value[username] = false
+      }
+    }
 
     const roleText = computed(() => {
       const role = userRole.value as UserRole
@@ -3894,7 +4187,6 @@ export default defineComponent({
       return tabs
     }
 
-    // 参考资料缓存与渲染（结构与 qa_public.html 对齐）
     const sourcesMap = reactive<Record<string, any[]>>({})
     const sourcesLoading = reactive<Record<string, boolean>>({})
     const sourcesLoaded = reactive<Record<string, boolean>>({})
@@ -5048,6 +5340,30 @@ export default defineComponent({
       }
     }
 
+    // 多题库模式下，按题库 ID 计算各类型已通过题目数量。
+    // 用于"多题库随机抽取"配置中的 input-number :max 上限校验，
+    // 与单题库模式（singleApprovedCount/judgeApprovedCount/saqApprovedCount）行为一致：
+    // 当某类型该题库为 0 时，输入框无法增加，避免提交时后端报错"题目数量不足"。
+    const bankApprovedCountsMap = computed<Record<string, { single: number; multi: number; judge: number; saq: number }>>(() => {
+      const map: Record<string, { single: number; multi: number; judge: number; saq: number }> = {}
+      for (const q of multiBankApprovedQuestions.value) {
+        const bids = Array.isArray(q.bank_ids) ? q.bank_ids : []
+        for (const bid of bids) {
+          if (!bid) continue
+          if (!map[bid]) map[bid] = { single: 0, multi: 0, judge: 0, saq: 0 }
+          if (q.qtype === 'saq') map[bid].saq += 1
+          else if (q.qtype === 'judge') map[bid].judge += 1
+          else if (isMultiChoice(q)) map[bid].multi += 1
+          else map[bid].single += 1
+        }
+      }
+      return map
+    })
+    const bankApprovedCounts = (bankId: string) => {
+      const c = bankApprovedCountsMap.value[bankId]
+      return c || { single: 0, multi: 0, judge: 0, saq: 0 }
+    }
+
     // 启用多题库模式时拉取数据：
     //  - 无缓存 → 显示 "正在合并…" 提示加载；
     //  - 已有缓存 → 立即使用缓存数据，后台静默刷新，避免闪烁。
@@ -5056,6 +5372,15 @@ export default defineComponent({
       const hasCache = multiBankApprovedQuestions.value.length > 0
       loadMultiBankApprovedQuestions(/* silent */ hasCache)
     })
+
+    // 任何会影响"已通过"集合的变更（通过/驳回/删除/恢复/导入/上传/编辑）之后调用：
+    // 多题库模式下静默刷新跨题库缓存。否则缓存只在首次切换到多题库时加载一次，
+    // 新通过的题目不会即时反映在"手动选题"和"随机抽取"的范围内。
+    const refreshMultiBankApprovedIfNeeded = () => {
+      if (multiBankEnabled.value) {
+        loadMultiBankApprovedQuestions(/* silent */ true)
+      }
+    }
 
     // 当前生效的题库筛选 ID 列表（仅多题库模式下使用）
     //  - 随机抽取模式：从 multiBankConfigs 自动派生（已配置抽取的题库）
@@ -5633,6 +5958,7 @@ export default defineComponent({
         // 但本次上传可能为已有题目（重复项）回填了 knowledge_points，
         // 因此必须重新拉取完整题库，确保题目卡和"试卷管理"的考点筛选都能看到最新章节标题。
         await loadQuestions()
+        refreshMultiBankApprovedIfNeeded()
       } catch (e: any) {
         const msg = e?.message || String(e) || '未知错误'
         uploadMessage.value = '上传失败：' + msg
@@ -5690,7 +6016,7 @@ export default defineComponent({
       currentTaskId.value = taskId
       pollingInterval.value = window.setInterval(async () => {
         try {
-          const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache:'no-store' })
+          const r = await fetch(`${MCQ_BASE_URL}/tasks/status?task_id=${encodeURIComponent(taskId)}`, { cache:'no-store', headers: getAuthHeaders(false) })
           const j = await r.json(); if (!j || !j.ok) return
           currentTaskStatus.value = j.status || ''
           asyncMsg.value = `进度：${j.done||0}/${j.total||0}`
@@ -6111,6 +6437,7 @@ export default defineComponent({
           ElMessage.success('已通过')
           // 直接更新本地状态，避免重新加载全部题目
           if (question) question.status = 'approved'
+          refreshMultiBankApprovedIfNeeded()
         }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) {
@@ -6132,6 +6459,7 @@ export default defineComponent({
           // 直接更新本地状态，避免重新加载全部题目
           const question = (questions.value || []).find(q => q.qid === qid)
           if (question) question.status = 'rejected'
+          refreshMultiBankApprovedIfNeeded()
         }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) { if (error !== 'cancel') ElMessage.error('操作失败：' + (error?.message || error)) }
@@ -6160,6 +6488,7 @@ export default defineComponent({
           ElMessage.success('删除成功')
           // 直接从本地列表移除，避免重新加载全部题目
           questions.value = questions.value.filter(q => q.qid !== qid)
+          refreshMultiBankApprovedIfNeeded()
         } else {
           throw new Error(data?.msg || '删除失败')
         }
@@ -6197,6 +6526,7 @@ export default defineComponent({
           ElMessage.success(`已通过 ${data.count || candidates.length} 题`)
           // 直接更新本地状态，避免重新加载全部题目
           for (const c of candidates) c.status = 'approved'
+          refreshMultiBankApprovedIfNeeded()
         }
         else throw new Error(data?.msg || '操作失败')
       } catch (error: any) {
@@ -6229,6 +6559,7 @@ export default defineComponent({
         ElMessage.success(`批量驳回 ${data.count||candidates.length} 题`)
         // 直接更新本地状态，避免重新加载全部题目
         for (const c of candidates) c.status = 'rejected'
+        refreshMultiBankApprovedIfNeeded()
       } catch (e:any) { ElMessage.error(e?.message || e) }
       finally { rejectingAll.value = false }
     }
@@ -6275,6 +6606,7 @@ export default defineComponent({
           questions.value = questions.value.filter(q => !deletedSet.has(q.qid))
           selectedQuestions.value = []
           selectAll.value = false
+          refreshMultiBankApprovedIfNeeded()
         } else {
           throw new Error(data?.msg || '批量删除失败')
         }
@@ -6337,6 +6669,7 @@ export default defineComponent({
           ElMessage.success('恢复成功')
           loadDeletedQuestions()
           loadQuestions()
+          refreshMultiBankApprovedIfNeeded()
         } else {
           throw new Error(data?.msg || '恢复失败')
         }
@@ -6370,6 +6703,7 @@ export default defineComponent({
           selectedDeleted.value = []
           loadDeletedQuestions()
           loadQuestions()
+          refreshMultiBankApprovedIfNeeded()
         } else {
           throw new Error(data?.msg || '恢复失败')
         }
@@ -6517,6 +6851,7 @@ export default defineComponent({
         ElMessage.success(msg)
         await loadQuestions()
         loadBanksList()
+        refreshMultiBankApprovedIfNeeded()
       } catch(e:any) { ElMessage.error(`导入失败：${e?.message||e}`) }
       finally { importingBank.value = false; if (bankImportRef.value) bankImportRef.value.value='' }
     }
@@ -6830,6 +7165,7 @@ export default defineComponent({
 
         ElMessage.success('保存成功')
         editingId.value = null
+        refreshMultiBankApprovedIfNeeded()
       } catch (e: any) {
         ElMessage.error(e?.message || e)
       }
@@ -9183,7 +9519,22 @@ export default defineComponent({
       }
     })
 
+    // 选择当前可见的第一个 Tab 作为默认（避免默认 'questions' 被隐藏后页面空白）
+    const ensureVisibleActiveTab = () => {
+      const candidates = ['questions', 'approval', 'password', 'recycle', 'papers', 'export', 'publish', 'exam-settings']
+      // 超管还要包括 visible-tabs
+      if (isSuperAdminUser.value) candidates.push('visible-tabs')
+      // 当前 activeTab 仍可见则不动
+      if (activeTab.value === 'visible-tabs' && isSuperAdminUser.value) return
+      if (tabVisible(activeTab.value)) return
+      const next = candidates.find(t => t === 'visible-tabs' ? isSuperAdminUser.value : tabVisible(t))
+      if (next) activeTab.value = next
+    }
+
     onMounted(async () => {
+      // 优先加载当前用户的可见模块配置（影响其他 Tab 的渲染）
+      await loadMyAllowedTabs()
+      ensureVisibleActiveTab()
       if (showBjzxTabs.value) {
         // 先等题库列表加载完（确定 currentBankId），再加载题目，避免竞态导致"暂无题目"
         await loadBanksList()
@@ -9197,6 +9548,14 @@ export default defineComponent({
       if (showAdminTabs.value) {
         loadUsers()
         loadPendingUsers()
+      }
+      // 超级管理员：加载所有用户的可见模块配置（依赖 users 列表）
+      if (isSuperAdminUser.value) {
+        // 若上面分支没有触发 loadUsers（仅 super admin 但无 admin/bjzx 标识时），保险触发
+        if (!showAdminTabs.value) {
+          await loadUsers()
+        }
+        await loadVisibleTabsConfigs()
       }
       window.addEventListener('beforeunload', handleAdminBeforeUnload)
     })
@@ -9262,6 +9621,7 @@ export default defineComponent({
       // 多题库合并已通过题目
       multiBankApprovedQuestions, loadingMultiBankQuestions,
       singleApprovedCount, multiApprovedCount, judgeApprovedCount, saqApprovedCount,
+      bankApprovedCounts,
       // 不定项配置
       enableIndeterminate, indeterminateMode, indeterminateSingleCount, indeterminateMultiCount, indeterminateTotalCount,
       selectedIndeterminateQuestions, toggleIndeterminate,
@@ -9325,6 +9685,16 @@ export default defineComponent({
       antiCheatConfig, loadingAntiCheat, savingAntiCheat, antiCheatMessage,
       loadAntiCheatConfig, saveAntiCheatConfig, isAntiCheatDirty, beforeTabLeave,
       vncPortsDialogVisible, vncPortEntries, newVncPortEntry, openVncPortsDialog, addVncPortEntry, removeVncPortEntry, confirmVncPorts, Setting,
+      // 可见模块（管理中心 Tab 可见性）
+      tabVisible, myAllowedTabs, myAllowedTabsLoaded, loadMyAllowedTabs,
+      allTabKeys, tabKeyName,
+      visibleTabsConfigs, visibleTabsEditing, visibleTabsConfiguredSet,
+      visibleTabsLoading, visibleTabsSaving, visibleTabsSearch, visibleTabsCandidates,
+      visibleTabsPage, visibleTabsPageSize, pagedVisibleTabsCandidates,
+      loadVisibleTabsConfigs, isTabAllowedForUserRole,
+      visibleTabsToggle, visibleTabsIsChecked, visibleTabsSelectAllForUser,
+      visibleTabsClearForUser, visibleTabsSave, visibleTabsReset,
+      normalizeRole,
       // 图标组件
       Upload, Download, MagicStick, Search, Check, Close
     }
