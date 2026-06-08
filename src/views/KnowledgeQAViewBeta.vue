@@ -1186,7 +1186,7 @@ export default defineComponent({
             const optionsText = text.slice(firstOptMatch.index);
             
             // 提取选项：支持 A.xxx B.xxx 或分行格式
-            const optPattern = /[（(]?\s*([A-Ha-h])\s*[.、):：]?\s*([^A-Ha-h（(]+?)(?=\s*[（(]?\s*[A-Ha-h]\s*[.、):：]|\s*$)/g;
+            const optPattern = /[（(]?\s*([A-Ja-j])\s*[.、):：]?\s*([^A-Ja-j（(]+?)(?=\s*[（(]?\s*[A-Ja-j]\s*[.、):：]|\s*$)/g;
             let match;
             while ((match = optPattern.exec(optionsText)) !== null) {
               const label = match[1].toUpperCase();

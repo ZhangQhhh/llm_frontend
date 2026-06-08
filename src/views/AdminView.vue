@@ -183,7 +183,7 @@
                     ref="uploadRef"
                     :auto-upload="false"
                     :limit="1"
-                    accept=".docx,.doc,.wps,.txt"
+                    accept=".docx,.doc,.wps,.txt,.xlsx,.xls"
                     :on-change="handleFileChange"
                     style="display: inline-block"
                   >
@@ -4082,7 +4082,7 @@ export default defineComponent({
       const out: Array<{ label: string; text: string; images?: QuestionImage[] }> = []
       const o = opts || {}
       const imgMap = optionImages || {}
-      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']) {
         // 有文本或有图片的选项都要显示
         const hasText = o[k] !== undefined && o[k] !== null && o[k] !== ''
         const hasImages = imgMap[k] && imgMap[k].length > 0
@@ -5659,7 +5659,7 @@ export default defineComponent({
 
     const uploadQuestions = async () => {
       if (!uploadFile.value) {
-        ElMessage.warning('请选择 .docx / .txt 文件')
+        ElMessage.warning('请选择 .docx / .doc / .wps / .txt / .xlsx / .xls 文件')
         return
       }
 
@@ -6372,7 +6372,7 @@ export default defineComponent({
             // 2) 兼容"纯图片选项"：选项文本为空时，bank_list 默认不返回 option_images，
             //    normalizeOptions 会过滤掉这些标签，导致 q.options 为空。
             //    此时图片到达后需要补齐对应标签，避免选项图片完全丢失。
-            for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+            for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']) {
               if (!existing.has(k) && oi[k] && oi[k].length > 0) {
                 q.options.push({ label: k, text: '', images: oi[k] })
               }
@@ -7235,14 +7235,14 @@ export default defineComponent({
 
     // 添加选项
     const addOption = () => {
-      const allKeys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+      const allKeys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
       const existingKeys = Object.keys(editBuf.options || {})
       // 找到下一个可用的选项字母
       const nextKey = allKeys.find(k => !existingKeys.includes(k))
       if (nextKey) {
         editBuf.options[nextKey] = ''
       } else {
-        ElMessage.warning('最多支持8个选项（A-H）')
+        ElMessage.warning('最多支持10个选项（A-J）')
       }
     }
 
@@ -8091,7 +8091,7 @@ export default defineComponent({
       if (!item.options) return 0
       let count = 0
       const optionImages = item.option_images || {}
-      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+      for (const k of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']) {
         // 选项有文本 或 有图片，都算有效选项
         const hasText = item.options[k] !== undefined && item.options[k] !== null
         const hasImages = optionImages[k] && optionImages[k].length > 0

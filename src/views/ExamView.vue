@@ -3414,8 +3414,8 @@ export default defineComponent({
       let s = ''
       if (Array.isArray(ans)) s = ans.map((x: any) => String(x)).join('')
       else s = String(ans)
-      const letters = s.replace(/[^A-Ha-h]/g, '')
-      if (letters && letters.length <= 8) {
+      const letters = s.replace(/[^A-Ja-j]/g, '')
+      if (letters && letters.length <= 10) {
         return letters.toUpperCase().split('').sort().join('')
       }
       return _normTextForSig(s)
@@ -4036,6 +4036,16 @@ export default defineComponent({
         return
       }
 
+      // 防重入：已提交或正在提交时直接忽略，避免自动提交（切屏/超时）与
+      // 手动点击或多次自动触发并发，导致第二个请求命中后端
+      // WHERE status='in_progress' 而误报“该考试已提交”
+      if (submitted.value || submitting.value) {
+        return
+      }
+
+      // 立即占用提交标记，确保确认弹窗期间到来的自动提交（切屏/超时）不会并发触发
+      submitting.value = true
+
       const answers = collectAnswers()
       const unanswered = answers.filter(a => a.chosen_labels.length === 0).length
 
@@ -4051,11 +4061,11 @@ export default defineComponent({
             }
           )
         } catch {
+          submitting.value = false
           return
         }
       }
 
-      submitting.value = true
       submitMessage.value = '评分中…'
 
       try {
