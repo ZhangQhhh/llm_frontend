@@ -2551,10 +2551,10 @@ export default defineComponent({
       let cleaned = text
         .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
-        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
         // 移除不带选项字母的通用进度提示（支持行内任意位置）
         .replace(/正在进行混合检索[.…]*\s*/g, '')
         .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')

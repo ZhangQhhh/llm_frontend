@@ -760,10 +760,6 @@
 
                     <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
 
-                    <!-- <el-option label="DeepSeek 云端" value="deepseek-cloud" /> -->
-
-                    <!-- <el-option label="DeepSeek 云端 (深度思考)" value="deepseek-cloud-reasoner" /> -->
-
                   </el-select>
 
                 </div>
@@ -1908,6 +1904,8 @@ import { saveAs } from 'file-saver';
 
 import { LLM_BASE_URL, WRITER_BASE_URL, OCR_BASE_URL } from '@/config/api/api';
 
+import { useAvailableModels } from '@/composables/useAvailableModels';
+
 import ThreeBackground from '@/components/ThreeBackground.vue';
 
 
@@ -2007,6 +2005,8 @@ export default defineComponent({
   setup() {
 
     const store = useStore();
+
+    const { initModel, models, resolveModel } = useAvailableModels();
 
 
 
@@ -2220,7 +2220,8 @@ export default defineComponent({
 
     const writeMode = ref<'generate' | 'complete'>('generate');
 
-    const selectedModel = ref<string>('deepseek');
+    const selectedModel = ref<string>('');
+    initModel(selectedModel, ['deepseek', 'qwen3-32b', 'qwen2025', 'qwen-plus']);
 
     const temperatureValue = ref<number>(0.7);  // temperature 参数，默认 0.7
 
@@ -4236,7 +4237,7 @@ export default defineComponent({
 
             first_message: firstMessage,
 
-            model_id: 'qwen3-32b',  // 固定使用 qwen3-32b 生成标题
+            model_id: resolveModel(['qwen3-32b', 'qwen2025', 'deepseek']),  // 动态选择第一个可达模型
 
           }),
 
@@ -4897,6 +4898,8 @@ export default defineComponent({
       sendButtonText,
 
       selectedModel,
+
+      models,
 
       templateFile,
 

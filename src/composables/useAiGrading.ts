@@ -1,6 +1,7 @@
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, toRef } from 'vue'
 import { fetchMcqWithAuth } from '@/utils/request'
 import { MCQ_BASE_URL } from '@/config/api/api'
+import { useAvailableModels } from '@/composables/useAvailableModels'
 
 // ==================== 类型 ====================
 export interface AiGradeLogItem {
@@ -56,13 +57,16 @@ const aiProgressPercent = computed(() => {
   return Math.round((aiProgress.completedStudents / aiProgress.totalStudents) * 100)
 })
 
-const llmOptions = ref([
-  { value: 'qwen3-32b', label: 'Qwen (通用)' },
-  { value: 'qwen2025', label: 'Qwen (增强)' },
-  { value: 'deepseek', label: 'DeepSeekv3.1' },
+const { initModel: _initModel } = useAvailableModels()
+// 主模型不可达时自动回退到首个可达模型（deepseek → qwen3-32b → qwen2025 → qwen-plus）
+// 并自动注册不可达警告
+_initModel(toRef(aiConfig, 'modelId'), ['deepseek', 'qwen3-32b', 'qwen2025', 'qwen-plus'])
+const llmOptions = [
+  { value: 'qwen3-32b',    label: 'Qwen (通用)' },
+  { value: 'qwen2025',     label: 'Qwen (增强)' },
+  { value: 'deepseek',     label: 'DeepSeekv3.1' },
   { value: 'deepseek-3.2', label: 'DeepSeekv3.2' },
-  { value: 'qwen-plus', label: 'Qwen (云端)' },
-])
+]
 
 // ==================== 轮询逻辑 ====================
 

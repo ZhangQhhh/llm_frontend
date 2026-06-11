@@ -315,9 +315,10 @@ D. 选项D内容
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
 import { useStore } from "vuex";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { useAvailableModels } from "@/composables/useAvailableModels";
 import {
   UploadFilled,
   Close,
@@ -334,6 +335,9 @@ import {
 } from "@element-plus/icons-vue";
 import { MCQ_BASE_URL } from "@/config/api/api";
 import type { UploadFile } from "element-plus";
+
+const { fetchModels, resolveModel } = useAvailableModels();
+onMounted(() => { fetchModels() });
 
 const store = useStore();
 const getAuthHeaders = (includeContentType = true): Record<string, string> => {
@@ -487,7 +491,7 @@ const shouldRetry = (
 const doFormatOnce = async (file: File): Promise<any> => {
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('model_id', 'qwen3-32b');
+  fd.append('model_id', resolveModel(['qwen3-32b', 'qwen2025', 'deepseek']));
   
   const r = await fetch(`${MCQ_BASE_URL}/format_only`, { method: 'POST', headers: getAuthHeaders(false), body: fd });
   

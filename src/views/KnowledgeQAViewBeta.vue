@@ -574,6 +574,7 @@ import {
   type SubQuestionsData
 } from '@/mocks/referenceMocks';
 import { renderMarkdown } from '@/utils/markdown';
+import { useAvailableModels } from '@/composables/useAvailableModels';
 // import { streamMonitor } from '@/utils/streamPerformanceMonitor'; // 暂时注释，待后续使用
 
 export default defineComponent({
@@ -586,6 +587,7 @@ export default defineComponent({
   },
   setup() {
     const store = useStore();
+    const { initModel, models } = useAvailableModels();
 
     // Debug模式检测（通过URL路径判断）
     const isDebugMode = computed(() => {
@@ -741,7 +743,8 @@ export default defineComponent({
     const progressMessage = ref('');
 
     // 配置
-    const modelId = ref('deepseek');
+    const modelId = ref('');
+    initModel(modelId, ['deepseek', 'qwen3-32b', 'qwen2025', 'qwen-plus']);
     const rerankTopN = ref(10);
     const thinkingMode = ref(true);
     const insertBlock = ref(false);
@@ -1810,7 +1813,7 @@ export default defineComponent({
 
     return {
       question, answer, thinking, references, filteredReferences, referenceIdMap, processedAnswer, streamingAnswerContent, streamingThinkingContent, subQuestions, keywords,
-      loading, modelId, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
+      loading, modelId, models, rerankTopN, thinkingMode, insertBlock, mcqMode, mcqStrategy, mcqResults, activeTab,
       streamTestEnabled, streamTestAvailable,
       feedbackSubmitted, showFeedbackModal, feedbackReason, reporterName, reporterUnit, submittingFeedback,
       showProgress, progressInfo, progressMessage, activeThinking, answerBodyRef, mainScrollRef, scrollAnchor,

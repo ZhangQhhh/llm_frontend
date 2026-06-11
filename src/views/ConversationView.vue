@@ -310,6 +310,7 @@ import {
 import { API_ENDPOINTS, STORAGE_KEYS, SHOW_HIDDEN_NODES } from '@/config/api/api';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { renderMarkdown } from '@/utils/markdown';
+import { useAvailableModels } from '@/composables/useAvailableModels';
 import { 
   isProgressMessage, 
   parseProgressMessage, 
@@ -343,6 +344,7 @@ export default defineComponent({
   setup() {
     const store = useStore();
     const router = useRouter();
+    const { initModel, models } = useAvailableModels();
 
     // 状态
     const question = ref('');
@@ -372,7 +374,8 @@ export default defineComponent({
     const sessionsTotalPages = ref(1);
 
     // 配置
-    const modelId = ref('deepseek');
+    const modelId = ref('');
+    initModel(modelId, ['deepseek', 'qwen3-32b', 'qwen2025', 'qwen-plus']);
     const rerankTopN = ref(10);
     const thinkingMode = ref(true);
     const insertBlock = ref(false);
@@ -876,6 +879,7 @@ export default defineComponent({
       loading,
       sessionId,
       modelId,
+      models,
       rerankTopN,
       thinkingMode,
       insertBlock,

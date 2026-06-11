@@ -523,7 +523,10 @@
             </el-form-item>
             <el-form-item label="AI模型">
               <el-select v-model="aiConfig.modelId" placeholder="选择模型" style="width: 100%">
-                <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+                <el-option label="Qwen (通用)" value="qwen3-32b" />
+                <el-option label="Qwen (增强)" value="qwen2025" />
+                <el-option label="DeepSeekv3.1" value="deepseek" />
+                <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
               </el-select>
             </el-form-item>
             <el-form-item label="评分范围">
@@ -570,7 +573,10 @@
                 :disabled="!autoGradeConfig.enabled"
                 @change="saveAutoGradeConfig"
               >
-                <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+                <el-option label="Qwen (通用)" value="qwen3-32b" />
+                <el-option label="Qwen (增强)" value="qwen2025" />
+                <el-option label="DeepSeekv3.1" value="deepseek" />
+                <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
               </el-select>
               <div class="ai-config-tip">后台自动评分使用的模型</div>
             </el-form-item>
@@ -693,6 +699,7 @@ import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { fetchMcqWithAuth } from '@/utils/request'
 import { MCQ_BASE_URL } from '@/config/api/api'
 import { useAiGrading } from '@/composables/useAiGrading'
+import { useAvailableModels } from '@/composables/useAvailableModels'
 
 const router = useRouter()
 
@@ -1795,14 +1802,8 @@ const {
 // AI配置弹窗当前激活的tab：'manual' | 'auto'
 const aiConfigTab = ref<'manual' | 'auto'>('manual')
 
-// AI模型选项配置（可直接在此修改）
-const llmOptions = ref([
-  { value: 'qwen3-32b', label: 'Qwen (通用)' },
-  { value: 'qwen2025', label: 'Qwen (增强)' },
-  { value: 'deepseek', label: 'DeepSeekv3.1' },
-  { value: 'deepseek-3.2', label: 'DeepSeekv3.2' },
-  //{ value: 'qwen-plus', label: 'Qwen (云端)' },
-])
+const { fetchModels: _fetchLlmModels } = useAvailableModels()
+_fetchLlmModels()
 
 // 当后台评分有新进展时，刷新评分数据到UI
 onProgressChange((gradedResults, wasRunning) => {

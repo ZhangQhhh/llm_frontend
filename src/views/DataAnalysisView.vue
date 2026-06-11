@@ -956,6 +956,8 @@ import * as echarts from 'echarts';
 import { davHttp } from '@/config/api/http';
 import { API_ENDPOINTS } from '@/config/api/api';
 import { convertExcelToXlsx } from '@/utils/excel-convert';
+import { useAvailableModels } from '@/composables/useAvailableModels';
+const { initModel } = useAvailableModels();
 const templateHistoryCsv = new URL('../assets/tem_file/示意文件.csv', import.meta.url).href;
 const templateStaffXlsx = new URL('../assets/tem_file/20240801.xlsx', import.meta.url).href;
 const templateFlightXls = new URL('../assets/tem_file/航班表2024.xls', import.meta.url).href;
@@ -976,12 +978,12 @@ const uploadingForecastHistory = ref(false);
 
 // 报告参数
 type YearReportType = 'comprehensive' | 'people_only';
-type YearModelId = 'qwen2025' | 'qwen3-32b' | 'deepseek';
 type YearDatasetType = 'people' | 'traffic';
 const yearStartMonth = ref('');
 const yearEndMonth = ref('');
 const yearReportType = ref<YearReportType>('comprehensive');
-const yearModelId = ref<YearModelId>('deepseek');
+const yearModelId = ref<string>('');
+initModel(yearModelId, ['deepseek', 'qwen2025', 'qwen3-32b', 'qwen-plus']);
 const yearUploadDatasetType = ref<YearDatasetType>('people');
 const yearUploadMonth = ref('');
 const yearUploadFile = ref<File | null>(null);

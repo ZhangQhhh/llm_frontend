@@ -242,7 +242,10 @@
                   </el-button>
                   <el-divider direction="vertical" />
                   <el-select v-model="llmModelId" placeholder="AI模型" size="default" style="width:180px">
-                    <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen (增强)" value="qwen2025" />
+                    <el-option label="DeepSeekv3.1" value="deepseek" />
+                    <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
                   </el-select>
                   <el-input-number v-model="topN" :min="1" :step="1" size="default" style="width:90px" controls-position="right" />
                   <el-checkbox v-model="thinking" size="default">思考模式</el-checkbox>
@@ -591,7 +594,7 @@
                           >
                             + 添加选项
                           </el-button>
-                          <span class="opt-hint">（支持 A-H，删除所有选项将变为简答题）</span>
+                          <span class="opt-hint">（支持 A-J，删除所有选项将变为简答题）</span>
                         </div>
                       </div>
                       <!-- 选项图片上传input -->
@@ -646,11 +649,27 @@
 
                     <!-- 3. 答案 -->
                     <el-form-item label="答案">
+                      <!-- 选择题：字母按钮录入（避免手输空格导致批改不匹配；题型仍按答案长度自动判定） -->
+                      <div v-if="editIsChoice" class="answer-choice-area">
+                        <div class="answer-letter-btns">
+                          <el-button
+                            v-for="k in editOptionKeys"
+                            :key="k"
+                            :type="isAnswerSelected(k) ? 'primary' : 'default'"
+                            round
+                            @click="toggleAnswerLetter(k)"
+                          >{{ k }}</el-button>
+                          <span class="answer-current">当前答案：<strong>{{ editBuf.answer || '（未选）' }}</strong></span>
+                        </div>
+                        <div class="answer-hint">点击字母选择答案，单选选一个、多选可选多个</div>
+                      </div>
+                      <!-- 简答题：保持原文本框 -->
                       <el-input
+                        v-else
                         v-model="editBuf.answer"
                         type="textarea"
                         :autosize="{ minRows: 3, maxRows: 10 }"
-                        placeholder="如 A 或 AC（简答题填写参考答案）"
+                        placeholder="简答题填写参考答案"
                       />
                     </el-form-item>
 
@@ -1679,7 +1698,10 @@
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e4e7ed; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <span style="color: #606266; font-size: 14px;">🔍 批量解析：</span>
                   <el-select v-model="llmModelId" placeholder="AI模型" size="small" style="width: 140px">
-                    <el-option v-for="m in llmOptions" :key="m.value" :label="m.label" :value="m.value" />
+                    <el-option label="Qwen (通用)" value="qwen3-32b" />
+                    <el-option label="Qwen (增强)" value="qwen2025" />
+                    <el-option label="DeepSeekv3.1" value="deepseek" />
+                    <el-option label="DeepSeekv3.2" value="deepseek-3.2" />
                   </el-select>
                   <el-input-number v-model="topN" :min="1" :step="1" size="small" style="width: 75px" controls-position="right" />
                   <el-checkbox v-model="thinking" size="small">思考模式</el-checkbox>
@@ -1760,6 +1782,7 @@
                       </template>
                       <el-tag type="danger" size="small" effect="dark">⚠ 解析告警 ({{ item.parse_warnings.length }})</el-tag>
                     </el-tooltip>
+                    <el-tag v-if="hasMissingImageWarning(item)" type="warning" size="small" effect="dark">📷 疑似缺图</el-tag>
                     <el-tag v-if="hasParseIssue(item) && item.qtype !== 'saq' && !(item.parse_warnings && item.parse_warnings.length)" type="danger" size="small">需检查</el-tag>
                     <el-tag v-if="!item.answer && item.qtype !== 'saq'" type="warning" size="small">缺少答案</el-tag>
                     <el-tag v-if="getOptionsCount(item) < 2 && item.qtype !== 'saq'" type="warning" size="small">选项不足</el-tag>
@@ -1811,8 +1834,8 @@
                     </div>
                     <!-- 选择题显示选项 -->
                     <div v-if="item.qtype !== 'saq'" class="preview-options">
-                      <template v-for="k in ['A','B','C','D','E','F','G','H']" :key="k">
-                        <div v-if="(item.options && item.options[k] !== undefined) || (item.option_images && item.option_images[k] && item.option_images[k].length > 0)" class="preview-opt-item">
+                      <template v-for="k in ['A','B','C','D','E','F','G','H','I','J']" :key="k">
+                        <div v-if="(item.options && item.options[k] !== undefined && String(item.options[k]).trim() !== '') || (item.option_images && item.option_images[k] && item.option_images[k].length > 0) || (isPaperAnswerEmptyMode(item) && ['A','B','C','D'].includes(k))" class="preview-opt-item">
                           <span class="preview-opt">{{ k }}. {{ item.options[k] || '' }}</span>
                           <!-- 纯图片选项提示 -->
                           <span v-if="!item.options[k] && item.option_images && item.option_images[k] && item.option_images[k].length > 0" style="color: #909399; font-size: 12px;">(图片选项)</span>
@@ -1865,7 +1888,7 @@
                   <div v-else class="preview-edit">
                     <el-form label-width="60px" size="small">
                       <el-form-item label="题型">
-                        <el-radio-group v-model="item.qtype" size="small">
+                        <el-radio-group v-model="item.qtype" size="small" @change="onPaperItemQtypeChange(item)">
                           <el-radio-button value="single">单选</el-radio-button>
                           <el-radio-button value="multi">多选</el-radio-button>
                           <el-radio-button value="indeterminate">不定项</el-radio-button>
@@ -1901,7 +1924,7 @@
                       </el-form-item>
                       <el-form-item label="选项">
                         <div style="width: 100%;">
-                          <div v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" style="margin-bottom: 8px;">
+                          <div v-for="k in ['A','B','C','D','E','F','G','H','I','J']" :key="k" style="margin-bottom: 8px;">
                             <div style="display: flex; align-items: center;">
                               <span style="width: 24px; font-weight: bold;">{{ k }}.</span>
                               <el-input v-model="item.options[k]" placeholder="留空则不显示此选项" style="flex: 1;" />
@@ -1924,7 +1947,35 @@
                         </div>
                       </el-form-item>
                       <el-form-item label="答案">
-                        <el-input v-model="item.answer" type="textarea" :autosize="{ minRows: 1, maxRows: 6 }" placeholder="如 A 或 ABC（简答题填写参考答案）" />
+                        <!-- 选择题：字母按钮录入（题型由上方"题型"选择，避免手输空格导致批改不匹配） -->
+                        <div v-if="item.qtype !== 'saq'" class="answer-choice-area">
+                          <div class="answer-letter-btns">
+                            <el-button
+                              v-for="k in paperItemAnswerKeys(item)"
+                              :key="k"
+                              :type="isPaperAnswerSelected(item, k) ? 'primary' : 'default'"
+                              round
+                              @click="togglePaperAnswerLetter(item, k)"
+                            >{{ k }}</el-button>
+                            <el-button
+                              v-if="isPaperAnswerEmptyMode(item) && paperItemAnswerKeys(item).length < 10"
+                              size="small" plain :icon="Plus"
+                              @click="addPaperAnswerKey(item)"
+                            >选项</el-button>
+                            <span class="answer-current">当前答案：<strong>{{ item.answer || '（未选）' }}</strong></span>
+                          </div>
+                          <div class="answer-hint">
+                            <template v-if="isPaperAnswerEmptyMode(item)">选项内容为空，已提供默认 A/B/C/D，可点"+选项"增加；</template>{{ (item.qtype === 'multi' || item.qtype === 'indeterminate') ? '可多选，点击字母切换' : '单选，点击字母切换' }}
+                          </div>
+                        </div>
+                        <!-- 简答题：保持原文本框 -->
+                        <el-input
+                          v-else
+                          v-model="item.answer"
+                          type="textarea"
+                          :autosize="{ minRows: 1, maxRows: 6 }"
+                          placeholder="简答题填写参考答案"
+                        />
                       </el-form-item>
                       <el-form-item label="解析">
                         <el-input v-model="item.explain" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选填，解析内容" />
@@ -2050,6 +2101,10 @@
                         v-if="Array.isArray(item.parse_warnings) && item.parse_warnings.length > 0"
                         type="danger" size="small" effect="dark"
                       >⚠ {{ item.parse_warnings.length }} 个告警</el-tag>
+                      <el-tag
+                        v-if="hasMissingImageWarning(item)"
+                        type="warning" size="small" effect="dark"
+                      >📷 疑似缺图</el-tag>
                       <el-button
                         size="small" type="primary" link
                         style="margin-left: auto;"
@@ -3567,6 +3622,7 @@ import { fetchWithAuth, getApiUrl, openInNewTab } from '@/utils/request'
 import llmHttp from '@/config/api/llmHttp'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTextWithTables, renderTableBlocks, buildQuestionImagesMap, visibleStemImages, extractImageMarkerFilenames, removeImageMarker } from '@/utils/tableRender'
+import { useAvailableModels } from '@/composables/useAvailableModels'
 
 interface QuestionImage {
   filename: string
@@ -4125,7 +4181,7 @@ export default defineComponent({
       if (!analysis) return result
 
       // 使用【选项X分析】标记分割各选项段落（比 A. 格式更可靠，避免误匹配内部 【证据链验证】 等）
-      const optionPattern = /【选项([A-H])分析】([\s\S]*?)(?=【选项[A-H]分析】|【答案汇总|说明：本步骤|$)/g
+      const optionPattern = /【选项([A-J])分析】([\s\S]*?)(?=【选项[A-J]分析】|【答案汇总|说明：本步骤|$)/g
       let match
       while ((match = optionPattern.exec(analysis)) !== null) {
         const label = match[1].toUpperCase()
@@ -4283,16 +4339,16 @@ export default defineComponent({
     const pendingTaskDismissed = ref(false)  // 是否忽略未完成任务提示
     const stoppingTask = ref(false)
     const resumingTask = ref(false)
-    const llmOptions = ref([
-      { value: 'qwen3-32b',     label: 'Qwen (通用) ' },
-      { value: 'qwen2025',      label: 'Qwen (增强)' },
-      { value: 'deepseek',      label: 'DeepSeekv3.1' },
-      { value: 'deepseek-3.2',  label: 'DeepSeekv3.2' },
-      //{ value: 'qwen-plus',     label: 'Qwen (云端) ' },
-      //{ value: 'qwen3-14b-lora',label: 'qwen3-14b-lora' },
-      //{ value: 'deepseek-32b',  label: 'deepseek-32b (deepseek-r1-distill-qwen-32b)' },
-    ])
+    const { fetchModels: _fetchLlmModels, watchModelReachability } = useAvailableModels()
+    _fetchLlmModels()
+    const llmOptions = [
+      { value: 'qwen3-32b',    label: 'Qwen (通用)' },
+      { value: 'qwen2025',     label: 'Qwen (增强)' },
+      { value: 'deepseek',     label: 'DeepSeekv3.1' },
+      { value: 'deepseek-3.2', label: 'DeepSeekv3.2' },
+    ]
     const llmModelId = ref('deepseek')
+    watchModelReachability(llmModelId)
     const fallbackModelId = ref('qwen-plus')
     const topN = ref(10)
     const thinking = ref(true)
@@ -5283,7 +5339,7 @@ export default defineComponent({
 
     // 判断题目是否为多选题（答案包含多个字母）
     const isMultiChoice = (q: Question) => {
-      const answer = (q.answer || '').toUpperCase().replace(/[^A-H]/g, '')
+      const answer = (q.answer || '').toUpperCase().replace(/[^A-J]/g, '')
       return answer.length > 1
     }
 
@@ -6897,10 +6953,10 @@ export default defineComponent({
         // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
         .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
-        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
         // 移除不带选项字母的通用进度提示（支持行内任意位置）
         .replace(/正在进行混合检索[.…]*\s*/g, '')
         .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
@@ -6960,7 +7016,9 @@ export default defineComponent({
       try {
         const newItem = {
           stem: '',
-          options: { A: '', B: '', C: '', D: '' },
+          // 新增题默认只给 A/B 两个选项，避免空的 C/D 被持久化后在答题时显示多余选项；
+          // 需要更多选项时由用户通过"添加选项"按钮逐个增加。
+          options: { A: '', B: '' },
           answer: '',
           qtype: 'single',
           explain: '',
@@ -7012,7 +7070,7 @@ export default defineComponent({
     const editRow = async (row: any) => {
       editingId.value = row.qid
       editBuf.stem = row.stem || ''
-      editBuf.answer = row.answer || ''
+      editBuf.answer = (row.answer || '').toString().toUpperCase()
       // 清理 markdown 符号，方便编辑，并提取纯解析文本（去除嵌入的知识点行）
       const cleanedAnalysis = cleanMarkdownForEdit(row.analysis || '')
       const { explain: extractedExplain, kp } = extractKnowledgePoint(cleanedAnalysis)
@@ -7232,6 +7290,138 @@ export default defineComponent({
     const editOptionKeys = computed(() => {
       return Object.keys(editBuf.options || {}).sort()
     })
+
+    // 是否为选择题（存在任何选项标签即视为选择题，答案用字母按钮录入）
+    const editIsChoice = computed(() => editOptionKeys.value.length > 0)
+
+    // 把答案串解析为已选字母集合（仅保留 A-J 大写字母，自动去除空格等杂质）
+    const getSelectedAnswerLetters = (): string[] => {
+      return String(editBuf.answer || '')
+        .toUpperCase()
+        .split('')
+        .filter(c => /[A-J]/.test(c))
+    }
+
+    // 判断某个字母当前是否被选中
+    const isAnswerSelected = (letter: string): boolean => {
+      return getSelectedAnswerLetters().includes(letter)
+    }
+
+    // 点击字母按钮切换答案（可多选；题型仍由保存时按答案长度自动判定）
+    const toggleAnswerLetter = (letter: string) => {
+      const set = new Set(getSelectedAnswerLetters())
+      if (set.has(letter)) set.delete(letter)
+      else set.add(letter)
+      // 按选项字母顺序排序后拼接，保证答案规范（无空格、字母升序）
+      editBuf.answer = editOptionKeys.value.filter(k => set.has(k)).join('')
+    }
+
+    // ===== 试卷编辑（uploadedPaperItems）：选择题答案字母按钮 =====
+    const PAPER_ANSWER_KEYS = ['A','B','C','D','E','F','G','H','I','J']
+
+    // 某题是否「选项内容全为空」（无任何文本、无任何图片）
+    const isPaperAnswerEmptyMode = (item: any): boolean => {
+      const opts = item?.options || {}
+      const optImgs = item?.option_images || {}
+      return !PAPER_ANSWER_KEYS.some(k =>
+        String(opts[k] ?? '').trim() !== '' ||
+        (Array.isArray(optImgs[k]) && optImgs[k].length > 0)
+      )
+    }
+
+    // 取某题可作为答案的选项字母：
+    // - 有内容（文本或图片）的选项 → 仅展示这些字母；
+    // - 选项内容全为空 → 回退默认 A/B/C/D（可通过"+ 选项"按需增加），
+    //   并始终并入已选答案里出现的字母，保证答案字母都有对应按钮。
+    const paperItemAnswerKeys = (item: any): string[] => {
+      const opts = item?.options || {}
+      const optImgs = item?.option_images || {}
+      const contentKeys = PAPER_ANSWER_KEYS.filter(k =>
+        String(opts[k] ?? '').trim() !== '' ||
+        (Array.isArray(optImgs[k]) && optImgs[k].length > 0)
+      )
+      const ansKeys = getPaperItemAnswerLetters(item)
+      if (contentKeys.length > 0) {
+        const set = new Set([...contentKeys, ...ansKeys])
+        return PAPER_ANSWER_KEYS.filter(k => set.has(k))
+      }
+      // 选项全空：默认 4 个，按 _emptyAnswerCount 扩展，且不少于已选答案覆盖的字母数
+      const ansMax = ansKeys.reduce((m, c) => Math.max(m, PAPER_ANSWER_KEYS.indexOf(c) + 1), 0)
+      const n = Math.min(Math.max(4, item?._emptyAnswerCount || 0, ansMax), PAPER_ANSWER_KEYS.length)
+      return PAPER_ANSWER_KEYS.slice(0, n)
+    }
+
+    // 选项全空模式下，按需增加一个默认答案选项字母（最多到 J）
+    const addPaperAnswerKey = (item: any) => {
+      if (!item) return
+      const next = Math.min(paperItemAnswerKeys(item).length + 1, PAPER_ANSWER_KEYS.length)
+      item._emptyAnswerCount = next
+    }
+
+    // 保存试卷时规范化某题的选项（与显示规则保持一致，存储同步）：
+    // - 简答题：不处理选项；
+    // - 选择题且有内容：仅保留有内容（文本或图片）的选项，剔除空选项及其空图片；
+    // - 选择题且完全无内容：默认 A/B/C/D 四个空选项。
+    const normalizePaperItemOptions = (item: any): { options: Record<string, string>, option_images: Record<string, any> } => {
+      const opts = item?.options || {}
+      const optImgs = item?.option_images || {}
+      if (item?.qtype === 'saq') {
+        return { options: { ...opts }, option_images: { ...optImgs } }
+      }
+      const contentKeys = PAPER_ANSWER_KEYS.filter(k =>
+        String(opts[k] ?? '').trim() !== '' ||
+        (Array.isArray(optImgs[k]) && optImgs[k].length > 0)
+      )
+      const outOpts: Record<string, string> = {}
+      const outImgs: Record<string, any> = {}
+      if (contentKeys.length > 0) {
+        for (const k of contentKeys) {
+          outOpts[k] = String(opts[k] ?? '')
+          if (Array.isArray(optImgs[k]) && optImgs[k].length > 0) outImgs[k] = optImgs[k]
+        }
+      } else {
+        // 完全无内容的选择题 → 默认 4 个空选项
+        for (const k of ['A', 'B', 'C', 'D']) outOpts[k] = ''
+      }
+      return { options: outOpts, option_images: outImgs }
+    }
+
+    // 解析某题答案串为已选字母集合（仅保留 A-J 大写字母，自动清洗空格等杂质）
+    const getPaperItemAnswerLetters = (item: any): string[] => {
+      return String(item?.answer || '')
+        .toUpperCase()
+        .split('')
+        .filter((c: string) => /[A-J]/.test(c))
+    }
+
+    const isPaperAnswerSelected = (item: any, letter: string): boolean => {
+      return getPaperItemAnswerLetters(item).includes(letter)
+    }
+
+    // 点击字母按钮切换答案（题型为多选/不定项时多选，否则单选）
+    const togglePaperAnswerLetter = (item: any, letter: string) => {
+      const multi = item?.qtype === 'multi' || item?.qtype === 'indeterminate'
+      const set = new Set(getPaperItemAnswerLetters(item))
+      if (multi) {
+        if (set.has(letter)) set.delete(letter)
+        else set.add(letter)
+      } else {
+        if (set.has(letter) && set.size === 1) set.clear()
+        else { set.clear(); set.add(letter) }
+      }
+      // 按字母升序拼接，保证答案规范（无空格、字母升序）
+      item.answer = ['A','B','C','D','E','F','G','H','I','J'].filter(k => set.has(k)).join('')
+    }
+
+    // 切换题型时：切到简答不动答案；切到单选/判断仅保留第一个已选字母
+    const onPaperItemQtypeChange = (item: any) => {
+      if (!item || item.qtype === 'saq') return
+      const multi = item.qtype === 'multi' || item.qtype === 'indeterminate'
+      if (!multi) {
+        const letters = getPaperItemAnswerLetters(item)
+        item.answer = letters.length ? letters[0] : ''
+      }
+    }
 
     // 添加选项
     const addOption = () => {
@@ -7643,10 +7833,10 @@ export default defineComponent({
         // 移除"参考来源"关键词及其 markdown 符号（包括 **参考来源**:）
         .replace(/\*{0,2}参考来源\*{0,2}[：:\s]*/g, '')
         // 将带选项字母的进度提示替换为选项分隔标记
-        .replace(/^([A-Ha-h])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
-        .replace(/^([A-Ha-h])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在进行混合检索[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*已找到相关资料[，,]正在生成回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*未找到高相关性资料[，,]基于通用知识回答[.…]*\s*$/gm, replaceProgressWithLabel)
+        .replace(/^([A-Ja-j])[.)、]?\s*正在使用精准检索分析[.…]*\s*$/gm, replaceProgressWithLabel)
         // 移除不带选项字母的通用进度提示（支持行内任意位置）
         .replace(/正在进行混合检索[.…]*\s*/g, '')
         .replace(/已找到相关资料[，,]正在生成回答[.…]*\s*/g, '')
@@ -8079,11 +8269,17 @@ export default defineComponent({
         const optImgKeys = Object.keys(item.option_images || {}).map((k: string) => k.toUpperCase())
         for (const k of optImgKeys) optKeys.add(k)
         for (const c of ans) {
-          if (!/[A-H]/.test(c)) continue
+          if (!/[A-J]/.test(c)) continue
           if (!optKeys.has(c)) return true
         }
       }
       return false
+    }
+
+    // 判断题目是否命中"引用配图却未匹配到图片"告警（用于显示专属标签）
+    const hasMissingImageWarning = (item: any): boolean => {
+      if (!Array.isArray(item.parse_warnings)) return false
+      return item.parse_warnings.some((w: any) => typeof w === 'string' && w.includes('引用配图'))
     }
 
     // 获取有效选项数量（包括纯图片选项）
@@ -8463,11 +8659,17 @@ export default defineComponent({
         return
       }
 
-      const validItems = uploadedPaperItems.value.filter(item => item.stem && item.stem.trim())
-      if (validItems.length === 0) {
+      const rawValidItems = uploadedPaperItems.value.filter(item => item.stem && item.stem.trim())
+      if (rawValidItems.length === 0) {
         ElMessage.warning('没有有效的题目可保存')
         return
       }
+      // 存储与显示规则同步：剔除空选项；完全无内容的选择题默认 A/B/C/D
+      const validItems = rawValidItems.map((item: any) => {
+        if (item.qtype === 'saq') return item
+        const { options, option_images } = normalizePaperItemOptions(item)
+        return { ...item, options, option_images }
+      })
 
       savingUploadedPaper.value = true
       try {
@@ -9585,7 +9787,7 @@ export default defineComponent({
       loadPendingUsers, approveUser, rejectUser, maskIdCard,uploadRef,exportingBank,importingBank,viewSources,
       bankImportRef,asyncExplaining,asyncMsg,llmOptions,llmModelId,topN,thinking,insertBlock,triggerPickBankDocx,pendingTaskDismissed,dismissPendingTask,
       rejectingAll,page,pageSize,rowRegenLoading,deletingQuestion,editingId,editBuf,counterMsg,explainBatchAsync,rejectAll,exportBankDocx,
-      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,addOption,removeOption,removeStemImage,removeOptionImage,removeAnalysisImage,triggerStemImageUpload,onStemImageSelected,triggerOptionImageUpload,onOptionImageSelected,triggerAnalysisImageUpload,onAnalysisImageSelected,triggerReplaceStemImage,triggerReplaceOptionImage,triggerReplaceAnalysisImage,editingQtype,chineseNumber,addKnowledgeClause,removeKnowledgeClause,addPaperItemClause,removePaperItemClause,
+      UserStatus, isBanned, getStatusTagType, getStatusText, Refresh,regenAndSave,pagedQuestions,optionKeys,editOptionKeys,editIsChoice,isAnswerSelected,toggleAnswerLetter,paperItemAnswerKeys,isPaperAnswerEmptyMode,addPaperAnswerKey,isPaperAnswerSelected,togglePaperAnswerLetter,onPaperItemQtypeChange,addOption,removeOption,removeStemImage,removeOptionImage,removeAnalysisImage,triggerStemImageUpload,onStemImageSelected,triggerOptionImageUpload,onOptionImageSelected,triggerAnalysisImageUpload,onAnalysisImageSelected,triggerReplaceStemImage,triggerReplaceOptionImage,triggerReplaceAnalysisImage,editingQtype,chineseNumber,addKnowledgeClause,removeKnowledgeClause,addPaperItemClause,removePaperItemClause,
       // 任务控制相关
       currentTaskId, currentTaskStatus, stoppingTask, resumingTask, isTaskRunning, canResumeTask, stopTask, resumeTask,
       sourcesMap, sourcesLoading, sourcesLoaded, sourcesError, sourcePassages, getSourceTitle, getSourceMeta, isGroupedSources,
@@ -9628,7 +9830,7 @@ export default defineComponent({
       // 上传试卷相关
       paperUploadRef, paperPreviewVisible, uploadedPaperTitle, uploadedPaperItems,
       editingPaperItemIdx, savingUploadedPaper, paperParseIssueCount,
-      hasParseIssue, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
+      hasParseIssue, hasMissingImageWarning, getOptionsCount, triggerPickPaperFile, onPickPaperFile,
       toggleEditPaperItem, deletePaperItem, addNewPaperItem, saveUploadedPaper,
       deleteUploadedItemImage, triggerUploadItemImage, triggerReplaceUploadedItemImage,
       uploadedSingleScore, uploadedMultiScore, uploadedIndeterminateScore, uploadedJudgeScore, uploadedSaqScore, uploadedSaqScoreMode,
@@ -10130,6 +10332,43 @@ export default defineComponent({
 }
 
 .opt-hint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.answer-choice-area {
+  width: 100%;
+}
+
+.answer-qtype-group {
+  margin-bottom: 10px;
+}
+
+.answer-letter-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.answer-letter-btns .el-button {
+  margin-left: 0;
+  min-width: 44px;
+}
+
+.answer-current {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.answer-current strong {
+  color: #409eff;
+  letter-spacing: 1px;
+}
+
+.answer-hint {
+  margin-top: 6px;
   font-size: 12px;
   color: #9ca3af;
 }
